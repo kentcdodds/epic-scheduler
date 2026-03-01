@@ -139,6 +139,7 @@ export function ScheduleRoute(handle: Handle) {
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
 	let rangeAnchor: string | null = null
+	let tapRangeAction: 'add' | 'remove' | null = null
 	let mobileDayKey: string | null = null
 	let useTapRangeMode = false
 	let saveMessage: string | null = null
@@ -375,7 +376,11 @@ export function ScheduleRoute(handle: Handle) {
 		selectedSlots.delete(slot)
 	}
 
-	function applyRange(startSlot: string, endSlot: string) {
+	function applyRange(
+		startSlot: string,
+		endSlot: string,
+		shouldSelect: boolean,
+	) {
 		if (!snapshot) return
 		const startIndex = snapshot.slots.indexOf(startSlot)
 		const endIndex = snapshot.slots.indexOf(endSlot)
@@ -385,7 +390,7 @@ export function ScheduleRoute(handle: Handle) {
 		for (let index = min; index <= max; index += 1) {
 			const slot = snapshot.slots[index]
 			if (!slot) continue
-			selectedSlots.add(slot)
+			setSlotSelection(slot, shouldSelect)
 		}
 	}
 
@@ -417,14 +422,19 @@ export function ScheduleRoute(handle: Handle) {
 		if (!useTapRangeMode) return
 		if (!rangeAnchor) {
 			rangeAnchor = slot
+			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
 			activeSlot = slot
 			setStatusMessage(
-				'Range start selected. Tap another slot to set range end.',
+				tapRangeAction === 'remove'
+					? 'Range start selected. Tap another slot to remove range.'
+					: 'Range start selected. Tap another slot to add range.',
 			)
 			return
 		}
-		applyRange(rangeAnchor, slot)
+		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
+		applyRange(rangeAnchor, slot, shouldSelect)
 		rangeAnchor = null
+		tapRangeAction = null
 		activeSlot = slot
 		setStatusMessage(null, false)
 		markDirty()
@@ -482,6 +492,7 @@ export function ScheduleRoute(handle: Handle) {
 		persistedSelectedSlots = new Set<string>()
 		activeSlot = null
 		rangeAnchor = null
+		tapRangeAction = null
 		mobileDayKey = null
 		hasDirtyChanges = false
 		changeVersion = 0
@@ -865,6 +876,7 @@ export function ScheduleRoute(handle: Handle) {
 								click: () => {
 									useTapRangeMode = !useTapRangeMode
 									rangeAnchor = null
+									tapRangeAction = null
 									setStatusMessage(
 										useTapRangeMode
 											? 'Tap-range mode enabled. Tap start, then tap end.'

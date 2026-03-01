@@ -21,6 +21,8 @@ on the Epic Web E2E workshop and our existing setup.
   time on narrow viewports and navigation boundaries are enforced.
 - Touch-scroll safety on mobile so drag/scroll gestures do not mutate selection
   unless the user intentionally enables tap-based selection mode.
+- Tap-range selection mode behavior on mobile, including both adding and
+  removing ranges when users tap an already selected slot as the range start.
 - Attendee slot-detail metadata such as displayed attendee timezone and
   attendee-local time for the selected slot.
 - Integration across the worker, client router, and API endpoints.
