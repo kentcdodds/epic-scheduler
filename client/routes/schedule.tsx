@@ -83,6 +83,7 @@ export function ScheduleRoute(handle: Handle) {
 	let lastPointerSlot: string | null = null
 	let lastPathname = ''
 	let initialNameLoaded = false
+	const autoSaveDelayMs = 650
 
 	function setStatusMessage(message: string | null, error = false) {
 		saveMessage = message
@@ -101,10 +102,22 @@ export function ScheduleRoute(handle: Handle) {
 		return value ? normalizeName(value) : ''
 	}
 
+	function clearSaveDebounceTimer() {
+		if (saveDebounceTimer) {
+			clearTimeout(saveDebounceTimer)
+			saveDebounceTimer = null
+		}
+	}
+
 	function clearSocketResources() {
 		if (socket) {
-			socket.close()
+			const current = socket
 			socket = null
+			current.onopen = null
+			current.onmessage = null
+			current.onerror = null
+			current.onclose = null
+			current.close()
 		}
 		if (reconnectTimer) {
 			clearTimeout(reconnectTimer)
@@ -128,9 +141,10 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	async function loadSnapshot() {
-		if (!shareToken) return
+		const requestShareToken = shareToken
+		if (!requestShareToken) return
 		try {
-			const response = await fetch(`/api/schedules/${shareToken}`, {
+			const response = await fetch(`/api/schedules/${requestShareToken}`, {
 				headers: { Accept: 'application/json' },
 			})
 			const payload = (await response.json().catch(() => null)) as {
@@ -138,6 +152,7 @@ export function ScheduleRoute(handle: Handle) {
 				snapshot?: Snapshot
 				error?: string
 			} | null
+			if (requestShareToken !== shareToken) return
 			if (!response.ok || !payload?.ok || !payload.snapshot) {
 				const errorText =
 					typeof payload?.error === 'string'
@@ -169,13 +184,15 @@ export function ScheduleRoute(handle: Handle) {
 
 			handle.update()
 		} catch {
+			if (requestShareToken !== shareToken) return
 			isLoading = false
 			setStatusMessage('Unable to load schedule.', true)
 		}
 	}
 
 	async function saveAvailability() {
-		if (!snapshot || !shareToken) return
+		const requestShareToken = shareToken
+		if (!snapshot || !requestShareToken) return
 		if (handle.signal.aborted) return
 		if (isSaving) {
 			pendingSave = true
@@ -193,7 +210,7 @@ export function ScheduleRoute(handle: Handle) {
 
 		try {
 			const response = await fetch(
-				`/api/schedules/${shareToken}/availability`,
+				`/api/schedules/${requestShareToken}/availability`,
 				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -211,7 +228,8 @@ export function ScheduleRoute(handle: Handle) {
 				error?: string
 			} | null
 
-			if (!response.ok || !payload?.ok || !payload.snapshot) {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			if (!response.ok || !payload?.ok || !payload?.snapshot) {
 				const errorMessage =
 					typeof payload?.error === 'string'
 						? payload.error
@@ -226,24 +244,25 @@ export function ScheduleRoute(handle: Handle) {
 				setStatusMessage('Availability saved.', false)
 			}
 		} catch {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatusMessage('Network error while saving availability.', true)
 		} finally {
-			isSaving = false
-			handle.update()
-			const shouldReschedule =
-				pendingSave && hasDirtyChanges && !handle.signal.aborted
-			pendingSave = false
-			if (shouldReschedule) {
-				scheduleAutoSave()
+			if (requestShareToken === shareToken && !handle.signal.aborted) {
+				isSaving = false
+				handle.update()
+				const shouldReschedule = pendingSave && hasDirtyChanges
+				pendingSave = false
+				if (shouldReschedule) {
+					scheduleAutoSave()
+				}
+			} else {
+				pendingSave = false
 			}
 		}
 	}
 
 	function scheduleAutoSave() {
-		if (saveDebounceTimer) {
-			clearTimeout(saveDebounceTimer)
-			saveDebounceTimer = null
-		}
+		clearSaveDebounceTimer()
 		if (handle.signal.aborted) return
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) return
@@ -253,7 +272,7 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		saveDebounceTimer = setTimeout(() => {
 			void saveAvailability()
-		}, 650)
+		}, autoSaveDelayMs)
 	}
 
 	function markDirty() {
@@ -362,6 +381,7 @@ export function ScheduleRoute(handle: Handle) {
 			connectionState = 'offline'
 			handle.update()
 			reconnectTimer = setTimeout(() => {
+				if (socket !== ws) return
 				connectSocket()
 			}, 1200)
 		}
@@ -371,10 +391,21 @@ export function ScheduleRoute(handle: Handle) {
 		const nextPathname = getPathname()
 		if (nextPathname === lastPathname) return
 		lastPathname = nextPathname
+		clearSaveDebounceTimer()
+		clearSocketResources()
 		shareToken = parseShareToken(nextPathname)
 		snapshot = null
 		selectedSlots = new Set<string>()
+		activeSlot = null
+		rangeAnchor = null
 		hasDirtyChanges = false
+		changeVersion = 0
+		pendingSave = false
+		isSaving = false
+		paintMode = null
+		dragging = false
+		lastPointerSlot = null
+		connectionState = 'offline'
 		isLoading = true
 		initialNameLoaded = false
 		setStatusMessage(null, false)

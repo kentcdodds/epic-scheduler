@@ -37,7 +37,7 @@ export const availabilityTable = createTable({
 		slot_start_utc: string(),
 		updated_at: string(),
 	},
-	primaryKey: 'attendee_id',
+	primaryKey: ['attendee_id', 'slot_start_utc'],
 })
 
 export function createDb(db: D1Database) {

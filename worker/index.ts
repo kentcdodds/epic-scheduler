@@ -43,10 +43,21 @@ const appHandler = withCors({
 		}
 
 		if (url.pathname.startsWith(scheduleSocketPathPrefix)) {
-			const shareToken = url.pathname.slice(scheduleSocketPathPrefix.length)
-			if (!shareToken) {
+			const upgrade = request.headers.get('Upgrade')?.toLowerCase()
+			if (request.method !== 'GET' || upgrade !== 'websocket') {
 				return Response.json(
-					{ ok: false, error: 'Missing schedule token for realtime socket.' },
+					{
+						ok: false,
+						error: 'Realtime endpoint requires a websocket upgrade request.',
+					},
+					{ status: 426 },
+				)
+			}
+
+			const shareToken = url.pathname.slice(scheduleSocketPathPrefix.length)
+			if (!shareToken || shareToken.includes('/')) {
+				return Response.json(
+					{ ok: false, error: 'Invalid schedule token for realtime socket.' },
 					{ status: 400 },
 				)
 			}

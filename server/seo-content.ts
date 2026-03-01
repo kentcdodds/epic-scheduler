@@ -176,7 +176,7 @@ export function getBlogPostBySlug(slug: string) {
 }
 
 export function getBlogPosts() {
-	return blogPosts
+	return blogPosts.slice()
 }
 
 export function getIndexStructuredData(baseUrl: string) {

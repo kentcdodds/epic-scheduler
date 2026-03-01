@@ -30,6 +30,14 @@ function buildSlotsForWeekdays(params: {
 	endDate: string
 	intervalMinutes: number
 }) {
+	if (
+		!Number.isFinite(params.intervalMinutes) ||
+		!Number.isInteger(params.intervalMinutes) ||
+		params.intervalMinutes <= 0
+	) {
+		return []
+	}
+
 	const startParts = params.startDate
 		.split('-')
 		.map((value) => Number.parseInt(value, 10))
@@ -52,12 +60,19 @@ function buildSlotsForWeekdays(params: {
 
 	const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0)
 	const end = addDays(new Date(endYear, endMonth - 1, endDay, 0, 0, 0, 0), 1)
+	const startMs = start.getTime()
+	const endMs = end.getTime()
+	if (endMs <= startMs) {
+		return []
+	}
+	const intervalMs = params.intervalMinutes * 60_000
+	const estimatedSlots = Math.ceil((endMs - startMs) / intervalMs)
+	if (estimatedSlots > 24 * 31 * 4) {
+		return []
+	}
+
 	const slots: Array<string> = []
-	for (
-		let time = start.getTime();
-		time < end.getTime();
-		time += params.intervalMinutes * 60_000
-	) {
+	for (let time = startMs; time < endMs; time += intervalMs) {
 		const date = new Date(time)
 		const weekday = date.getDay()
 		const hour = date.getHours()
@@ -294,7 +309,18 @@ function setupScheduleWidget() {
 			void withOutput('Loading snapshot', fetchSnapshot)
 		})
 
+	const trustedHostOrigin = (() => {
+		if (!document.referrer) return null
+		try {
+			return new URL(document.referrer).origin
+		} catch {
+			return null
+		}
+	})()
+
 	window.addEventListener('message', (event) => {
+		if (event.source !== window.parent) return
+		if (trustedHostOrigin && event.origin !== trustedHostOrigin) return
 		hostBridge.handleHostMessage(event.data)
 	})
 

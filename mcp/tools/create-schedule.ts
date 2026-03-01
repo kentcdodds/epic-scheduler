@@ -18,6 +18,20 @@ const createScheduleTool = {
 
 const intervalSchema = z.union([z.literal(15), z.literal(30), z.literal(60)])
 
+function toSafeCreateScheduleError(error: unknown) {
+	const message = error instanceof Error ? error.message : ''
+	if (
+		/host name is required|invalid|must be|must|later than|too large|required/i.test(
+			message,
+		)
+	) {
+		return message
+	}
+
+	console.error('create_schedule tool failed:', error)
+	return 'Unable to create schedule.'
+}
+
 export async function registerCreateScheduleTool(agent: MCP) {
 	agent.server.registerTool(
 		createScheduleTool.name,
@@ -86,8 +100,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 					},
 				}
 			} catch (error) {
-				const message =
-					error instanceof Error ? error.message : 'Unable to create schedule.'
+				const message = toSafeCreateScheduleError(error)
 				return {
 					content: [{ type: 'text', text: message }],
 					isError: true,

@@ -44,7 +44,7 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 				content: [
 					{
 						type: 'text',
-						text: `Loaded snapshot for ${shareToken} with ${snapshot.attendees.length} attendee(s).`,
+						text: `Loaded snapshot with ${snapshot.attendees.length} attendee(s).`,
 					},
 				],
 				structuredContent: {

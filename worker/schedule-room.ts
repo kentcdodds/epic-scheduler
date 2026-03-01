@@ -12,6 +12,10 @@ type AvailabilityUpdatePayload = {
 	selectedSlots?: unknown
 }
 
+function isAvailabilityClientError(message: string) {
+	return /(not found|required|invalid|must|range|interval)/i.test(message)
+}
+
 export class ScheduleRoom extends DurableObject<Env> {
 	private sockets = new Set<WebSocket>()
 
@@ -92,7 +96,15 @@ export class ScheduleRoom extends DurableObject<Env> {
 					error instanceof Error
 						? error.message
 						: 'Unable to save availability.'
-				return Response.json({ ok: false, error: message }, { status: 400 })
+				if (isAvailabilityClientError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 400 })
+				}
+
+				console.error('schedule room availability update failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to save availability.' },
+					{ status: 500 },
+				)
 			}
 		}
 

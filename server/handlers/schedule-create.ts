@@ -34,6 +34,12 @@ function toIntervalMinutes(value: unknown) {
 	return 0
 }
 
+function isCreateScheduleValidationError(message: string) {
+	return /(invalid|required|must|later than|range|interval|too large)/i.test(
+		message,
+	)
+}
+
 export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 	return {
 		middleware: [],
@@ -73,7 +79,15 @@ export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 			} catch (error) {
 				const message =
 					error instanceof Error ? error.message : 'Unable to create schedule.'
-				return Response.json({ ok: false, error: message }, { status: 400 })
+				if (isCreateScheduleValidationError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 400 })
+				}
+
+				console.error('create schedule handler failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to create schedule.' },
+					{ status: 500 },
+				)
 			}
 		},
 	} satisfies BuildAction<

@@ -32,7 +32,7 @@ Use Cloudflare's built-in rate limiting rules instead of custom Worker logic.
    `Rate limiting rules`).
 3. Create a rule that targets high-write scheduler endpoints, for example:
    - Expression:
-     `(http.request.method eq "POST" and http.request.uri.path in {"/api/schedules" "/api/schedules/*/availability"})`
+     `(http.request.method eq "POST" and (http.request.uri.path eq "/api/schedules" or http.request.uri.path wildcard "/api/schedules/*/availability"))`
    - Threshold: `10` requests per `1 minute` per IP (tune as needed).
    - Action: `Block` or `Managed Challenge`.
 
