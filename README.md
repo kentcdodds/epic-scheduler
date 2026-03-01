@@ -74,14 +74,13 @@ Request → worker/index.ts
 
 ## Documentation
 
-| Document                                                                               | Description                                             |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| [`docs/getting-started.md`](./docs/getting-started.md)                                 | Setup flow for fresh template installs                  |
-| [`docs/environment-variables.md`](./docs/environment-variables.md)                     | Environment variable management                         |
-| [`docs/cloudflare-offerings.md`](./docs/cloudflare-offerings.md)                       | Optional Cloudflare integrations                        |
-| [`docs/chatgpt-claude-mcp-availability.md`](./docs/chatgpt-claude-mcp-availability.md) | Blog-style guide for ChatGPT/Claude MCP connector setup |
-| [`docs/agents/setup.md`](./docs/agents/setup.md)                                       | Local development, validation, and CI commands          |
-| [`docs/architecture/index.md`](./docs/architecture/index.md)                           | Runtime architecture map                                |
+| Document                                                           | Description                                    |
+| ------------------------------------------------------------------ | ---------------------------------------------- |
+| [`docs/getting-started.md`](./docs/getting-started.md)             | Setup flow for fresh template installs         |
+| [`docs/environment-variables.md`](./docs/environment-variables.md) | Environment variable management                |
+| [`docs/cloudflare-offerings.md`](./docs/cloudflare-offerings.md)   | Optional Cloudflare integrations               |
+| [`docs/agents/setup.md`](./docs/agents/setup.md)                   | Local development, validation, and CI commands |
+| [`docs/architecture/index.md`](./docs/architecture/index.md)       | Runtime architecture map                       |
 
 ---
 

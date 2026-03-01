@@ -28,6 +28,169 @@ export const canonicalPaths = {
 
 const blogPosts: Array<BlogPost> = [
 	{
+		slug: 'chatgpt-claude-mcp-availability-links',
+		title: 'Use ChatGPT and Claude to answer availability links with MCP',
+		description:
+			'How to connect Epic Scheduler to ChatGPT and Claude through MCP so AI agents can submit availability from one shared link.',
+		publishedDate: '2026-03-02',
+		readingMinutes: 8,
+		lede: 'Paste one scheduling link plus constraints, and an AI agent can submit your availability and summarize overlap windows.',
+		body: html`<p>
+				If someone sends you a scheduling link, you should be able to reply with
+				your constraints once and let an agent do the rest. Epic Scheduler's MCP
+				server makes that possible in both ChatGPT and Claude.
+			</p>
+			<p>
+				This post covers the full setup and the practical workflow of asking an
+				AI agent to respond to a specific availability link on your behalf.
+			</p>
+			<div class="seo-inline-demo">
+				<img
+					src="/blog/chatgpt-claude-mcp/epic-scheduler-home-page.png"
+					alt="Epic Scheduler home page showing a paintable availability grid"
+					loading="lazy"
+					style="width: 100%; height: auto; border-radius: 0.5rem"
+				/>
+				<p class="seo-meta">
+					Epic Scheduler host setup: one grid, one link, timezone-aware slots.
+				</p>
+			</div>
+			<h2>Why this workflow matters</h2>
+			<p>
+				Most scheduling friction comes from context switching and repeated
+				translation: "What timezone?", "Does Tuesday morning still work?", "Did
+				you fill out the poll yet?" MCP removes that repetition by letting
+				agents call scheduling tools directly.
+			</p>
+			<ul>
+				<li>Share one scheduling URL.</li>
+				<li>Describe your constraints in natural language.</li>
+				<li>Let the agent submit and verify your availability.</li>
+			</ul>
+			<div class="seo-inline-demo">
+				<img
+					src="/blog/chatgpt-claude-mcp/epic-scheduler-share-link-page.png"
+					alt="Epic Scheduler share link page with selected overlap slots"
+					loading="lazy"
+					style="width: 100%; height: auto; border-radius: 0.5rem"
+				/>
+				<p class="seo-meta">
+					Each shared schedule is link-based, identified by
+					<code>/s/:shareToken</code>.
+				</p>
+			</div>
+			<h2>What Epic Scheduler exposes via MCP</h2>
+			<p>
+				Epic Scheduler serves MCP at <code>/mcp</code> and exposes tools for the
+				core scheduling loop:
+			</p>
+			<ul>
+				<li><code>create_schedule</code></li>
+				<li><code>submit_schedule_availability</code></li>
+				<li><code>get_schedule_snapshot</code></li>
+				<li><code>open_schedule_ui</code> (MCP app widget)</li>
+			</ul>
+			<p>
+				In other words: create a link, submit attendee slots, inspect overlap,
+				repeat.
+			</p>
+			<h2>Add Epic Scheduler in ChatGPT</h2>
+			<p>
+				OpenAI's "Connect from ChatGPT" flow currently follows this pattern:
+			</p>
+			<ol>
+				<li>Enable Developer mode in Apps &amp; Connectors settings.</li>
+				<li>Create a connector/app entry.</li>
+				<li>Set connector URL to <code>https://your-domain/mcp</code>.</li>
+				<li>Enable the connector in a conversation.</li>
+			</ol>
+			<div class="seo-inline-demo">
+				<img
+					src="/blog/chatgpt-claude-mcp/openai-connect-from-chatgpt-docs.png"
+					alt="OpenAI documentation page for connecting an MCP server from ChatGPT"
+					loading="lazy"
+					style="width: 100%; height: auto; border-radius: 0.5rem"
+				/>
+				<p class="seo-meta">
+					Reference: OpenAI "Connect from ChatGPT" connector setup docs.
+				</p>
+			</div>
+			<h2>Add Epic Scheduler in Claude</h2>
+			<p>
+				Claude supports third-party remote MCP servers as custom connectors. The
+				basic flow is:
+			</p>
+			<ol>
+				<li>Go to Connectors settings (or Admin Connectors for org owners).</li>
+				<li>Add a custom connector with your <code>/mcp</code> URL.</li>
+				<li>Authenticate if needed.</li>
+				<li>Enable that connector per chat.</li>
+			</ol>
+			<div class="seo-inline-demo">
+				<img
+					src="/blog/chatgpt-claude-mcp/claude-remote-mcp-docs.png"
+					alt="Claude documentation page for adding remote MCP connectors"
+					loading="lazy"
+					style="width: 100%; height: auto; border-radius: 0.5rem"
+				/>
+				<p class="seo-meta">
+					Reference: Claude remote MCP custom connector setup docs.
+				</p>
+			</div>
+			<h2>The one-link prompt pattern</h2>
+			<p>
+				Once connected, you can give the model one link and one sentence of
+				availability constraints:
+			</p>
+			<p>
+				<em
+					>Use Epic Scheduler to respond to this scheduling link as "Jordan
+					Lee": https://your-domain/s/abc123. I am available Tue/Thu 9:00–11:30
+					AM PT and Wed 1:00–3:00 PM PT. Submit my availability and summarize
+					best overlap windows.</em
+				>
+			</p>
+			<p>The agent should:</p>
+			<ol>
+				<li>Parse the share token from the URL.</li>
+				<li>Load the schedule snapshot.</li>
+				<li>Translate constraints into valid slot timestamps.</li>
+				<li>Submit via <code>submit_schedule_availability</code>.</li>
+				<li>Re-read overlap and report recommended windows.</li>
+			</ol>
+			<h2>Optional UI workflow via MCP Apps</h2>
+			<p>
+				If the host supports MCP Apps, <code>open_schedule_ui</code> can render
+				a widget for creating links, submitting availability, and loading
+				snapshots.
+			</p>
+			<div class="seo-inline-demo">
+				<img
+					src="/blog/chatgpt-claude-mcp/epic-scheduler-mcp-widget-page.png"
+					alt="Epic Scheduler MCP app widget showing create submit and snapshot actions"
+					loading="lazy"
+					style="width: 100%; height: auto; border-radius: 0.5rem"
+				/>
+				<p class="seo-meta">
+					MCP app widget flow for interactive scheduling actions.
+				</p>
+			</div>
+			<h2>Production notes</h2>
+			<p>
+				Epic Scheduler is intentionally link-based in v1. For stricter
+				production controls, add platform security in front of MCP:
+			</p>
+			<ul>
+				<li>Cloudflare Access (or equivalent auth) for <code>/mcp</code></li>
+				<li>Rate limits and abuse detection</li>
+				<li>Narrow tool permissions where possible</li>
+			</ul>
+			<p>
+				The highest-leverage habit is simple: treat scheduling as a one-link
+				handoff, then let the agent execute the mechanics.
+			</p>`,
+	},
+	{
 		slug: 'meeting-scheduler-for-remote-teams',
 		title: 'A practical meeting scheduler for remote teams',
 		description:
