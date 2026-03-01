@@ -123,3 +123,85 @@ test('sendUserMessageWithFallback delivers ui/message to latest-protocol host', 
 		false,
 	)
 })
+
+test('requestDisplayMode sends ui/request-display-mode to host', async () => {
+	const hostPostedMessages: Array<HostRequestMessage> = []
+	let bridge: ReturnType<typeof createWidgetHostBridge>
+
+	const parentWindow = {
+		postMessage(message: unknown) {
+			if (!message || typeof message !== 'object' || Array.isArray(message)) {
+				return
+			}
+
+			const request = message as HostRequestMessage
+			hostPostedMessages.push(request)
+
+			if (request.method === 'ui/initialize') {
+				bridge.handleHostMessage({
+					jsonrpc: '2.0',
+					id: request.id,
+					result: {
+						protocolVersion: latestProtocolVersion,
+						hostInfo: {
+							name: 'mcp-jam-sim',
+							version: '1.0.0',
+						},
+						hostCapabilities: {},
+						hostContext: {
+							availableDisplayModes: ['inline', 'fullscreen'],
+						},
+					},
+				})
+				return
+			}
+
+			if (request.method === 'ui/request-display-mode') {
+				bridge.handleHostMessage({
+					jsonrpc: '2.0',
+					id: request.id,
+					result: {
+						mode:
+							request.params?.mode === 'fullscreen' ? 'fullscreen' : 'inline',
+					},
+				})
+			}
+		},
+	}
+
+	globalThis.window = {
+		parent: parentWindow,
+	} as unknown as Window & typeof globalThis
+
+	bridge = createWidgetHostBridge({
+		appInfo: {
+			name: 'schedule-widget',
+			version: '1.0.0',
+		},
+		requestTimeoutMs: 500,
+	})
+
+	const grantedMode = await bridge.requestDisplayMode('fullscreen')
+	expect(grantedMode).toBe('fullscreen')
+
+	const initializeRequest = hostPostedMessages.find(
+		(message) => message.method === 'ui/initialize',
+	)
+	const initializeParams = initializeRequest?.params as
+		| {
+				appCapabilities?: {
+					availableDisplayModes?: Array<string>
+				}
+		  }
+		| undefined
+	expect(
+		initializeParams?.appCapabilities?.availableDisplayModes ?? [],
+	).toEqual(['inline', 'fullscreen'])
+	expect(
+		hostPostedMessages.some(
+			(message) =>
+				message.method === 'ui/request-display-mode' &&
+				message.params?.mode === 'fullscreen',
+		),
+	).toBe(true)
+})

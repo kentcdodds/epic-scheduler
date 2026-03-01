@@ -110,7 +110,6 @@ jobs:
             fi
           fi
 
-          # Cloudflare Worker names must be URL-safe; normalize to lower-kebab-case.
           slug="$(echo "$PREVIEW_ID" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' | cut -c1-32)"
           if [ -z "$slug" ]; then
             slug="preview"
@@ -122,11 +121,9 @@ jobs:
             APP_WORKER_NAME="${APP_NAME}-branch-${slug}"
           fi
 
-          echo "preview_kind=$PREVIEW_KIND" >> "$GITHUB_OUTPUT"
-          echo "preview_id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
           echo "worker_name=$APP_WORKER_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: 🧱 Ensure preview resources (D1 + KV)
+      - name: 🧱 Ensure preview resources (D1)
         id: resources
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -144,81 +141,10 @@ jobs:
           bun ./wrangler-env.ts d1 migrations apply APP_DB --remote --config
           "$WRANGLER_CONFIG"
 
-      - name: 🧪 Deploy preview mock Workers
-        id: deploy_mocks
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          APP_WORKER_NAME: ${{ steps.names.outputs.worker_name }}
-        run: |
-          set -euo pipefail
-          MOCK_API_TOKEN="$(openssl rand -hex 32)"
-          echo "::add-mask::$MOCK_API_TOKEN"
-          OVERRIDES_FILE="preview-secrets-overrides.env"
-          : > "$OVERRIDES_FILE"
-
-          mock_summary=""
-          mock_comment_summary=""
-
-          for dir in mock-servers/*; do
-            if [ ! -d "$dir" ]; then
-              continue
-            fi
-            if [ ! -f "$dir/wrangler.jsonc" ]; then
-              continue
-            fi
-
-            service="$(basename "$dir")"
-            service_key="$(echo "$service" | tr '[:lower:]-' '[:upper:]_')"
-            mock_worker_name="${APP_WORKER_NAME}-mock-${service}"
-            deploy_log="deploy-mock-${service}.log"
-
-            bun tools/ci/sync-worker-secrets.ts --env "" --name "$mock_worker_name" --config "$dir/wrangler.jsonc" --set "MOCK_API_TOKEN=$MOCK_API_TOKEN"
-
-            bunx wrangler deploy --env preview --name "$mock_worker_name" --config "$dir/wrangler.jsonc" 2>&1 | tee "$deploy_log"
-
-            mock_url="$(node -e 'const fs = require("node:fs"); const text = fs.readFileSync(process.argv[1], "utf8").replace(/\u001b\[[0-9;]*m/g, ""); const worker = process.argv[2]; const escaped = worker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const workerUrlRegex = new RegExp(`https://(?:[a-zA-Z0-9-]+\\.)?${escaped}\\.[a-zA-Z0-9._-]+\\.workers\\.dev`, "g"); const matches = text.match(workerUrlRegex); process.stdout.write(matches?.at(-1) ?? "")' "$deploy_log" "$mock_worker_name")"
-            if [ -z "$mock_url" ]; then
-              echo "Failed to parse mock URL for $service." >&2
-              exit 1
-            fi
-            mock_version_preview_url="$(node -e 'const fs = require("node:fs"); const text = fs.readFileSync(process.argv[1], "utf8").replace(/\u001b\[[0-9;]*m/g, ""); const match = text.match(/(?:Version\s+)?Preview URL:\s*(https:\/\/\S+)/i); process.stdout.write(match?.[1] ?? "")' "$deploy_log")"
-
-            echo "${service_key}_API_BASE_URL=$mock_url" >> "$OVERRIDES_FILE"
-            echo "${service_key}_API_KEY=$MOCK_API_TOKEN" >> "$OVERRIDES_FILE"
-
-            mock_summary_line="- ${service}: ${mock_url} (\`${mock_worker_name}\`)"
-            mock_comment_summary_line="- ${service}: [${mock_url}/__mocks](${mock_url}/__mocks?token=${MOCK_API_TOKEN}) (\`${mock_worker_name}\`)"
-            if [ -n "$mock_version_preview_url" ]; then
-              mock_summary_line="${mock_summary_line} | version preview: ${mock_version_preview_url}"
-              mock_comment_summary_line="${mock_comment_summary_line} | version preview: [${mock_version_preview_url}](${mock_version_preview_url})"
-            fi
-
-            mock_summary="${mock_summary}\n${mock_summary_line}"
-            mock_comment_summary="${mock_comment_summary}\n${mock_comment_summary_line}"
-          done
-
-          if [ -n "$mock_summary" ]; then
-            mock_summary="$(printf "%b" "$mock_summary" | sed '1{/^$/d;}')"
-          fi
-          if [ -n "$mock_comment_summary" ]; then
-            mock_comment_summary="$(printf "%b" "$mock_comment_summary" | sed '1{/^$/d;}')"
-          fi
-
-          {
-            echo "mock_summary<<EOF"
-            printf "%b\n" "$mock_summary"
-            echo "EOF"
-            echo "mock_comment_summary<<EOF"
-            printf "%b\n" "$mock_comment_summary"
-            echo "EOF"
-            echo "overrides_file=$OVERRIDES_FILE"
-          } >> "$GITHUB_OUTPUT"
-
       - name: 🔐 Sync preview app Worker secrets (bulk)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           APP_WORKER_NAME: ${{ steps.names.outputs.worker_name }}
-          OVERRIDES_FILE: ${{ steps.deploy_mocks.outputs.overrides_file }}
         run: |
           set -euo pipefail
           ENV_FILE=".env.example"
@@ -226,12 +152,8 @@ jobs:
             echo "Missing $ENV_FILE (required for preview deploy secrets)." >&2
             exit 1
           fi
-          if [ ! -f "$OVERRIDES_FILE" ]; then
-            echo "Missing overrides file ($OVERRIDES_FILE) from mock deploy step." >&2
-            exit 1
-          fi
 
-          bun tools/ci/sync-worker-secrets.ts --env "" --name "$APP_WORKER_NAME" --from-dotenv "$ENV_FILE" --from-dotenv "$OVERRIDES_FILE" --generate-cookie-secret --include-empty
+          bun tools/ci/sync-worker-secrets.ts --env "" --name "$APP_WORKER_NAME" --from-dotenv "$ENV_FILE" --include-empty
 
       - name: ☁️ Deploy preview app Worker
         id: deploy_preview
@@ -245,7 +167,26 @@ jobs:
           set -euo pipefail
           echo "worker_name=$APP_WORKER_NAME" >> "$GITHUB_OUTPUT"
 
-          bun run deploy -- --name "$APP_WORKER_NAME" --config "$WRANGLER_CONFIG" --var "APP_COMMIT_SHA:${DEPLOY_COMMIT_SHA}" 2>&1 | tee deploy.log
+          deploy_attempts=3
+          for attempt in $(seq 1 "$deploy_attempts"); do
+            echo "Preview deploy attempt $attempt/$deploy_attempts"
+            set +e
+            bun run deploy -- --name "$APP_WORKER_NAME" --config "$WRANGLER_CONFIG" --var "APP_COMMIT_SHA:${DEPLOY_COMMIT_SHA}" 2>&1 | tee deploy.log
+            deploy_exit_code="${PIPESTATUS[0]}"
+            set -e
+
+            if [ "$deploy_exit_code" -eq 0 ]; then
+              break
+            fi
+
+            if [ "$attempt" -eq "$deploy_attempts" ]; then
+              exit "$deploy_exit_code"
+            fi
+
+            sleep_seconds=$((attempt * 5))
+            echo "Deploy failed (exit $deploy_exit_code). Retrying in ${sleep_seconds}s..."
+            sleep "$sleep_seconds"
+          done
 
           PREVIEW_URL="$(node -e 'const fs = require("node:fs"); const text = fs.readFileSync(process.argv[1], "utf8").replace(/\u001b\[[0-9;]*m/g, ""); const worker = process.argv[2]; const escaped = worker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const workerUrlRegex = new RegExp(`https://(?:[a-zA-Z0-9-]+\\.)?${escaped}\\.[a-zA-Z0-9._-]+\\.workers\\.dev`, "g"); const matches = text.match(workerUrlRegex); process.stdout.write(matches?.at(-1) ?? "")' deploy.log "$APP_WORKER_NAME")"
           if [ -n "$PREVIEW_URL" ]; then
@@ -305,9 +246,7 @@ jobs:
           PREVIEW_VERSION_URL:
             '${{ steps.deploy_preview.outputs.version_preview_url }}'
           WORKER_NAME: ${{ steps.deploy_preview.outputs.worker_name }}
-          MOCK_SUMMARY: ${{ steps.deploy_mocks.outputs.mock_summary }}
           D1_DATABASE_NAME: ${{ steps.resources.outputs.d1_database_name }}
-          OAUTH_KV_TITLE: ${{ steps.resources.outputs.oauth_kv_title }}
         run: |
           {
             echo "### Preview"
@@ -321,14 +260,6 @@ jobs:
             if [ -n "${D1_DATABASE_NAME:-}" ]; then
               printf 'D1: `%s`\n' "$D1_DATABASE_NAME"
             fi
-            if [ -n "${OAUTH_KV_TITLE:-}" ]; then
-              printf 'KV: `%s`\n' "$OAUTH_KV_TITLE"
-            fi
-            if [ -n "${MOCK_SUMMARY:-}" ]; then
-              echo ""
-              echo "### Mocks"
-              printf '%s\n' "$MOCK_SUMMARY"
-            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 💬 Comment Preview URL on PR
@@ -341,9 +272,7 @@ jobs:
           PREVIEW_VERSION_URL:
             '${{ steps.deploy_preview.outputs.version_preview_url }}'
           WORKER_NAME: ${{ steps.deploy_preview.outputs.worker_name }}
-          MOCK_SUMMARY: ${{ steps.deploy_mocks.outputs.mock_comment_summary }}
           D1_DATABASE_NAME: ${{ steps.resources.outputs.d1_database_name }}
-          OAUTH_KV_TITLE: ${{ steps.resources.outputs.oauth_kv_title }}
         with:
           script: |
             const marker = "<!-- epic-scheduler-preview-url -->";
@@ -360,14 +289,6 @@ jobs:
             }
             if (process.env.D1_DATABASE_NAME?.trim()) {
               bodyLines.push(`D1: \`${process.env.D1_DATABASE_NAME.trim()}\``);
-            }
-            if (process.env.OAUTH_KV_TITLE?.trim()) {
-              bodyLines.push(`KV: \`${process.env.OAUTH_KV_TITLE.trim()}\``);
-            }
-            if (process.env.MOCK_SUMMARY?.trim()) {
-              bodyLines.push("");
-              bodyLines.push("Mocks:");
-              bodyLines.push(process.env.MOCK_SUMMARY.trim());
             }
             const body = bodyLines.join("\n");
 
@@ -467,7 +388,7 @@ jobs:
 
           echo "worker_name=$APP_WORKER_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: 🗑️ Delete preview Workers
+      - name: 🗑️ Delete preview Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           APP_WORKER_NAME: ${{ steps.names.outputs.worker_name }}
@@ -499,20 +420,7 @@ jobs:
 
           delete_worker "$APP_WORKER_NAME"
 
-          for dir in mock-servers/*; do
-            if [ ! -d "$dir" ]; then
-              continue
-            fi
-            if [ ! -f "$dir/wrangler.jsonc" ]; then
-              continue
-            fi
-
-            service="$(basename "$dir")"
-            mock_worker_name="${APP_WORKER_NAME}-mock-${service}"
-            delete_worker "$mock_worker_name"
-          done
-
-      - name: 🧹 Delete preview resources (D1 + KV)
+      - name: 🧹 Delete preview resources (D1)
         if: always()
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

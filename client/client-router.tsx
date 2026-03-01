@@ -50,6 +50,7 @@ function shouldHandleClick(event: MouseEvent, anchor: HTMLAnchorElement) {
 	if (event.button !== 0) return false
 	if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey)
 		return false
+	if (anchor.hasAttribute('data-router-reload')) return false
 	if (anchor.target && anchor.target !== '_self') return false
 	if (anchor.hasAttribute('download')) return false
 

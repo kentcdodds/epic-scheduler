@@ -1,18 +1,19 @@
 import { createRouter } from 'remix/fetch-router'
 import { type AppEnv } from '#types/env-schema.ts'
-import { account } from './handlers/account.ts'
-import { createAuthHandler } from './handlers/auth.ts'
-import { chat } from './handlers/chat.ts'
+import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
 import { createHealthHandler } from './handlers/health.ts'
 import { home } from './handlers/home.ts'
-import { login } from './handlers/login.ts'
-import { logout } from './handlers/logout.ts'
+import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
+import { createScheduleReadHandler } from './handlers/schedule-read.ts'
+import { createScheduleSubmitAvailabilityHandler } from './handlers/schedule-submit-availability.ts'
 import {
-	createPasswordResetConfirmHandler,
-	createPasswordResetRequestHandler,
-} from './handlers/password-reset.ts'
-import { session } from './handlers/session.ts'
-import { signup } from './handlers/signup.ts'
+	blogIndex,
+	blogPost,
+	features,
+	howItWorks,
+	privacy,
+	terms,
+} from './handlers/seo-pages.ts'
 import { Layout } from './layout.ts'
 import { render } from './render.ts'
 import { routes } from './routes.ts'
@@ -26,21 +27,20 @@ export function createAppRouter(appEnv: AppEnv) {
 	})
 
 	router.map(routes.home, home)
-	router.map(routes.chat, chat)
+	router.map(routes.howItWorks, howItWorks)
+	router.map(routes.features, features)
+	router.map(routes.blog, blogIndex)
+	router.map(routes.blogPost, blogPost)
+	router.map(routes.privacy, privacy)
+	router.map(routes.terms, terms)
+	router.map(routes.robotsTxt, robotsTxt)
+	router.map(routes.sitemapXml, sitemapXml)
 	router.map(routes.health, createHealthHandler(appEnv))
-	router.map(routes.login, login)
-	router.map(routes.signup, signup)
-	router.map(routes.account, account)
-	router.map(routes.auth, createAuthHandler(appEnv))
-	router.map(routes.session, session)
-	router.map(routes.logout, logout)
+	router.map(routes.scheduleCreate, createScheduleCreateHandler(appEnv))
+	router.map(routes.scheduleRead, createScheduleReadHandler(appEnv))
 	router.map(
-		routes.passwordResetRequest,
-		createPasswordResetRequestHandler(appEnv),
-	)
-	router.map(
-		routes.passwordResetConfirm,
-		createPasswordResetConfirmHandler(appEnv),
+		routes.scheduleSubmitAvailability,
+		createScheduleSubmitAvailabilityHandler(appEnv),
 	)
 
 	return router

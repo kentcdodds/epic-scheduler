@@ -11,7 +11,18 @@ on the Epic Web E2E workshop and our existing setup.
 
 ## What to test
 
-- Primary routes and flows (navigation, auth, critical forms).
+- Primary routes and flows (navigation, schedule creation, availability
+  updates).
+- User-visible sync states for optimistic flows (for example
+  pending/saving/saved availability indicators).
+- Mobile layout stability for interactive flows so status updates do not shift
+  the grid while users are selecting slots.
+- Mobile day-pagination controls (previous/next) so only one day is shown at a
+  time on narrow viewports and navigation boundaries are enforced.
+- Touch-scroll safety on mobile so drag/scroll gestures do not mutate selection
+  unless the user intentionally enables tap-based selection mode.
+- Attendee slot-detail metadata such as displayed attendee timezone and
+  attendee-local time for the selected slot.
 - Integration across the worker, client router, and API endpoints.
 - Regressions that are expensive to catch in unit tests.
 
@@ -41,9 +52,8 @@ Avoid `page.locator('css')` unless no accessible alternative exists.
   colliding with the dev server. Override with `PLAYWRIGHT_BASE_URL` or
   `PLAYWRIGHT_PORT`.
 - Playwright sets `CLOUDFLARE_ENV=test` so Wrangler uses `.env.test`.
-- Ensure the `env.test` section in `wrangler.jsonc` includes assets, KV, and
-  durable objects since these are not inherited from top-level Wrangler config.
-- `.env.test` supplies a `COOKIE_SECRET` var for local sessions.
+- Ensure the `env.test` section in `wrangler.jsonc` includes assets and durable
+  objects since these are not inherited from top-level Wrangler config.
 - Client routes live in `client/app.tsx` and `client/routes/index.tsx`.
 - API endpoints are defined in `server/routes.ts` and mapped in
   `server/router.ts`.
@@ -54,7 +64,8 @@ handled by the static asset fetcher in `worker/index.ts`.
 ## Test data
 
 - Use real input values and a happy-path payload.
-- Keep credentials and emails obviously fake and local-only.
+- Use fake participant names (for example `Alex`, `Jordan`) and generated share
+  tokens from test-created schedules.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions
@@ -64,15 +75,14 @@ handled by the static asset fetcher in `worker/index.ts`.
 - For client-router regressions, you may set a `window` marker before clicking a
   link and assert it survives navigation to prove there was no full document
   reload.
-- Use the same marker pattern for form submissions (for example logout) when
-  verifying router-handled form navigation.
 
 ## Running tests
 
 Common commands:
 
 - `bun run test:e2e`
-- `bun run test:e2e e2e/login.spec.ts`
+- `bun run test:e2e e2e/schedule-collaboration.spec.ts`
+- `bun run test:e2e e2e/seo-content.spec.ts`
 
 These tests are executed by the `validate` gate, which also runs `lint:fix` and
 the MCP E2E suite.

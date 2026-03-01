@@ -75,7 +75,7 @@ bun ./docs/post-download.ts --guided
 
 - `CLOUDFLARE_API_TOKEN` (Workers deploy + D1 edit access on the correct
   account)
-- `COOKIE_SECRET` (generate with `openssl rand -hex 32` or similar)
+- `APP_BASE_URL` (optional, used in deploy metadata and health reporting)
 
 3. Deploy:
 
@@ -87,10 +87,10 @@ bun run deploy
 
 Use non-interactive flags or `--defaults`. The `--defaults` flag skips prompts
 and uses defaults based on the current directory name (worker/package/database
-names), plus a generated cookie secret.
+names).
 
 ```
-bun ./docs/post-download.ts --defaults --database-id <id> --preview-database-id <id> --kv-namespace-id <id>
+bun ./docs/post-download.ts --defaults --database-id <id> --preview-database-id <id>
 ```
 
 To preview changes without writing, add `--dry-run`. To emit a JSON summary, add
@@ -106,8 +106,6 @@ To preview changes without writing, add `--dry-run`. To emit a JSON summary, add
 - `--app-name`, `--worker-name`, `--package-name`
 - `--database-name`, `--database-id`
 - `--preview-database-name`, `--preview-database-id`
-- `--kv-namespace-id`, `--kv-namespace-preview-id`
-- `--kv-namespace-title`, `--kv-namespace-preview-title` (used when creating)
 
 ## Local development
 

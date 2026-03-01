@@ -17,11 +17,6 @@ type D1DatabaseListEntry = {
 	name: string
 }
 
-type KvNamespaceListEntry = {
-	id: string
-	title: string
-}
-
 function fail(message: string): never {
 	console.error(message)
 	process.exit(1)
@@ -137,12 +132,9 @@ function renderArg(value: string) {
 function buildPreviewResourceNames(workerName: string) {
 	const maxLen = 63
 	const d1Suffix = '-db'
-	const kvSuffix = '-oauth-kv'
-
-	const d1DatabaseName = truncateWithSuffix(workerName, d1Suffix, maxLen)
-	const oauthKvTitle = truncateWithSuffix(workerName, kvSuffix, maxLen)
-
-	return { d1DatabaseName, oauthKvTitle }
+	return {
+		d1DatabaseName: truncateWithSuffix(workerName, d1Suffix, maxLen),
+	}
 }
 
 function truncateWithSuffix(base: string, suffix: string, maxLen: number) {
@@ -190,7 +182,6 @@ function ensureD1Database({
 	if (location && location.length > 0) {
 		args.push('--location', location)
 	}
-	// If Wrangler prompts to update config, always answer "no".
 	const createResult = runWrangler(args, { input: 'n\n', quiet: true })
 	if (createResult.status !== 0) {
 		fail(`Failed to create D1 database: ${name}`)
@@ -223,88 +214,6 @@ function deleteD1Database({ name, dryRun }: { name: string; dryRun: boolean }) {
 		fail(`Failed to delete D1 database: ${name}`)
 	}
 	console.error(`Deleted D1 database: ${name}`)
-}
-
-function listKvNamespaces(): Array<KvNamespaceListEntry> {
-	const result = runWrangler(['kv', 'namespace', 'list'], { quiet: true })
-	if (result.status !== 0) {
-		fail('Failed to list KV namespaces (wrangler kv namespace list).')
-	}
-	try {
-		return JSON.parse(result.stdout) as Array<KvNamespaceListEntry>
-	} catch {
-		fail('Could not parse JSON output from wrangler kv namespace list.')
-	}
-}
-
-function ensureKvNamespace({
-	title,
-	dryRun,
-}: {
-	title: string
-	dryRun: boolean
-}) {
-	if (dryRun) {
-		console.error(`[dry-run] ensure KV namespace: ${title}`)
-		return { title, id: `dry-run-${title}` }
-	}
-
-	const existing = listKvNamespaces().find((ns) => ns.title === title)
-	if (existing) {
-		console.error(`KV namespace exists: ${title} (${existing.id})`)
-		return { title, id: existing.id }
-	}
-
-	// If Wrangler prompts to update config, always answer "no".
-	const createResult = runWrangler(['kv', 'namespace', 'create', title], {
-		input: 'n\n',
-		quiet: true,
-	})
-	if (createResult.status !== 0) {
-		fail(`Failed to create KV namespace: ${title}`)
-	}
-
-	const created = listKvNamespaces().find((ns) => ns.title === title)
-	if (!created) {
-		fail(`Created KV namespace "${title}" but could not find it via list.`)
-	}
-	console.error(`Created KV namespace: ${title} (${created.id})`)
-	return { title, id: created.id }
-}
-
-function deleteKvNamespace({
-	title,
-	dryRun,
-}: {
-	title: string
-	dryRun: boolean
-}) {
-	if (dryRun) {
-		console.error(`[dry-run] delete KV namespace: ${title}`)
-		return
-	}
-
-	const existing = listKvNamespaces().find((ns) => ns.title === title)
-	if (!existing) {
-		console.error(`KV namespace already deleted: ${title}`)
-		return
-	}
-
-	const result = runWrangler(
-		[
-			'kv',
-			'namespace',
-			'delete',
-			'--namespace-id',
-			existing.id,
-			'--skip-confirmation',
-		],
-		{ quiet: true },
-	)
-	if (result.status !== 0) {
-		fail(`Failed to delete KV namespace: ${title}`)
-	}
-	console.error(`Deleted KV namespace: ${title} (${existing.id})`)
 }
 
 function stripJsonc(source: string) {
@@ -419,7 +328,6 @@ function stripTrailingCommas(source: string) {
 					continue
 				}
 				if (next === '}' || next === ']') {
-					// Skip comma before a closing token, preserve whitespace.
 					break
 				}
 				break
@@ -448,17 +356,14 @@ async function writeGeneratedWranglerConfig({
 	outConfigPath,
 	d1DatabaseName,
 	d1DatabaseId,
-	oauthKvId,
 }: {
 	baseConfigPath: string
 	outConfigPath: string
 	d1DatabaseName: string
 	d1DatabaseId: string
-	oauthKvId: string
 }) {
 	const baseText = await readFile(baseConfigPath, 'utf8')
 	const config = parseJsonc<Record<string, unknown>>(baseText)
-
 	const env = config.env
 	if (!env || typeof env !== 'object') {
 		fail(`wrangler config "${baseConfigPath}" is missing "env".`)
@@ -493,30 +398,6 @@ async function writeGeneratedWranglerConfig({
 		database_id: d1DatabaseId,
 	}
 
-	const kvNamespaces = (previewEnv as Record<string, unknown>).kv_namespaces
-	if (!Array.isArray(kvNamespaces)) {
-		fail(
-			`wrangler config "${baseConfigPath}" is missing "env.preview.kv_namespaces".`,
-		)
-	}
-
-	const kvEntryIndex = kvNamespaces.findIndex((entry) => {
-		if (!entry || typeof entry !== 'object') return false
-		return (entry as Record<string, unknown>).binding === 'OAUTH_KV'
-	})
-	if (kvEntryIndex < 0) {
-		fail(
-			`wrangler config "${baseConfigPath}" has no preview KV binding for "OAUTH_KV".`,
-		)
-	}
-
-	const kvEntry = kvNamespaces[kvEntryIndex] as Record<string, unknown>
-	kvNamespaces[kvEntryIndex] = {
-		...kvEntry,
-		id: oauthKvId,
-		preview_id: oauthKvId,
-	}
-
 	const resolvedOut = path.resolve(outConfigPath)
 	await writeFile(
 		resolvedOut,
@@ -528,37 +409,27 @@ async function writeGeneratedWranglerConfig({
 }
 
 async function ensurePreviewResources(options: CliOptions) {
-	const { d1DatabaseName, oauthKvTitle } = buildPreviewResourceNames(
-		options.workerName,
-	)
+	const { d1DatabaseName } = buildPreviewResourceNames(options.workerName)
 	const d1 = ensureD1Database({
 		name: d1DatabaseName,
 		location: options.d1Location,
 		dryRun: options.dryRun,
 	})
-	const kv = ensureKvNamespace({ title: oauthKvTitle, dryRun: options.dryRun })
 
 	const generatedConfigPath = await writeGeneratedWranglerConfig({
 		baseConfigPath: options.wranglerConfigPath,
 		outConfigPath: options.outConfigPath,
 		d1DatabaseName: d1.name,
 		d1DatabaseId: d1.id,
-		oauthKvId: kv.id,
 	})
 
-	// Emit GitHub Actions-friendly outputs (stdout only).
 	console.log(`wrangler_config=${generatedConfigPath}`)
 	console.log(`d1_database_name=${d1.name}`)
 	console.log(`d1_database_id=${d1.id}`)
-	console.log(`oauth_kv_title=${kv.title}`)
-	console.log(`oauth_kv_id=${kv.id}`)
 }
 
 async function cleanupPreviewResources(options: CliOptions) {
-	const { d1DatabaseName, oauthKvTitle } = buildPreviewResourceNames(
-		options.workerName,
-	)
-	deleteKvNamespace({ title: oauthKvTitle, dryRun: options.dryRun })
+	const { d1DatabaseName } = buildPreviewResourceNames(options.workerName)
 	deleteD1Database({ name: d1DatabaseName, dryRun: options.dryRun })
 }
 

@@ -90,8 +90,13 @@ When a UI should communicate back to the host agent:
   `@modelcontextprotocol/ext-apps`) and call host methods such as:
   - `ui/message` (send a user-style message)
   - `tools/call` (call server tools)
+  - `ui/request-display-mode` (request `fullscreen`/`pip` when the host allows
+    it)
   - `ui/open-link` (request external link open)
 - Keep messages concise and deterministic where possible.
+- Before requesting a display mode change, check
+  `hostContext.availableDisplayModes` (or equivalent host context) and
+  gracefully handle hosts that deny the request.
 - For inline `rawHtml` widgets in this repo, prefer reusing the shared runtime
   in `client/mcp-apps/widget-host-bridge.ts` (bundled into
   `public/mcp-apps/calculator-widget.js`) instead of duplicating bridge code.

@@ -6,24 +6,19 @@ This document explains how an incoming request moves through the system.
 
 All traffic enters the Worker at `worker/index.ts`.
 
-The `fetch` handler is wrapped by `OAuthProvider` from
-`@cloudflare/workers-oauth-provider`, which means OAuth endpoints and token
-infrastructure are available alongside normal app routes.
-
 ## Routing order
 
 Requests are handled in this order:
 
-1. OAuth authorization endpoints:
-   - `/oauth/authorize`
-   - `/oauth/authorize-info`
-   - `/oauth/callback`
-2. Browser noise endpoint:
+1. Browser noise endpoint:
    - `/.well-known/appspecific/com.chrome.devtools.json` (returns 204)
-3. OAuth protected resource metadata endpoint:
-   - `/.well-known/oauth-protected-resource` (and the `/mcp` variant)
-4. MCP endpoint:
-   - `/mcp` (requires OAuth bearer token)
+2. MCP endpoint:
+   - `/mcp`
+3. Realtime websocket endpoint:
+   - `/ws/:shareToken` (proxied to `ScheduleRoom` durable object)
+4. SEO crawler endpoints:
+   - `/robots.txt`
+   - `/sitemap.xml`
 5. Static assets:
    - Served from `ASSETS` for `GET` and `HEAD` when available
 6. App server routes:
@@ -31,11 +26,10 @@ Requests are handled in this order:
 
 ## App server flow
 
-`server/handler.ts` validates environment variables and configures session
-cookie signing (`COOKIE_SECRET`) before creating the app router.
+`server/handler.ts` validates environment variables then creates the app router.
 
 `server/router.ts` maps route patterns from `server/routes.ts` to handler
-modules (home, auth, account, session, logout, password reset, health).
+modules (home app shell, marketing/SEO pages, schedule APIs, and health).
 
 ## Client-side navigation flow
 

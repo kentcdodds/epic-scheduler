@@ -15,9 +15,7 @@ Quick notes for getting a local epic-scheduler environment running.
 
 - Copy `.env.test` to `.env` before starting any work, then update secrets as
   needed.
-- `bun run dev` (starts mock API servers automatically and sets
-  `RESEND_API_BASE_URL` to the local mock Worker).
-- Add new mock API servers by following `docs/agents/mock-api-servers.md`.
+- `bun run dev`.
 - If you only need the client bundle or worker, use:
   - `bun run dev:client`
   - `bun run dev:worker`
@@ -38,17 +36,12 @@ The GitHub Actions preview workflow creates per-preview Cloudflare resources so
 each PR preview is isolated:
 
 - D1 database: `<preview-worker-name>-db`
-- KV namespace (OAuth state): `<preview-worker-name>-oauth-kv`
 
-When a PR is closed, the cleanup job deletes the preview Worker(s) and these
-resources as well.
+When a PR is closed, the cleanup job deletes the preview Worker and database.
 
 Cloudflare Workers supports version `preview_urls`, but those preview URLs are
-not currently available for Workers that use Durable Objects. The main app
-Worker binds `MCP_OBJECT`, so app previews continue to use per-PR Worker names.
-Mock Workers do not use Durable Objects, so their Wrangler configs opt into
-`preview_urls = true` and the workflow includes mock version preview links when
-Cloudflare returns them.
+not currently available for Workers that use Durable Objects. The app binds DOs,
+so previews continue to use per-PR Worker names.
 
 Both the preview and production deploy workflows run a post-deploy healthcheck
 against `<deploy-url>/health` and fail the job if it does not return

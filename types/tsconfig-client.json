@@ -5,9 +5,9 @@
 		"allowImportingTsExtensions": true,
 		"tsBuildInfoFile": "../node_modules/.tmp/tsconfig.client.tsbuildinfo",
 		"lib": ["DOM", "DOM.Iterable", "ES2022"],
-		"types": [],
+		"types": ["bun"],
 		"jsx": "react-jsx",
 		"jsxImportSource": "remix/component"
 	},
-	"include": ["../client/**/*.ts", "../client/**/*.tsx"]
+	"include": ["../client/**/*.ts", "../client/**/*.tsx", "../shared/**/*.ts"]
 }

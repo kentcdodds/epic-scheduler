@@ -9,26 +9,17 @@ types, runtime validation, and documentation in sync.
    - Update `types/env.d.ts` so `Env` includes the new variable.
 
 2. **Validate at runtime**
-   - Add the variable to the Zod schema in `types/env-schema.ts`.
+   - Add the variable to the schema in `types/env-schema.ts`.
    - `server/env.ts` uses the schema to fail fast at runtime.
    - The schema is the single source of truth for validation + types.
 
    Example:
 
    ```ts
-   const EnvSchema = z.object({
-   	COOKIE_SECRET: z
-   		.string()
-   		.min(
-   			32,
-   			'COOKIE_SECRET must be at least 32 characters for session signing.',
-   		),
-   	THIRD_PARTY_API_KEY: z
-   		.string()
-   		.min(
-   			1,
-   			'Missing THIRD_PARTY_API_KEY. Go to https://example.com/ to get one.',
-   		),
+   const EnvSchema = object({
+   	APP_DB: d1DatabaseSchema,
+   	APP_BASE_URL: optionalUrlStringSchema,
+   	APP_COMMIT_SHA: optionalCommitShaSchema,
    })
    ```
 
@@ -44,8 +35,8 @@ types, runtime validation, and documentation in sync.
      - `.github/workflows/deploy.yml` (production deploys)
      - `.github/workflows/preview.yml` (preview deploys)
 
-## Why Zod?
+## Why schema validation?
 
-Zod gives type inference for `Env`-driven values and a single runtime gate that
-fails fast with clear errors. It keeps the “what’s required” definition in one
-place.
+The schema parser gives type inference for `Env`-driven values and a single
+runtime gate that fails fast with clear errors. It keeps the “what’s required”
+definition in one place.

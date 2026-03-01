@@ -16,9 +16,8 @@
 
 ---
 
-epic-scheduler ships a Remix-powered UI, server routing, and OAuth-protected MCP
-endpoints so you can build both a user-facing app and tooling APIs on the same
-Worker.
+epic-scheduler ships a Remix-powered UI, realtime scheduling APIs, and MCP tools
+so you can coordinate availability with one share link across timezones.
 
 ## Quick Start
 
@@ -40,7 +39,7 @@ paths and expectations.
 | UI Framework    | [Remix 3](https://remix.run/) (alpha)                                 |
 | Package Manager | [Bun](https://bun.sh/)                                                |
 | Database        | [Cloudflare D1](https://developers.cloudflare.com/d1/)                |
-| Session/OAuth   | [Cloudflare KV](https://developers.cloudflare.com/kv/)                |
+| Access Model    | Link-only (no account required)                                       |
 | MCP State       | [Durable Objects](https://developers.cloudflare.com/durable-objects/) |
 | E2E Testing     | [Playwright](https://playwright.dev/)                                 |
 | Bundler         | [esbuild](https://esbuild.github.io/)                                 |
@@ -50,14 +49,14 @@ paths and expectations.
 ```
 Request → worker/index.ts
               │
-              ├─→ OAuth handlers
               ├─→ MCP endpoints
+              ├─→ Realtime websocket routes
               ├─→ Static assets (public/)
               └─→ Server router → Remix components
 ```
 
 - `worker/index.ts` is the entrypoint for Cloudflare Workers
-- OAuth requests are handled first, then MCP requests, then static assets
+- MCP and websocket routes are handled before static assets
 - Non-asset requests fall through to the server handler and router
 - Client assets are bundled into `public/` and served via the `ASSETS` binding
 

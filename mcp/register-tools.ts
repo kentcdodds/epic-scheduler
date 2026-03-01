@@ -1,8 +1,12 @@
 import { type MCP } from './index.ts'
-import { registerDoMathTool } from './tools/do-math.ts'
-import { registerOpenCalculatorUiTool } from './tools/open-calculator-ui.ts'
+import { registerCreateScheduleTool } from './tools/create-schedule.ts'
+import { registerGetScheduleSnapshotTool } from './tools/get-schedule-snapshot.ts'
+import { registerOpenScheduleUiTool } from './tools/open-schedule-ui.ts'
+import { registerSubmitScheduleAvailabilityTool } from './tools/submit-schedule-availability.ts'
 
 export async function registerTools(agent: MCP) {
-	await registerDoMathTool(agent)
-	await registerOpenCalculatorUiTool(agent)
+	await registerCreateScheduleTool(agent)
+	await registerSubmitScheduleAvailabilityTool(agent)
+	await registerGetScheduleSnapshotTool(agent)
+	await registerOpenScheduleUiTool(agent)
 }
