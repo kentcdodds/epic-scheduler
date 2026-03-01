@@ -40,13 +40,6 @@ function readAvailableDisplayModes(
 	return source.availableDisplayModes.filter((mode) => isDisplayMode(mode))
 }
 
-function getBrowserTimeZone() {
-	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	if (typeof value !== 'string') return 'UTC'
-	const normalized = value.trim()
-	return normalized || 'UTC'
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
 }
@@ -83,7 +76,7 @@ function findNestedStringByKey(params: {
 
 	for (const nestedKey of nestedKeys) {
 		const nestedValue = params.source[nestedKey]
-		const resolved: string | null = findNestedStringByKey({
+		const resolved = findNestedStringByKey({
 			source: nestedValue,
 			key: params.key,
 			depth: depth + 1,
@@ -94,6 +87,13 @@ function findNestedStringByKey(params: {
 	}
 
 	return null
+}
+
+function getBrowserTimeZone() {
+	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
+	if (typeof value !== 'string') return 'UTC'
+	const normalized = value.trim()
+	return normalized || 'UTC'
 }
 
 function getFormElement<T extends HTMLElement>(
@@ -121,10 +121,6 @@ function setupScheduleWidget() {
 	if (!(rootElement instanceof HTMLElement)) return
 
 	const appRoot = document.documentElement
-	const outputElement = getFormElement<HTMLElement>(
-		rootElement,
-		'[data-output]',
-	)
 	const scheduleTitleElement = getFormElement<HTMLElement>(
 		rootElement,
 		'[data-schedule-title]',
@@ -132,10 +128,6 @@ function setupScheduleWidget() {
 	const shareTokenElement = getFormElement<HTMLElement>(
 		rootElement,
 		'[data-share-token]',
-	)
-	const connectionLabelElement = getFormElement<HTMLElement>(
-		rootElement,
-		'[data-connection-label]',
 	)
 	const statusElement = getFormElement<HTMLElement>(
 		rootElement,
@@ -161,11 +153,6 @@ function setupScheduleWidget() {
 		rootElement,
 		'[data-browser-timezone]',
 	)
-
-	const snapshotTokenInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="snapshotToken"]',
-	)
 	const attendeeNameInput = getFormElement<HTMLInputElement>(
 		rootElement,
 		'input[name="attendeeName"]',
@@ -173,24 +160,15 @@ function setupScheduleWidget() {
 
 	browserTimeZoneElement.textContent = getBrowserTimeZone()
 
+	let currentShareToken: string | null = null
 	let snapshot: ScheduleSnapshot | null = null
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
-	let autoLoadedShareToken: string | null = null
-
-	function writeOutput(value: unknown) {
-		outputElement.textContent =
-			typeof value === 'string' ? value : JSON.stringify(value, null, 2)
-	}
 
 	function setStatus(message: string, error = false) {
 		statusElement.textContent = message
 		statusElement.setAttribute('data-status-tone', error ? 'error' : 'normal')
-	}
-
-	function setConnectionLabel(message: string) {
-		connectionLabelElement.textContent = message
 	}
 
 	function getPersistedSelectionForName(name: string) {
@@ -422,13 +400,28 @@ function setupScheduleWidget() {
 		activeSlot = snapshot?.slots[0] ?? null
 	}
 
+	function applyShareToken(token: string) {
+		const normalizedShareToken = token.trim()
+		if (!normalizedShareToken) return false
+		if (normalizedShareToken === currentShareToken) return false
+
+		currentShareToken = normalizedShareToken
+		shareTokenElement.textContent = normalizedShareToken
+		snapshot = null
+		selectedSlots = new Set<string>()
+		persistedSelectedSlots = new Set<string>()
+		activeSlot = null
+		renderGrid()
+		renderSlotDetails()
+		updateSelectionSummary()
+		return true
+	}
+
 	function setSnapshot(nextSnapshot: ScheduleSnapshot) {
 		snapshot = nextSnapshot
-		scheduleTitleElement.textContent =
-			nextSnapshot.schedule.title || 'Schedule availability'
+		currentShareToken = nextSnapshot.schedule.shareToken
+		scheduleTitleElement.textContent = 'Your availability'
 		shareTokenElement.textContent = nextSnapshot.schedule.shareToken
-		snapshotTokenInput.value = nextSnapshot.schedule.shareToken
-		setConnectionLabel('Snapshot loaded and ready.')
 		if (!attendeeNameInput.value.trim()) {
 			attendeeNameInput.value = nextSnapshot.attendees[0]?.name ?? ''
 		}
@@ -441,7 +434,7 @@ function setupScheduleWidget() {
 	const hostBridge = createWidgetHostBridge({
 		appInfo: {
 			name: 'schedule-widget',
-			version: '2.0.0',
+			version: '3.0.0',
 		},
 		onRenderData: (renderData) => {
 			const theme = readTheme(renderData)
@@ -450,33 +443,21 @@ function setupScheduleWidget() {
 			} else {
 				appRoot.removeAttribute('data-theme')
 			}
-
-			const shareTokenFromRenderData = findNestedStringByKey({
-				source: renderData,
-				key: 'shareToken',
+			maybeApplyToolInput({
+				shareToken: findNestedStringByKey({
+					source: renderData,
+					key: 'shareToken',
+				}),
+				attendeeName:
+					findNestedStringByKey({
+						source: renderData,
+						key: 'attendeeName',
+					}) ??
+					findNestedStringByKey({
+						source: renderData,
+						key: 'name',
+					}),
 			})
-			if (
-				shareTokenFromRenderData &&
-				shareTokenFromRenderData !== autoLoadedShareToken
-			) {
-				autoLoadedShareToken = shareTokenFromRenderData
-				snapshotTokenInput.value = shareTokenFromRenderData
-				void withOutput('Loading snapshot', () =>
-					fetchSnapshot(shareTokenFromRenderData),
-				)
-			}
-			const attendeeNameFromRenderData =
-				findNestedStringByKey({
-					source: renderData,
-					key: 'attendeeName',
-				}) ??
-				findNestedStringByKey({
-					source: renderData,
-					key: 'name',
-				})
-			if (attendeeNameFromRenderData && !attendeeNameInput.value.trim()) {
-				attendeeNameInput.value = attendeeNameFromRenderData
-			}
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -508,30 +489,12 @@ function setupScheduleWidget() {
 		}
 	}
 
-	async function withOutput(
-		label: string,
-		fn: () => Promise<unknown>,
-		options: { hostMessage?: string } = {},
-	) {
-		writeOutput(`${label}...`)
-		try {
-			const result = await fn()
-			writeOutput(result)
-			if (options.hostMessage) {
-				void hostBridge.sendUserMessageWithFallback(options.hostMessage)
-			}
-		} catch (error) {
-			const message =
-				error instanceof Error ? error.message : 'Unexpected widget failure.'
-			writeOutput({ ok: false, error: message })
-			setStatus(message, true)
-		}
-	}
-
-	async function fetchSnapshot(tokenOverride?: string) {
-		const token = (tokenOverride ?? snapshotTokenInput.value).trim()
+	async function fetchSnapshot() {
+		const token = currentShareToken?.trim() ?? ''
 		if (!token) {
-			throw new Error('Share token is required.')
+			throw new Error(
+				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
+			)
 		}
 		const response = await fetch(`/api/schedules/${token}`)
 		const payload = (await response.json().catch(() => null)) as {
@@ -551,9 +514,11 @@ function setupScheduleWidget() {
 	}
 
 	async function submitAvailability() {
-		const token = snapshotTokenInput.value.trim()
+		const token = currentShareToken?.trim() ?? ''
 		if (!token) {
-			throw new Error('Share token is required.')
+			throw new Error(
+				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
+			)
 		}
 		const attendeeName = attendeeNameInput.value.trim()
 		if (!attendeeName) {
@@ -586,9 +551,69 @@ function setupScheduleWidget() {
 		if (payload.snapshot) {
 			setSnapshot(payload.snapshot)
 		} else {
-			await fetchSnapshot(token)
+			await fetchSnapshot()
 		}
 		return payload
+	}
+
+	async function withOutput(
+		label: string,
+		fn: () => Promise<unknown>,
+		options: { hostMessage?: string; successMessage?: string } = {},
+	) {
+		setStatus(`${label}...`)
+		try {
+			const result = await fn()
+			setStatus(options.successMessage ?? `${label} complete.`)
+			if (options.hostMessage) {
+				void hostBridge.sendUserMessageWithFallback(options.hostMessage)
+			}
+			return result
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Unexpected widget failure.'
+			setStatus(message, true)
+			return null
+		}
+	}
+
+	function maybeApplyToolInput(params: {
+		shareToken: string | null
+		attendeeName: string | null
+	}) {
+		if (params.attendeeName && !attendeeNameInput.value.trim()) {
+			attendeeNameInput.value = params.attendeeName
+		}
+		if (!params.shareToken) return
+
+		const changedShareToken = applyShareToken(params.shareToken)
+		if (changedShareToken || !snapshot) {
+			void withOutput('Loading schedule', fetchSnapshot, {
+				successMessage: 'Schedule loaded.',
+			})
+		}
+	}
+
+	function handleToolInputMessage(message: unknown) {
+		if (!isRecord(message)) return
+		if (
+			message.method !== 'ui/notifications/tool-input' &&
+			message.method !== 'ui/notifications/tool-input-partial'
+		) {
+			return
+		}
+		const params = isRecord(message.params) ? message.params : undefined
+		const toolArguments = params?.arguments
+		maybeApplyToolInput({
+			shareToken:
+				findNestedStringByKey({ source: toolArguments, key: 'shareToken' }) ??
+				findNestedStringByKey({ source: params, key: 'shareToken' }),
+			attendeeName:
+				findNestedStringByKey({ source: toolArguments, key: 'attendeeName' }) ??
+				findNestedStringByKey({ source: toolArguments, key: 'name' }) ??
+				findNestedStringByKey({ source: params, key: 'attendeeName' }) ??
+				findNestedStringByKey({ source: params, key: 'name' }),
+		})
 	}
 
 	attendeeNameInput.addEventListener('input', () => {
@@ -647,14 +672,9 @@ function setupScheduleWidget() {
 		.querySelector('[data-action="submit"]')
 		?.addEventListener('click', () => {
 			void withOutput('Saving availability', submitAvailability, {
+				successMessage: 'Availability saved.',
 				hostMessage: 'Saved attendee availability from MCP app schedule grid.',
 			})
-		})
-
-	rootElement
-		.querySelector('[data-action="fetch"]')
-		?.addEventListener('click', () => {
-			void withOutput('Loading snapshot', () => fetchSnapshot())
 		})
 
 	const trustedHostOrigin = (() => {
@@ -669,32 +689,22 @@ function setupScheduleWidget() {
 	window.addEventListener('message', (event) => {
 		if (event.source !== window.parent) return
 		if (trustedHostOrigin && event.origin !== trustedHostOrigin) return
+		handleToolInputMessage(event.data)
 		hostBridge.handleHostMessage(event.data)
 	})
 
 	void hostBridge.initialize()
 	hostBridge.requestRenderData()
 	updateSelectionSummary()
-	const shareTokenFromUrl = readNonEmptyString(
-		new URL(window.location.href).searchParams.get('shareToken'),
-	)
-	if (shareTokenFromUrl) {
-		autoLoadedShareToken = shareTokenFromUrl
-		snapshotTokenInput.value = shareTokenFromUrl
-		setStatus('Loading snapshot from share token...')
-		void withOutput('Loading snapshot', () => fetchSnapshot(shareTokenFromUrl))
-	} else {
-		setStatus('Load a share token from create_schedule to begin.')
-	}
-	const attendeeNameFromUrl = readNonEmptyString(
-		new URL(window.location.href).searchParams.get('name'),
-	)
-	if (attendeeNameFromUrl && !attendeeNameInput.value.trim()) {
-		attendeeNameInput.value = attendeeNameFromUrl
-	}
-	if (!shareTokenFromUrl) {
-		writeOutput('Ready.')
-	}
+	setStatus('Waiting for share token input.')
+	maybeApplyToolInput({
+		shareToken: readNonEmptyString(
+			new URL(window.location.href).searchParams.get('shareToken'),
+		),
+		attendeeName: readNonEmptyString(
+			new URL(window.location.href).searchParams.get('name'),
+		),
+	})
 }
 
 if (document.readyState === 'loading') {

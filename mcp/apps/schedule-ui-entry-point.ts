@@ -54,11 +54,6 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 					min-height: 100vh;
 				}
 			}
-			.scheduler-shell {
-				display: grid;
-				gap: var(--spacing-lg);
-				width: min(100%, 52rem);
-			}
 			.scheduler-card {
 				display: grid;
 				gap: var(--spacing-md);
@@ -67,52 +62,17 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				border-radius: var(--radius-lg);
 				background: var(--color-surface);
 				box-shadow: var(--shadow-sm);
-			}
-			.scheduler-hero {
-				background: linear-gradient(
-					140deg,
-					color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)),
-					color-mix(in srgb, var(--color-primary) 8%, var(--color-background))
-				);
-			}
-			.scheduler-hero img {
-				width: min(100%, 18rem);
-				height: auto;
-			}
-			.scheduler-card h1,
-			.scheduler-card h2 {
-				margin: 0;
+				width: min(100%, 52rem);
 			}
 			.scheduler-card h1 {
+				margin: 0;
 				font-size: var(--font-size-xl);
-			}
-			.scheduler-card h2 {
-				font-size: var(--font-size-base);
 			}
 			.scheduler-card p {
 				margin: 0;
 			}
 			.scheduler-muted {
 				color: var(--color-text-muted);
-			}
-			.scheduler-chip-row {
-				display: flex;
-				flex-wrap: wrap;
-				gap: var(--spacing-xs);
-			}
-			.scheduler-chip {
-				display: inline-flex;
-				align-items: center;
-				padding: var(--spacing-xs) var(--spacing-sm);
-				border-radius: var(--radius-full);
-				background-color: color-mix(
-					in srgb,
-					var(--color-primary) 14%,
-					var(--color-surface)
-				);
-				color: var(--color-primary-text);
-				font-size: var(--font-size-xs);
-				font-weight: var(--font-weight-medium);
 			}
 			.scheduler-row {
 				display: grid;
@@ -251,6 +211,16 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 					transparent 6px 12px
 				);
 			}
+			.scheduler-slot-details {
+				display: grid;
+				gap: var(--spacing-sm);
+				padding-top: var(--spacing-sm);
+				border-top: 1px solid var(--color-border);
+			}
+			.scheduler-slot-details h2,
+			.scheduler-slot-details p {
+				margin: 0;
+			}
 			.scheduler-slot-details ul {
 				margin: 0;
 				padding-left: 1rem;
@@ -296,103 +266,57 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 	</head>
 	<body>
 		<main class="scheduler-widget" data-schedule-widget>
-			<div class="scheduler-shell">
-				<header class="scheduler-card scheduler-hero">
-					<img src="/epic-scheduler-logo.svg" alt="Epic Scheduler" />
-					<h1 data-schedule-title>Schedule availability</h1>
-					<p class="scheduler-muted">
-						Create links with the create_schedule tool, then load a share token
-						here to select availability and review overlap.
-					</p>
-					<div class="scheduler-chip-row">
-						<span class="scheduler-chip">Tool-driven link creation</span>
-						<span class="scheduler-chip">Shared schedule grid</span>
-						<span class="scheduler-chip">Timezone-friendly updates</span>
-					</div>
-					<p class="scheduler-muted">
-						Share token: <code data-share-token>Not loaded</code>
-					</p>
-				</header>
-
-				<section class="scheduler-card">
-					<h2>Open schedule link</h2>
-					<div class="scheduler-row scheduler-row-split">
-						<label class="scheduler-field">
-							<span>Share token</span>
-							<input name="snapshotToken" type="text" />
-						</label>
-						<div class="scheduler-button-row">
-							<button
-								type="button"
-								class="scheduler-primary-button"
-								data-action="fetch"
-							>
-								Load schedule
-							</button>
-							<button
-								type="button"
-								class="scheduler-secondary-button"
-								data-action="request-fullscreen"
-							>
-								Request fullscreen mode
-							</button>
-						</div>
-					</div>
-					<p class="scheduler-muted" data-connection-label>
-						Snapshot not loaded.
-					</p>
-					<p class="scheduler-muted">
-						Need a new link first? Use the create_schedule MCP tool, then paste the
-						returned token here.
-					</p>
-				</section>
-
-				<section class="scheduler-card">
-					<h2>Your availability</h2>
-					<div class="scheduler-row scheduler-row-split">
-						<label class="scheduler-field">
-							<span>Your name</span>
-							<input
-								name="attendeeName"
-								type="text"
-								placeholder="Add your name"
-							/>
-						</label>
-						<div class="scheduler-row">
-							<button
-								type="button"
-								class="scheduler-primary-button"
-								data-action="submit"
-							>
-								Save availability
-							</button>
-							<p class="scheduler-muted">
-								<span data-selected-count>0</span> selected slot(s) -
-								<span data-pending-count>0</span> pending
-							</p>
-						</div>
-					</div>
-					<p class="scheduler-muted">
-						Desktop and mobile: tap/click cells to toggle slots. Times use your
-						browser timezone: <strong data-browser-timezone>UTC</strong>
-					</p>
-					<p class="scheduler-status" data-status aria-live="polite">
-						Load a schedule to begin.
-					</p>
-					<div class="scheduler-grid-wrap" data-grid-host>
-						<p class="scheduler-muted" style="padding: var(--spacing-md)">
-							No schedule loaded yet.
+			<section class="scheduler-card">
+				<h1 data-schedule-title>Your availability</h1>
+				<p class="scheduler-muted">
+					This view uses the share token provided to open_schedule_ui. Create links
+					with create_schedule, then open this UI with the token input.
+				</p>
+				<p class="scheduler-muted">
+					Share token: <code data-share-token>Not provided</code>
+				</p>
+				<div class="scheduler-button-row">
+					<button
+						type="button"
+						class="scheduler-secondary-button"
+						data-action="request-fullscreen"
+					>
+						Request fullscreen mode
+					</button>
+				</div>
+				<div class="scheduler-row scheduler-row-split">
+					<label class="scheduler-field">
+						<span>Your name</span>
+						<input name="attendeeName" type="text" placeholder="Add your name" />
+					</label>
+					<div class="scheduler-row">
+						<button
+							type="button"
+							class="scheduler-primary-button"
+							data-action="submit"
+						>
+							Save availability
+						</button>
+						<p class="scheduler-muted">
+							<span data-selected-count>0</span> selected slot(s) -
+							<span data-pending-count>0</span> pending
 						</p>
 					</div>
-				</section>
-
-				<section class="scheduler-card scheduler-slot-details" data-slot-details hidden></section>
-
-				<section class="scheduler-card">
-					<h2>API output</h2>
-					<pre class="scheduler-output" data-output>Ready.</pre>
-				</section>
-			</div>
+				</div>
+				<p class="scheduler-muted">
+					Desktop and mobile: tap/click cells to toggle slots. Times use your
+					browser timezone: <strong data-browser-timezone>UTC</strong>
+				</p>
+				<p class="scheduler-status" data-status aria-live="polite">
+					Waiting for share token input.
+				</p>
+				<div class="scheduler-grid-wrap" data-grid-host>
+					<p class="scheduler-muted" style="padding: var(--spacing-md)">
+						No schedule loaded yet.
+					</p>
+				</div>
+				<section class="scheduler-slot-details" data-slot-details hidden></section>
+			</section>
 		</main>
 
 		<script type="module" src="${widgetScriptHref}" crossorigin="anonymous"></script>

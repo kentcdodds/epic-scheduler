@@ -29,24 +29,23 @@ test('schedule MCP widget loads an existing link and saves availability', async 
 	expect(typeof createPayload.shareToken).toBe('string')
 	const shareToken = createPayload.shareToken ?? ''
 
-	await page.goto('/dev/schedule-ui')
+	await page.goto(
+		`/dev/schedule-ui?shareToken=${encodeURIComponent(shareToken)}&name=${encodeURIComponent('Alex')}`,
+	)
 
 	await expect(
-		page.getByRole('heading', { name: 'Schedule availability' }),
+		page.getByRole('heading', { name: 'Your availability' }),
 	).toBeVisible()
+	await expect(page.getByText('Share token:')).toContainText(shareToken, {
+		timeout: 10_000,
+	})
 	await expect(
-		page.getByRole('heading', { name: 'Open schedule link' }),
-	).toBeVisible()
-	await expect(
-		page.getByText(/Need a new link first\? Use the create_schedule MCP tool/),
+		page.getByText(
+			'This view uses the share token provided to open_schedule_ui.',
+		),
 	).toBeVisible()
 
-	await page.getByLabel('Share token').fill(shareToken)
-	await page.getByRole('button', { name: /^Load schedule$/ }).click()
-	const output = page.locator('[data-output]')
-	await expect(output).toContainText('"ok": true', { timeout: 10_000 })
-
-	await page.getByLabel('Your name').fill('Alex')
+	await expect(page.getByLabel('Your name')).toHaveValue('Alex')
 	const firstSlotButton = page
 		.locator('[data-grid-host] button[data-slot]')
 		.first()
@@ -58,5 +57,5 @@ test('schedule MCP widget loads an existing link and saves availability', async 
 
 	await page.getByRole('button', { name: 'Save availability' }).click()
 	await expect(page.locator('[data-pending-count]')).toHaveText('0')
-	await expect(output).toContainText('"snapshot"')
+	await expect(page.getByText('Availability saved.')).toBeVisible()
 })

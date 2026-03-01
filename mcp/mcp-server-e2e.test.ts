@@ -422,8 +422,11 @@ test(
 		expect(scheduleResource?.mimeType).toBe('text/html;profile=mcp-app')
 		expect(scheduleResource?.text).toContain('data-schedule-widget')
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
-		expect(scheduleResource?.text).toContain('Open schedule link')
-		expect(scheduleResource?.text).toContain('Need a new link first? Use the')
+		expect(scheduleResource?.text).toContain('Your availability')
+		expect(scheduleResource?.text).toContain(
+			'Share token: <code data-share-token>',
+		)
+		expect(scheduleResource?.text).toContain('Waiting for share token input.')
 		expect(scheduleResource?.text).toContain('Request fullscreen mode')
 
 		const scheduleWidgetResponse = await fetch(
