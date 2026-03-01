@@ -7,6 +7,12 @@ import {
 	formatDateInputValue,
 } from '#client/schedule-utils.ts'
 import {
+	detectTapRangeMode,
+	getTapRangeStartMessage,
+	isTapRangeStartMessage,
+	resolveTapRangeModeFromPointer,
+} from '#client/tap-range-mode.ts'
+import {
 	colors,
 	mq,
 	radius,
@@ -57,7 +63,7 @@ export function HomeRoute(handle: Handle) {
 	let mobileDayKey: string | null = null
 	let status: RequestStatus = 'idle'
 	let message: string | null = null
-	let useTapRangeMode = false
+	let useTapRangeMode = detectTapRangeMode()
 	let paintMode: 'add' | 'remove' | null = null
 	let dragging = false
 	let lastPointerSlot: string | null = null
@@ -216,8 +222,21 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
+		const nextMode = resolveTapRangeModeFromPointer({
+			currentMode: useTapRangeMode,
+			pointerType: event.pointerType,
+		})
+		if (nextMode !== useTapRangeMode) {
+			useTapRangeMode = nextMode
+			rangeAnchor = null
+			tapRangeAction = null
+			if (isTapRangeStartMessage(message)) {
+				setMessage('idle', null)
+			} else {
+				handle.update()
+			}
+		}
 		if (useTapRangeMode) return
-		if (event.pointerType === 'touch') return
 		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		dragging = true
 		lastPointerSlot = slot
@@ -246,12 +265,7 @@ export function HomeRoute(handle: Handle) {
 			rangeAnchor = slot
 			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
 			activeSlot = slot
-			setMessage(
-				'idle',
-				tapRangeAction === 'remove'
-					? 'Range start selected. Tap another slot to remove range.'
-					: 'Range start selected. Tap another slot to add range.',
-			)
+			setMessage('idle', getTapRangeStartMessage(tapRangeAction))
 			return
 		}
 
@@ -550,43 +564,29 @@ export function HomeRoute(handle: Handle) {
 							alignItems: 'center',
 						}}
 					>
-						<button
-							type="button"
-							on={{
-								click: () => {
-									useTapRangeMode = !useTapRangeMode
-									rangeAnchor = null
-									tapRangeAction = null
-									setMessage(
-										'idle',
-										useTapRangeMode
-											? 'Tap-range mode enabled. Tap start, then tap end.'
-											: null,
-									)
-								},
-							}}
+						<span
 							css={{
 								padding: `${spacing.xs} ${spacing.md}`,
 								borderRadius: radius.full,
 								border: `1px solid ${colors.border}`,
 								backgroundColor: useTapRangeMode
-									? colors.primary
-									: 'transparent',
-								color: useTapRangeMode ? colors.onPrimary : colors.text,
-								cursor: 'pointer',
+									? colors.primarySoft
+									: colors.background,
+								color: useTapRangeMode ? colors.primaryText : colors.textMuted,
 								fontWeight: typography.fontWeight.medium,
 							}}
-							aria-pressed={useTapRangeMode}
 						>
-							{useTapRangeMode ? 'Tap start/end mode on' : 'Tap start/end mode'}
-						</button>
+							Selection mode:{' '}
+							{useTapRangeMode ? 'tap start/end' : 'click and drag'}
+						</span>
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 						</p>
 					</div>
 
 					<p css={{ margin: 0, color: colors.textMuted }}>
-						Desktop: click and drag to paint. Mobile: enable tap start/end mode.
+						Touch input auto-enables tap start/end mode. Mouse and trackpad
+						auto-enable drag paint mode.
 					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Times are shown in your browser timezone: {browserTimeZone}
