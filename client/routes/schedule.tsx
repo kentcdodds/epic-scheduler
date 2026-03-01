@@ -143,7 +143,7 @@ export function ScheduleRoute(handle: Handle) {
 				initialNameLoaded = true
 			}
 
-			if (attendeeName) {
+			if (attendeeName && !hasDirtyChanges) {
 				const slots = findSelectionForAttendee({
 					attendeeName,
 					attendees: snapshot.attendees,
@@ -335,6 +335,7 @@ export function ScheduleRoute(handle: Handle) {
 		shareToken = parseShareToken(nextPathname)
 		snapshot = null
 		selectedSlots = new Set<string>()
+		hasDirtyChanges = false
 		isLoading = true
 		initialNameLoaded = false
 		setStatusMessage(null, false)
