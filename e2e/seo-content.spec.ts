@@ -34,6 +34,11 @@ test('blog index and post pages render marketing content', async ({ page }) => {
 	).toBeVisible()
 	await expect(
 		page.getByRole('link', {
+			name: 'Use ChatGPT and Claude to answer availability links with MCP',
+		}),
+	).toBeVisible()
+	await expect(
+		page.getByRole('link', {
 			name: 'A practical meeting scheduler for remote teams',
 		}),
 	).toBeVisible()
@@ -46,6 +51,19 @@ test('blog index and post pages render marketing content', async ({ page }) => {
 	).toBeVisible()
 	await expect(
 		page.getByText('What changes when scheduling is visual'),
+	).toBeVisible()
+
+	await page.goto('/blog/chatgpt-claude-mcp-availability-links')
+	await expect(
+		page.getByRole('heading', {
+			name: 'Use ChatGPT and Claude to answer availability links with MCP',
+		}),
+	).toBeVisible()
+	await expect(page.getByText('The one-link prompt pattern')).toBeVisible()
+	await expect(
+		page.getByRole('img', {
+			name: 'Epic Scheduler MCP app widget showing create submit and snapshot actions',
+		}),
 	).toBeVisible()
 })
 
