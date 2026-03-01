@@ -1,0 +1,32 @@
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+	viewBox="0 0 64 64"
+	role="img"
+	aria-label="Epic Scheduler icon"
+>
+	<defs>
+		<linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+			<stop offset="0%" stop-color="#7b6aff" />
+			<stop offset="100%" stop-color="#5b3df5" />
+		</linearGradient>
+		<linearGradient id="slot-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+			<stop offset="0%" stop-color="#ffffff" />
+			<stop offset="100%" stop-color="#dce2ff" />
+		</linearGradient>
+	</defs>
+	<rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg-gradient)" />
+	<g fill="none" stroke="url(#slot-gradient)" stroke-width="3" stroke-linecap="round">
+		<path d="M16 22h32" />
+		<path d="M16 32h32" opacity="0.9" />
+		<path d="M16 42h22" opacity="0.85" />
+	</g>
+	<circle cx="43" cy="42" r="7.5" fill="#f8fbff" />
+	<path
+		d="M40 42.2l2.1 2.2 4.4-4.6"
+		fill="none"
+		stroke="#3f2dd4"
+		stroke-width="2.6"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+	/>
+</svg>

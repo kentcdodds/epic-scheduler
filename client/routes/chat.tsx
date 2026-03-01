@@ -28,11 +28,34 @@ export function ChatRoute(_handle: Handle) {
 					color: colors.text,
 				}}
 			>
-				About Epic Scheduler
+				Why Epic Scheduler
 			</h2>
+			<p
+				css={{
+					margin: 0,
+					color: colors.textMuted,
+					maxWidth: '56ch',
+				}}
+			>
+				Most scheduling friction is hidden in coordination messages. Epic
+				Scheduler removes that overhead with one shareable grid where everyone
+				paints availability in minutes.
+			</p>
+			<ul
+				css={{
+					margin: 0,
+					paddingLeft: spacing.lg,
+					display: 'grid',
+					gap: spacing.xs,
+					color: colors.textMuted,
+				}}
+			>
+				<li>Share a single link with no account requirement.</li>
+				<li>Watch overlap update live while responses come in.</li>
+				<li>See exactly who can attend each slot before booking.</li>
+			</ul>
 			<p css={{ margin: 0, color: colors.textMuted }}>
-				This app is optimized for small-group scheduling across timezones with
-				realtime overlap heatmaps, no accounts, and link-only collaboration.
+				Use the homepage to create your next poll.
 			</p>
 		</section>
 	)

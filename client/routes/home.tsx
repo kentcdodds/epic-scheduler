@@ -265,7 +265,7 @@ export function HomeRoute(handle: Handle) {
 				<header
 					css={{
 						display: 'grid',
-						gap: spacing.sm,
+						gap: spacing.md,
 						padding: spacing.lg,
 						borderRadius: radius.lg,
 						border: `1px solid ${colors.border}`,
@@ -274,6 +274,14 @@ export function HomeRoute(handle: Handle) {
 						boxShadow: shadows.sm,
 					}}
 				>
+					<img
+						src="/epic-scheduler-logo.svg"
+						alt="Epic Scheduler"
+						css={{
+							width: 'min(100%, 28rem)',
+							height: 'auto',
+						}}
+					/>
 					<h1
 						css={{
 							margin: 0,
@@ -282,12 +290,62 @@ export function HomeRoute(handle: Handle) {
 							color: colors.text,
 						}}
 					>
-						Create a scheduling link
+						Plan once, share once, schedule faster.
 					</h1>
-					<p css={{ margin: 0, color: colors.textMuted }}>
-						Paint your availability, copy one link, and let everyone respond in
-						their own timezone.
+					<p
+						css={{
+							margin: 0,
+							color: colors.textMuted,
+							maxWidth: '54ch',
+						}}
+					>
+						Create one link, paint your own windows, and instantly see overlap
+						without signup friction or message ping-pong.
 					</p>
+					<div
+						css={{
+							display: 'flex',
+							flexWrap: 'wrap',
+							gap: spacing.xs,
+						}}
+					>
+						<span
+							css={{
+								padding: `${spacing.xs} ${spacing.sm}`,
+								borderRadius: radius.full,
+								backgroundColor: colors.primarySoft,
+								color: colors.primaryText,
+								fontSize: typography.fontSize.xs,
+								fontWeight: typography.fontWeight.medium,
+							}}
+						>
+							Realtime shared grid
+						</span>
+						<span
+							css={{
+								padding: `${spacing.xs} ${spacing.sm}`,
+								borderRadius: radius.full,
+								backgroundColor: colors.primarySoft,
+								color: colors.primaryText,
+								fontSize: typography.fontSize.xs,
+								fontWeight: typography.fontWeight.medium,
+							}}
+						>
+							15/30/60 minute slots
+						</span>
+						<span
+							css={{
+								padding: `${spacing.xs} ${spacing.sm}`,
+								borderRadius: radius.full,
+								backgroundColor: colors.primarySoft,
+								color: colors.primaryText,
+								fontSize: typography.fontSize.xs,
+								fontWeight: typography.fontWeight.medium,
+							}}
+						>
+							Timezone-friendly links
+						</span>
+					</div>
 				</header>
 
 				<form

@@ -12,7 +12,7 @@ const defaultShell = html`<div class="app-shell">
 
 export function Layout({
 	children,
-	title = 'epic-scheduler',
+	title = 'Epic Scheduler',
 	entryScripts = defaultEntryScripts,
 }: {
 	children?: SafeHtml
@@ -25,6 +25,12 @@ export function Layout({
 		<head>
 			<meta charset="utf-8" />
 			<meta name="viewport" content="width=device-width, initial-scale=1" />
+			<link
+				rel="icon"
+				type="image/svg+xml"
+				sizes="any"
+				href="/epic-scheduler-favicon.svg"
+			/>
 			<link rel="icon" href="/favicon.ico" sizes="any" />
 			<link
 				rel="icon"
@@ -44,7 +50,7 @@ export function Layout({
 				href="/apple-touch-icon.png"
 			/>
 			<link rel="manifest" href="/site.webmanifest" />
-			<meta name="theme-color" content="#f47c00" />
+			<meta name="theme-color" content="#5b3df5" />
 			<title>${title}</title>
 			<link rel="stylesheet" href="/styles.css" />
 		</head>

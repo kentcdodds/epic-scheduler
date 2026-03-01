@@ -30,17 +30,50 @@ export function App(handle: Handle) {
 				<nav
 					css={{
 						display: 'flex',
-						gap: spacing.md,
+						gap: spacing.lg,
 						flexWrap: 'wrap',
+						alignItems: 'center',
+						justifyContent: 'space-between',
 						marginBottom: spacing.xl,
 					}}
 				>
-					<a href="/" css={navLinkCss}>
-						Create Schedule
+					<a
+						href="/"
+						css={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: spacing.xs,
+							textDecoration: 'none',
+						}}
+						aria-label="Epic Scheduler home"
+					>
+						<img
+							src="/epic-scheduler-favicon.svg"
+							alt=""
+							aria-hidden="true"
+							css={{
+								width: '1.5rem',
+								height: '1.5rem',
+								borderRadius: '0.45rem',
+							}}
+						/>
+						<span
+							css={{
+								color: colors.text,
+								fontWeight: typography.fontWeight.semibold,
+							}}
+						>
+							Epic Scheduler
+						</span>
 					</a>
-					<a href="/chat" css={navLinkCss}>
-						About
-					</a>
+					<div css={{ display: 'inline-flex', gap: spacing.md }}>
+						<a href="/" css={navLinkCss}>
+							New schedule
+						</a>
+						<a href="/chat" css={navLinkCss}>
+							Why this works
+						</a>
+					</div>
 				</nav>
 				<Router
 					setup={{
