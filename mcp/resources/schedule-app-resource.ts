@@ -4,36 +4,36 @@ import {
 } from '@modelcontextprotocol/ext-apps/server'
 import { createUIResource } from '@mcp-ui/server'
 import {
-	calculatorUiResourceUri,
-	renderCalculatorUiEntryPoint,
-} from '#mcp/apps/calculator-ui-entry-point.ts'
+	renderScheduleUiEntryPoint,
+	scheduleUiResourceUri,
+} from '#mcp/apps/schedule-ui-entry-point.ts'
 import { type MCP } from '#mcp/index.ts'
 
-const calculatorAppResource = {
-	name: 'calculator_app_resource',
-	title: 'Calculator App Resource',
+const scheduleAppResource = {
+	name: 'schedule_app_resource',
+	title: 'Schedule App Resource',
 	description:
-		'Interactive calculator app entry point rendered by MCP App compatible hosts.',
+		'Interactive scheduler MCP app for creating links, entering availability, and viewing snapshots.',
 } as const
 
-export async function registerCalculatorAppResource(agent: MCP) {
+export async function registerScheduleAppResource(agent: MCP) {
 	const baseUrl = agent.requireDomain()
 	const resourceDomain = new URL('/styles.css', baseUrl).origin
 
 	registerAppResource(
 		agent.server,
-		calculatorAppResource.name,
-		calculatorUiResourceUri,
+		scheduleAppResource.name,
+		scheduleUiResourceUri,
 		{
-			title: calculatorAppResource.title,
-			description: calculatorAppResource.description,
+			title: scheduleAppResource.title,
+			description: scheduleAppResource.description,
 		},
 		async () => {
-			const calculatorUiResource = createUIResource({
-				uri: calculatorUiResourceUri,
+			const resource = createUIResource({
+				uri: scheduleUiResourceUri,
 				content: {
 					type: 'rawHtml',
-					htmlString: renderCalculatorUiEntryPoint(baseUrl),
+					htmlString: renderScheduleUiEntryPoint(baseUrl),
 				},
 				encoding: 'text',
 				adapters: {
@@ -46,7 +46,7 @@ export async function registerCalculatorAppResource(agent: MCP) {
 			return {
 				contents: [
 					{
-						...calculatorUiResource.resource,
+						...resource.resource,
 						mimeType: RESOURCE_MIME_TYPE,
 						_meta: {
 							ui: {

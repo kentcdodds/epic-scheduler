@@ -74,15 +74,10 @@ jobs:
       - name: 🔐 Sync Cloudflare Secrets (bulk)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
         run: >
           bun tools/ci/sync-worker-secrets.ts --env production --set-from-env
-          COOKIE_SECRET --set-from-env-optional APP_BASE_URL
-          --set-from-env-optional RESEND_API_KEY --set-from-env-optional
-          RESEND_FROM_EMAIL
+          APP_BASE_URL
 
       - name: 🗄️ Apply D1 Migrations
         env:

@@ -1,32 +1,23 @@
 import { expect, test } from '@playwright/test'
 
-test('home page renders the shell', async ({ page }) => {
+test('home page renders scheduler creation flow', async ({ page }) => {
 	await page.goto('/')
 	await expect(page).toHaveTitle('epic-scheduler')
 	await expect(
-		page.getByRole('heading', { name: 'epic-scheduler Remix 3' }),
+		page.getByRole('heading', { name: 'Create a scheduling link' }),
+	).toBeVisible()
+	await expect(page.getByLabel('Your name')).toBeVisible()
+	await expect(
+		page.getByRole('button', { name: 'Create share link' }),
 	).toBeVisible()
 })
 
-test('login link navigates without full page reload', async ({ page }) => {
+test('create schedule link navigates to schedule page', async ({ page }) => {
 	await page.goto('/')
-	const loginLink = page.getByRole('link', { name: 'Login' })
-	await expect(loginLink).toBeVisible()
-
-	const marker = await page.evaluate(() => {
-		const value = `spa-${Math.random().toString(16).slice(2)}`
-		;(window as { __spaMarker?: string }).__spaMarker = value
-		return value
-	})
-
-	await loginLink.click()
-	await expect(page).toHaveURL(/\/login$/)
+	await page.getByLabel('Your name').fill('Host')
+	await page.getByRole('button', { name: 'Create share link' }).click()
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 	await expect(
-		page.getByRole('heading', { name: 'Welcome back' }),
+		page.getByRole('button', { name: 'Save availability' }),
 	).toBeVisible()
-
-	const markerAfterNavigation = await page.evaluate(
-		() => (window as { __spaMarker?: string }).__spaMarker ?? null,
-	)
-	expect(markerAfterNavigation).toBe(marker)
 })

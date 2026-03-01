@@ -1,71 +1,596 @@
 import { type Handle } from 'remix/component'
-import { Counter } from '#client/counter.tsx'
+import { navigate } from '#client/client-router.tsx'
+import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
+import {
+	addDays,
+	createSlotRangeFromDateInputs,
+	formatDateInputValue,
+} from '#client/schedule-utils.ts'
 import {
 	colors,
+	mq,
 	radius,
 	shadows,
 	spacing,
 	typography,
 } from '#client/styles/tokens.ts'
 
-export function HomeRoute(_handle: Handle) {
-	return () => (
-		<section
-			css={{
-				display: 'grid',
-				gap: spacing.lg,
-				justifyItems: 'center',
-				textAlign: 'center',
-			}}
-		>
-			<div
+type RequestStatus = 'idle' | 'saving' | 'error'
+
+function buildDefaultSelection(slots: Array<string>) {
+	const selected = new Set<string>()
+	for (const slot of slots) {
+		const date = new Date(slot)
+		const day = date.getDay()
+		const hour = date.getHours()
+		const isWeekday = day >= 1 && day <= 5
+		const isWorkHour = hour >= 9 && hour < 17
+		if (isWeekday && isWorkHour) {
+			selected.add(slot)
+		}
+	}
+	return selected
+}
+
+export function HomeRoute(handle: Handle) {
+	const today = new Date()
+	let title = 'Scheduling poll'
+	let hostName = ''
+	let intervalMinutes = 30
+	let startDateInput = formatDateInputValue(today)
+	let endDateInput = formatDateInputValue(addDays(today, 6))
+	let generatedSlots: Array<string> = []
+	let rangeStartUtc = ''
+	let rangeEndUtc = ''
+	let selectedSlots = new Set<string>()
+	let rangeAnchor: string | null = null
+	let activeSlot: string | null = null
+	let status: RequestStatus = 'idle'
+	let message: string | null = null
+	let useTapRangeMode = false
+	let paintMode: 'add' | 'remove' | null = null
+	let dragging = false
+	let lastPointerSlot: string | null = null
+	let didInitializeSelection = false
+
+	function syncSlots() {
+		const nextRange = createSlotRangeFromDateInputs({
+			startDateInput,
+			endDateInput,
+			intervalMinutes,
+		})
+		rangeStartUtc = nextRange.rangeStartUtc
+		rangeEndUtc = nextRange.rangeEndUtc
+		generatedSlots = nextRange.slots
+
+		if (!didInitializeSelection) {
+			selectedSlots = buildDefaultSelection(generatedSlots)
+			didInitializeSelection = true
+			return
+		}
+
+		const validSlots = new Set(generatedSlots)
+		selectedSlots = new Set(
+			Array.from(selectedSlots).filter((slot) => validSlots.has(slot)),
+		)
+	}
+
+	function setMessage(nextStatus: RequestStatus, text: string | null) {
+		status = nextStatus
+		message = text
+		handle.update()
+	}
+
+	function updateDateRange(next: {
+		startDateInput?: string
+		endDateInput?: string
+		intervalMinutes?: number
+	}) {
+		if (next.startDateInput) startDateInput = next.startDateInput
+		if (next.endDateInput) endDateInput = next.endDateInput
+		if (next.intervalMinutes) intervalMinutes = next.intervalMinutes
+		try {
+			syncSlots()
+			setMessage('idle', null)
+		} catch (error) {
+			const text = error instanceof Error ? error.message : 'Invalid range.'
+			setMessage('error', text)
+		}
+	}
+
+	function setSlotSelection(slot: string, shouldSelect: boolean) {
+		if (shouldSelect) {
+			selectedSlots.add(slot)
+			return
+		}
+		selectedSlots.delete(slot)
+	}
+
+	function applyRange(startSlot: string, endSlot: string) {
+		const startIndex = generatedSlots.indexOf(startSlot)
+		const endIndex = generatedSlots.indexOf(endSlot)
+		if (startIndex < 0 || endIndex < 0) return
+
+		const min = Math.min(startIndex, endIndex)
+		const max = Math.max(startIndex, endIndex)
+		for (let index = min; index <= max; index += 1) {
+			const slot = generatedSlots[index]
+			if (!slot) continue
+			selectedSlots.add(slot)
+		}
+	}
+
+	function getSlotAvailability() {
+		return Object.fromEntries(
+			generatedSlots.map((slot) => [
+				slot,
+				{
+					count: selectedSlots.has(slot) ? 1 : 0,
+					availableNames: selectedSlots.has(slot)
+						? [hostName.trim() || 'Host']
+						: [],
+				},
+			]),
+		)
+	}
+
+	async function createScheduleRequest() {
+		const normalizedHostName = hostName.trim()
+		if (!normalizedHostName) {
+			setMessage('error', 'Host name is required.')
+			return
+		}
+
+		if (selectedSlots.size === 0) {
+			setMessage(
+				'error',
+				'Select at least one slot before creating a schedule link.',
+			)
+			return
+		}
+
+		status = 'saving'
+		message = 'Creating link...'
+		handle.update()
+
+		try {
+			const response = await fetch('/api/schedules', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					title,
+					hostName: normalizedHostName,
+					intervalMinutes,
+					rangeStartUtc,
+					rangeEndUtc,
+					selectedSlots: Array.from(selectedSlots).sort((left, right) =>
+						left.localeCompare(right),
+					),
+				}),
+			})
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				shareToken?: string
+				error?: string
+			} | null
+			if (
+				!response.ok ||
+				!payload?.ok ||
+				typeof payload.shareToken !== 'string'
+			) {
+				const errorMessage =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to create schedule.'
+				setMessage('error', errorMessage)
+				return
+			}
+			const redirectTo = `/s/${payload.shareToken}?name=${encodeURIComponent(
+				normalizedHostName,
+			)}`
+			navigate(redirectTo)
+		} catch {
+			setMessage('error', 'Network error while creating schedule.')
+		}
+	}
+
+	function handleSubmit(event: SubmitEvent) {
+		event.preventDefault()
+		void createScheduleRequest()
+	}
+
+	function onCellPointerDown(slot: string, event: PointerEvent) {
+		if (useTapRangeMode) return
+		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
+		dragging = true
+		lastPointerSlot = slot
+		setSlotSelection(slot, paintMode === 'add')
+		;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(
+			event.pointerId,
+		)
+		handle.update()
+	}
+
+	function onCellPointerEnter(slot: string) {
+		if (!dragging || !paintMode || useTapRangeMode) return
+		if (lastPointerSlot === slot) return
+		lastPointerSlot = slot
+		setSlotSelection(slot, paintMode === 'add')
+		handle.update()
+	}
+
+	function onCellPointerUp() {
+		dragging = false
+		paintMode = null
+		lastPointerSlot = null
+	}
+
+	function onCellClick(slot: string) {
+		if (!useTapRangeMode) return
+
+		if (!rangeAnchor) {
+			rangeAnchor = slot
+			activeSlot = slot
+			setMessage(
+				'idle',
+				'Range start selected. Tap another slot to set range end.',
+			)
+			return
+		}
+
+		applyRange(rangeAnchor, slot)
+		rangeAnchor = null
+		activeSlot = slot
+		setMessage('idle', null)
+	}
+
+	function onCellFocus(slot: string) {
+		activeSlot = slot
+	}
+
+	syncSlots()
+
+	return () => {
+		const slotAvailability = getSlotAvailability()
+		const selectedCount = selectedSlots.size
+		const isSaving = status === 'saving'
+
+		return (
+			<section
 				css={{
 					display: 'grid',
 					gap: spacing.lg,
-					padding: spacing.lg,
-					borderRadius: radius.lg,
-					border: `1px solid ${colors.border}`,
-					background: `linear-gradient(135deg, ${colors.primarySoftStrong}, ${colors.primarySoftest})`,
-					boxShadow: shadows.sm,
-					maxWidth: '36rem',
-					width: '100%',
 				}}
 			>
-				<div
+				<header
+					css={{
+						display: 'grid',
+						gap: spacing.sm,
+						padding: spacing.lg,
+						borderRadius: radius.lg,
+						border: `1px solid ${colors.border}`,
+						background:
+							'linear-gradient(140deg, color-mix(in srgb, var(--color-primary) 22%, var(--color-surface)), color-mix(in srgb, var(--color-primary) 8%, var(--color-background)))',
+						boxShadow: shadows.sm,
+					}}
+				>
+					<h1
+						css={{
+							margin: 0,
+							fontSize: typography.fontSize.xl,
+							fontWeight: typography.fontWeight.semibold,
+							color: colors.text,
+						}}
+					>
+						Create a scheduling link
+					</h1>
+					<p css={{ margin: 0, color: colors.textMuted }}>
+						Paint your availability, copy one link, and let everyone respond in
+						their own timezone.
+					</p>
+				</header>
+
+				<form
+					on={{ submit: handleSubmit }}
 					css={{
 						display: 'grid',
 						gap: spacing.md,
-						justifyItems: 'center',
+						padding: spacing.lg,
+						borderRadius: radius.lg,
+						border: `1px solid ${colors.border}`,
+						backgroundColor: colors.surface,
+						boxShadow: shadows.sm,
 					}}
 				>
-					<img
-						src="/logo.png"
-						alt="epic-scheduler logo"
+					<div
 						css={{
-							width: '220px',
-							maxWidth: '100%',
-							height: 'auto',
+							display: 'grid',
+							gap: spacing.md,
+							gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+							[mq.mobile]: {
+								gridTemplateColumns: '1fr',
+							},
 						}}
-					/>
-					<div css={{ display: 'grid', gap: spacing.sm }}>
-						<h1
-							css={{
-								fontSize: typography.fontSize['2xl'],
-								fontWeight: typography.fontWeight.semibold,
-								margin: 0,
-								color: colors.text,
+					>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{
+									fontSize: typography.fontSize.sm,
+									fontWeight: typography.fontWeight.medium,
+									color: colors.text,
+								}}
+							>
+								Schedule title
+							</span>
+							<input
+								type="text"
+								name="title"
+								value={title}
+								placeholder="Planning session"
+								on={{
+									input: (event) => {
+										title = event.currentTarget.value
+										handle.update()
+									},
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{
+									fontSize: typography.fontSize.sm,
+									fontWeight: typography.fontWeight.medium,
+									color: colors.text,
+								}}
+							>
+								Your name
+							</span>
+							<input
+								type="text"
+								name="hostName"
+								value={hostName}
+								placeholder="Kent"
+								on={{
+									input: (event) => {
+										hostName = event.currentTarget.value
+										handle.update()
+									},
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+					</div>
+
+					<div
+						css={{
+							display: 'grid',
+							gap: spacing.md,
+							gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+							[mq.mobile]: {
+								gridTemplateColumns: '1fr',
+							},
+						}}
+					>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Slot interval
+							</span>
+							<select
+								name="interval"
+								value={String(intervalMinutes)}
+								on={{
+									change: (event) => {
+										const value = Number.parseInt(event.currentTarget.value, 10)
+										updateDateRange({ intervalMinutes: value })
+									},
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							>
+								<option value="15">15 minutes</option>
+								<option value="30">30 minutes</option>
+								<option value="60">1 hour</option>
+							</select>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Start date
+							</span>
+							<input
+								type="date"
+								name="startDate"
+								value={startDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											startDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								End date
+							</span>
+							<input
+								type="date"
+								name="endDate"
+								value={endDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											endDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+					</div>
+
+					<div
+						css={{
+							display: 'flex',
+							flexWrap: 'wrap',
+							gap: spacing.sm,
+							alignItems: 'center',
+						}}
+					>
+						<button
+							type="button"
+							on={{
+								click: () => {
+									useTapRangeMode = !useTapRangeMode
+									rangeAnchor = null
+									setMessage(
+										'idle',
+										useTapRangeMode
+											? 'Tap-range mode enabled. Tap start, then tap end.'
+											: null,
+									)
+								},
 							}}
+							css={{
+								padding: `${spacing.xs} ${spacing.md}`,
+								borderRadius: radius.full,
+								border: `1px solid ${colors.border}`,
+								backgroundColor: useTapRangeMode
+									? colors.primary
+									: 'transparent',
+								color: useTapRangeMode ? colors.onPrimary : colors.text,
+								cursor: 'pointer',
+								fontWeight: typography.fontWeight.medium,
+							}}
+							aria-pressed={useTapRangeMode}
 						>
-							epic-scheduler <span css={{ color: colors.primaryText }}>Remix 3</span>
-						</h1>
+							{useTapRangeMode ? 'Tap start/end mode on' : 'Tap start/end mode'}
+						</button>
 						<p css={{ margin: 0, color: colors.textMuted }}>
-							Remix 3 components running on the client, backed by Remix 3
-							routing in the worker.
+							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 						</p>
 					</div>
-				</div>
-			</div>
-			<Counter setup={{ initial: 1 }} />
-		</section>
-	)
+
+					<p css={{ margin: 0, color: colors.textMuted }}>
+						Desktop: click and drag to paint. Mobile: enable tap start/end mode.
+					</p>
+
+					{renderScheduleGrid({
+						slots: generatedSlots,
+						selectedSlots,
+						slotAvailability,
+						maxAvailabilityCount: 1,
+						activeSlot,
+						rangeAnchor,
+						onCellPointerDown,
+						onCellPointerEnter: (slot, _event) => {
+							onCellPointerEnter(slot)
+						},
+						onCellPointerUp: (_slot, _event) => {
+							onCellPointerUp()
+						},
+						onCellClick: (slot, _event) => {
+							if (!useTapRangeMode) return
+							onCellClick(slot)
+						},
+						onCellFocus,
+					})}
+
+					<div
+						css={{
+							display: 'flex',
+							gap: spacing.sm,
+							flexWrap: 'wrap',
+							alignItems: 'center',
+						}}
+					>
+						<button
+							type="submit"
+							disabled={isSaving}
+							css={{
+								padding: `${spacing.sm} ${spacing.lg}`,
+								borderRadius: radius.full,
+								border: 'none',
+								backgroundColor: colors.primary,
+								color: colors.onPrimary,
+								fontWeight: typography.fontWeight.semibold,
+								cursor: isSaving ? 'not-allowed' : 'pointer',
+								opacity: isSaving ? 0.8 : 1,
+							}}
+						>
+							{isSaving ? 'Creating…' : 'Create share link'}
+						</button>
+						<button
+							type="button"
+							css={{
+								padding: `${spacing.sm} ${spacing.lg}`,
+								borderRadius: radius.full,
+								border: `1px solid ${colors.border}`,
+								backgroundColor: 'transparent',
+								color: colors.text,
+								fontWeight: typography.fontWeight.medium,
+								cursor: 'pointer',
+							}}
+							on={{
+								click: () => {
+									selectedSlots = buildDefaultSelection(generatedSlots)
+									setMessage('idle', null)
+								},
+							}}
+						>
+							Reset to weekday work hours
+						</button>
+					</div>
+
+					{message ? (
+						<p
+							role={status === 'error' ? 'alert' : undefined}
+							css={{
+								margin: 0,
+								color: status === 'error' ? colors.error : colors.textMuted,
+								fontSize: typography.fontSize.sm,
+							}}
+						>
+							{message}
+						</p>
+					) : null}
+				</form>
+			</section>
+		)
+	}
 }

@@ -1,47 +1,34 @@
 # Data storage
 
-This project uses three Cloudflare storage systems for different purposes.
+The scheduler uses D1 as the durable store and Durable Objects for realtime
+coordination.
 
 ## D1 (`APP_DB`)
 
-Relational app data lives in D1.
+Scheduler data lives in D1:
 
-Current schema is defined by migrations in `migrations/`:
+- `schedules`: link token, interval, range, metadata
+- `attendees`: names per schedule
+- `availability`: slot selections per attendee
 
-- `users`: login identity and password hash
-- `password_resets`: hashed reset tokens with expiry and foreign key to users
+Shared persistence logic is centralized in `shared/schedule-store.ts`.
 
-App access pattern:
+## Durable Objects (`MCP_OBJECT`, `SCHEDULE_ROOM`)
 
-- `worker/db.ts` defines shared `remix/data-table` table metadata and creates a
-  D1-backed database runtime via `worker/d1-data-table-adapter.ts`
-- Database row validation and API payload parsing use `remix/data-schema`
-- app handlers and the mock Resend worker perform CRUD/query operations through
-  `remix/data-table` (including `findOne`, `create`, `update`, `deleteMany`, and
-  `count`)
+- `MCP_OBJECT` hosts MCP runtime state (`mcp/index.ts`).
+- `SCHEDULE_ROOM` handles websocket fanout and serialized availability writes
+  (`worker/schedule-room.ts`).
 
-## KV (`OAUTH_KV`)
+The Worker forwards:
 
-OAuth provider state is stored in KV through the
-`@cloudflare/workers-oauth-provider` integration.
-
-- Binding is configured in `wrangler.jsonc`
-- This supports OAuth client and token flows without custom storage code in the
-  app handlers
-
-## Durable Objects (`MCP_OBJECT`)
-
-MCP server runtime state is hosted via a Durable Object class (`MCP`) in
-`mcp/index.ts`, exposed through the `/mcp` route.
-
-- The Worker forwards authorized MCP requests to `MCP.serve(...).fetch`
-- Durable Objects provide a stateful execution model for MCP operations
+- `/mcp` to `MCP_OBJECT`
+- `/ws/:shareToken` to `SCHEDULE_ROOM`
 
 ## Configuration reference
 
 Bindings are configured per environment in `wrangler.jsonc`:
 
 - `APP_DB` (D1)
-- `OAUTH_KV` (KV)
 - `MCP_OBJECT` (Durable Objects)
+- `SCHEDULE_ROOM` (Durable Objects)
 - `ASSETS` (static assets bucket)

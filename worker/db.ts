@@ -2,44 +2,42 @@ import { createDatabase, createTable, sql } from 'remix/data-table'
 import { number, string } from 'remix/data-schema'
 import { createD1DataTableAdapter } from './d1-data-table-adapter.ts'
 
-export const usersTable = createTable({
-	name: 'users',
-	columns: {
-		id: number(),
-		username: string(),
-		email: string(),
-		password_hash: string(),
-		created_at: string(),
-		updated_at: string(),
-	},
-	primaryKey: 'id',
-})
-
-export const passwordResetsTable = createTable({
-	name: 'password_resets',
-	columns: {
-		id: number(),
-		user_id: number(),
-		token_hash: string(),
-		expires_at: number(),
-		created_at: string(),
-	},
-	primaryKey: 'id',
-})
-
-export const mockResendMessagesTable = createTable({
-	name: 'mock_resend_messages',
+export const schedulesTable = createTable({
+	name: 'schedules',
 	columns: {
 		id: string(),
-		token_hash: string(),
-		received_at: number(),
-		from_email: string(),
-		to_json: string(),
-		subject: string(),
-		html: string(),
-		payload_json: string(),
+		share_token: string(),
+		title: string(),
+		interval_minutes: number(),
+		range_start_utc: string(),
+		range_end_utc: string(),
+		created_at: string(),
 	},
 	primaryKey: 'id',
+})
+
+export const attendeesTable = createTable({
+	name: 'attendees',
+	columns: {
+		id: string(),
+		schedule_id: string(),
+		name: string(),
+		name_norm: string(),
+		is_host: number(),
+		created_at: string(),
+	},
+	primaryKey: 'id',
+})
+
+export const availabilityTable = createTable({
+	name: 'availability',
+	columns: {
+		schedule_id: string(),
+		attendee_id: string(),
+		slot_start_utc: string(),
+		updated_at: string(),
+	},
+	primaryKey: 'attendee_id',
 })
 
 export function createDb(db: D1Database) {

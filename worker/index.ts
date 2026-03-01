@@ -1,23 +1,12 @@
-import { OAuthProvider } from '@cloudflare/workers-oauth-provider'
 import { MCP } from '#mcp/index.ts'
 import { handleRequest } from '#server/handler.ts'
-import {
-	apiHandler,
-	handleAuthorizeRequest,
-	handleAuthorizeInfo,
-	handleOAuthCallback,
-	oauthPaths,
-	oauthScopes,
-} from './oauth-handlers.ts'
-import {
-	handleMcpRequest,
-	handleProtectedResourceMetadata,
-	isProtectedResourceMetadataRequest,
-	mcpResourcePath,
-} from './mcp-auth.ts'
 import { withCors } from './utils.ts'
 
 export { MCP }
+export { ScheduleRoom } from './schedule-room.ts'
+
+const mcpResourcePath = '/mcp'
+const scheduleSocketPathPrefix = '/ws/'
 
 const appHandler = withCors({
 	getCorsHeaders(request) {
@@ -35,35 +24,35 @@ const appHandler = withCors({
 	async handler(request, env, ctx) {
 		const url = new URL(request.url)
 
-		if (url.pathname === oauthPaths.authorize) {
-			return handleAuthorizeRequest(request, env)
-		}
-
-		if (url.pathname === oauthPaths.authorizeInfo) {
-			return handleAuthorizeInfo(request, env)
-		}
-
-		if (url.pathname === oauthPaths.callback) {
-			return handleOAuthCallback(request)
-		}
-
 		if (url.pathname === '/.well-known/appspecific/com.chrome.devtools.json') {
 			return new Response(null, { status: 204 })
 		}
 
-		if (isProtectedResourceMetadataRequest(url.pathname)) {
-			return handleProtectedResourceMetadata(request)
+		if (url.pathname === mcpResourcePath) {
+			const mcpContext = ctx as ExecutionContext<{ baseUrl: string }>
+			;(
+				mcpContext as ExecutionContext<{ baseUrl: string }> & {
+					props?: { baseUrl: string }
+				}
+			).props = {
+				baseUrl: url.origin,
+			}
+			return MCP.serve(mcpResourcePath, {
+				binding: 'MCP_OBJECT',
+			}).fetch(request, env, mcpContext)
 		}
 
-		if (url.pathname === mcpResourcePath) {
-			return handleMcpRequest({
-				request,
-				env,
-				ctx,
-				fetchMcp: MCP.serve(mcpResourcePath, {
-					binding: 'MCP_OBJECT',
-				}).fetch,
-			})
+		if (url.pathname.startsWith(scheduleSocketPathPrefix)) {
+			const shareToken = url.pathname.slice(scheduleSocketPathPrefix.length)
+			if (!shareToken) {
+				return Response.json(
+					{ ok: false, error: 'Missing schedule token for realtime socket.' },
+					{ status: 400 },
+				)
+			}
+			const roomId = env.SCHEDULE_ROOM.idFromName(shareToken)
+			const room = env.SCHEDULE_ROOM.get(roomId)
+			return room.fetch(new Request('https://schedule-room/connect', request))
 		}
 
 		// Sandboxed widget iframes have an opaque origin, so JS/CSS loads become CORS fetches.
@@ -85,15 +74,15 @@ const appHandler = withCors({
 			}
 		}
 
-		// Dev route: serve calculator UI for iframe testing (simulates ChatGPT/MCP Jam)
+		// Dev route: serve schedule UI for iframe testing (simulates ChatGPT/MCP Jam)
 		if (
-			url.pathname === '/dev/calculator-ui' &&
+			url.pathname === '/dev/schedule-ui' &&
 			(request.method === 'GET' || request.method === 'HEAD')
 		) {
-			const { renderCalculatorUiEntryPoint } =
-				await import('#mcp/apps/calculator-ui-entry-point.ts')
+			const { renderScheduleUiEntryPoint } =
+				await import('#mcp/apps/schedule-ui-entry-point.ts')
 			const baseUrl = new URL('/', url.origin)
-			const html = renderCalculatorUiEntryPoint(baseUrl)
+			const html = renderScheduleUiEntryPoint(baseUrl)
 			return new Response(html, {
 				headers: {
 					'Content-Type': 'text/html; charset=utf-8',
@@ -113,23 +102,8 @@ const appHandler = withCors({
 	},
 })
 
-const oauthProvider = new OAuthProvider({
-	apiRoute: oauthPaths.apiPrefix,
-	apiHandler,
-	defaultHandler: {
-		fetch(request, env, ctx) {
-			// @ts-expect-error https://github.com/cloudflare/workers-oauth-provider/issues/71
-			return appHandler(request, env, ctx)
-		},
-	},
-	authorizeEndpoint: oauthPaths.authorize,
-	tokenEndpoint: oauthPaths.token,
-	clientRegistrationEndpoint: oauthPaths.register,
-	scopesSupported: oauthScopes,
-})
-
 export default {
 	fetch(request: Request, env: Env, ctx: ExecutionContext) {
-		return oauthProvider.fetch(request, env, ctx)
+		return appHandler(request, env, ctx)
 	},
 } satisfies ExportedHandler<Env>

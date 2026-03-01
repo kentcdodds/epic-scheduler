@@ -1,29 +1,33 @@
 :root {
 	color-scheme: light dark;
 
-	/* Colors - Light mode (epic-scheduler ember) */
-	--color-primary: #f47c00;
-	--color-primary-hover: #e26c00;
-	--color-primary-active: #c85a00;
-	--color-on-primary: #120b08;
-	--color-primary-text: #b04700;
-	--color-background: #f6f6f8;
-	--color-surface: #ececf1;
-	--color-text: #2f2f34;
-	--color-text-muted: #676770;
-	--color-border: #d7d7df;
+	/* Colors - Light mode (twilight violet) */
+	--color-primary: #5b3df5;
+	--color-primary-hover: #4d31da;
+	--color-primary-active: #3e26b8;
+	--color-on-primary: #ffffff;
+	--color-primary-text: #3d2ab5;
+	--color-background: #f5f7ff;
+	--color-surface: #ffffff;
+	--color-text: #111827;
+	--color-text-muted: #475569;
+	--color-border: #cdd6f4;
+	--color-error: #b42318;
+	--color-error-hover: #8f1c13;
 
-	/* Colors - Dark mode (smoldering ember) */
-	--color-primary-dark: #f6a23a;
-	--color-primary-hover-dark: #f08b1a;
-	--color-primary-active-dark: #d87305;
-	--color-on-primary-dark: #120b08;
-	--color-primary-text-dark: #f6a23a;
-	--color-background-dark: #121216;
-	--color-surface-dark: #1c1c22;
-	--color-text-dark: #f1f1f5;
-	--color-text-muted-dark: #b3b3bd;
-	--color-border-dark: #2b2b33;
+	/* Colors - Dark mode (night aurora) */
+	--color-primary-dark: #7b6aff;
+	--color-primary-hover-dark: #6c5cf3;
+	--color-primary-active-dark: #5b4add;
+	--color-on-primary-dark: #ffffff;
+	--color-primary-text-dark: #c3bbff;
+	--color-background-dark: #0b1020;
+	--color-surface-dark: #141b2f;
+	--color-text-dark: #e8ecff;
+	--color-text-muted-dark: #a5b0d1;
+	--color-border-dark: #2a3558;
+	--color-error-dark: #ff8c8c;
+	--color-error-hover-dark: #ff7777;
 
 	/* Typography */
 	--font-family: system-ui, sans-serif;
@@ -106,6 +110,8 @@
 	--color-text: var(--color-text-dark);
 	--color-text-muted: var(--color-text-muted-dark);
 	--color-border: var(--color-border-dark);
+	--color-error: var(--color-error-dark);
+	--color-error-hover: var(--color-error-hover-dark);
 
 	/* Dark mode shadows - lighter for visibility */
 	--shadow-sm: var(--shadow-sm-dark);
@@ -126,6 +132,8 @@
 		--color-text: var(--color-text-dark);
 		--color-text-muted: var(--color-text-muted-dark);
 		--color-border: var(--color-border-dark);
+		--color-error: var(--color-error-dark);
+		--color-error-hover: var(--color-error-hover-dark);
 
 		/* Dark mode shadows - lighter for visibility */
 		--shadow-sm: var(--shadow-sm-dark);
@@ -149,6 +157,15 @@ body {
 	line-height: 1.5;
 	color: var(--color-text);
 	background-color: var(--color-background);
+}
+
+a {
+	color: var(--color-primary-text);
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
 }
 
 #root {

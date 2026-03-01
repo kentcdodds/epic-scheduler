@@ -16,11 +16,13 @@ const serverMetadata = {
 	},
 	instructions: `
 Quick start
-- Use 'do_math' any time you need arithmetic. Prefer calling the tool over doing mental math.
-- Use 'open_calculator_ui' when you want an interactive calculator widget in MCP App compatible hosts.
+- Use 'create_schedule' to create a new scheduling link.
+- Use 'submit_schedule_availability' to save attendee selections.
+- Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
+- Use 'open_schedule_ui' to open the MCP app widget for schedule data entry and display.
 
 How to chain tools safely
-- If you need to verify, re-run 'do_math' with the same arguments (idempotent) or validate with an inverse operation.
+- First create a schedule, then submit attendee availability, then read the snapshot.
 	`.trim(),
 } as const
 
@@ -39,5 +41,13 @@ export class MCP extends McpAgent<Env, State, Props> {
 			'This should never happen, but somehow we did not get the baseUrl from the request handler',
 		)
 		return baseUrl
+	}
+
+	getAppDb() {
+		return this.env.APP_DB
+	}
+
+	getScheduleRoomNamespace() {
+		return this.env.SCHEDULE_ROOM
 	}
 }

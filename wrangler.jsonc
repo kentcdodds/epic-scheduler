@@ -9,6 +9,10 @@
 			"new_sqlite_classes": ["MCP"],
 			"tag": "v1",
 		},
+		{
+			"new_sqlite_classes": ["ScheduleRoom"],
+			"tag": "v2",
+		},
 	],
 
 	"observability": {
@@ -27,6 +31,10 @@
 						"class_name": "MCP",
 						"name": "MCP_OBJECT",
 					},
+					{
+						"class_name": "ScheduleRoom",
+						"name": "SCHEDULE_ROOM",
+					},
 				],
 			},
 			"d1_databases": [
@@ -35,13 +43,6 @@
 					"database_name": "epic-scheduler",
 					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
-				},
-			],
-			"kv_namespaces": [
-				{
-					"binding": "OAUTH_KV",
-					"id": "82c4daf43e484b9483f7a4308b1adbb4",
-					"preview_id": "82c4daf43e484b9483f7a4308b1adbb4",
 				},
 			],
 		},
@@ -57,6 +58,10 @@
 						"class_name": "MCP",
 						"name": "MCP_OBJECT",
 					},
+					{
+						"class_name": "ScheduleRoom",
+						"name": "SCHEDULE_ROOM",
+					},
 				],
 			},
 			"d1_databases": [
@@ -65,13 +70,6 @@
 					"database_name": "epic-scheduler",
 					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
-				},
-			],
-			"kv_namespaces": [
-				{
-					"binding": "OAUTH_KV",
-					"id": "82c4daf43e484b9483f7a4308b1adbb4",
-					"preview_id": "82c4daf43e484b9483f7a4308b1adbb4",
 				},
 			],
 		},
@@ -87,6 +85,10 @@
 						"class_name": "MCP",
 						"name": "MCP_OBJECT",
 					},
+					{
+						"class_name": "ScheduleRoom",
+						"name": "SCHEDULE_ROOM",
+					},
 				],
 			},
 			"d1_databases": [
@@ -95,13 +97,6 @@
 					"database_name": "epic-scheduler",
 					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
-				},
-			],
-			"kv_namespaces": [
-				{
-					"binding": "OAUTH_KV",
-					"id": "82c4daf43e484b9483f7a4308b1adbb4",
-					"preview_id": "82c4daf43e484b9483f7a4308b1adbb4",
 				},
 			],
 		},
