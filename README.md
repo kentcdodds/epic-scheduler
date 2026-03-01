@@ -36,7 +36,7 @@ verification commands.
 ## Create your own project from the template
 
 ```bash
-bunx degit epicweb-dev/epicflare my-epic-scheduler-app
+bunx degit kentcdodds/epic-scheduler my-epic-scheduler-app
 cd my-epic-scheduler-app
 bun install
 bun ./docs/post-download.ts --guided
