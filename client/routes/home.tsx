@@ -32,8 +32,16 @@ function buildDefaultSelection(slots: Array<string>) {
 	return selected
 }
 
+function getBrowserTimeZone() {
+	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
+	if (typeof value !== 'string') return 'UTC'
+	const normalized = value.trim()
+	return normalized || 'UTC'
+}
+
 export function HomeRoute(handle: Handle) {
 	const today = new Date()
+	const browserTimeZone = getBrowserTimeZone()
 	let title = 'Scheduling poll'
 	let hostName = ''
 	let intervalMinutes = 30
@@ -161,6 +169,7 @@ export function HomeRoute(handle: Handle) {
 				body: JSON.stringify({
 					title,
 					hostName: normalizedHostName,
+					hostTimeZone: browserTimeZone,
 					intervalMinutes,
 					rangeStartUtc,
 					rangeEndUtc,
@@ -568,6 +577,9 @@ export function HomeRoute(handle: Handle) {
 
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Desktop: click and drag to paint. Mobile: enable tap start/end mode.
+					</p>
+					<p css={{ margin: 0, color: colors.textMuted }}>
+						Times are shown in your browser timezone: {browserTimeZone}
 					</p>
 
 					{renderScheduleGrid({

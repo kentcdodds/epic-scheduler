@@ -9,6 +9,7 @@ type CreateScheduleRequest = {
 	rangeStartUtc?: unknown
 	rangeEndUtc?: unknown
 	hostName?: unknown
+	hostTimeZone?: unknown
 	selectedSlots?: unknown
 }
 
@@ -61,6 +62,7 @@ export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 					rangeStartUtc: toStringValue(body.rangeStartUtc),
 					rangeEndUtc: toStringValue(body.rangeEndUtc),
 					hostName: toStringValue(body.hostName),
+					hostTimeZone: toStringValue(body.hostTimeZone),
 					selectedSlots: toStringArray(body.selectedSlots),
 				})
 				const snapshot = await getScheduleSnapshot(

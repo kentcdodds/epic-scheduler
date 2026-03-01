@@ -14,6 +14,7 @@ export type AttendeeRecord = {
 	id: string
 	name: string
 	isHost: boolean
+	timeZone: string | null
 }
 
 export type ScheduleSnapshot = {
@@ -43,12 +44,14 @@ type ScheduleInsertInput = {
 	rangeStartUtc: string
 	rangeEndUtc: string
 	hostName: string
+	hostTimeZone?: string | null
 	selectedSlots: Array<string>
 }
 
 type UpsertAvailabilityInput = {
 	shareToken: string
 	attendeeName: string
+	attendeeTimeZone?: string | null
 	selectedSlots: Array<string>
 	isHost?: boolean
 }
@@ -67,6 +70,7 @@ type AttendeeRow = {
 	id: string
 	name: string
 	is_host: number
+	time_zone: string | null
 }
 
 type AvailabilityRow = {
@@ -92,6 +96,23 @@ function parseUtcIso(value: string, fieldName: string) {
 		throw new Error(`Invalid ${fieldName}. Expected an ISO date string.`)
 	}
 	return date.toISOString()
+}
+
+function normalizeTimeZone(
+	value: string | null | undefined,
+	fieldName: string,
+) {
+	const normalized = typeof value === 'string' ? value.trim() : ''
+	if (!normalized) return null
+	try {
+		new Intl.DateTimeFormat('en-US', {
+			timeZone: normalized,
+			hour: 'numeric',
+		}).format(new Date(0))
+	} catch {
+		throw new Error(`Invalid ${fieldName}.`)
+	}
+	return normalized
 }
 
 export function normalizeIntervalMinutes(
@@ -239,6 +260,7 @@ export async function createSchedule(
 	const hostAttendeeId = crypto.randomUUID()
 	const createdAt = new Date().toISOString()
 	const nameNorm = normalizeNameForMatch(hostName)
+	const hostTimeZone = normalizeTimeZone(input.hostTimeZone, 'hostTimeZone')
 
 	await db
 		.prepare(
@@ -273,10 +295,11 @@ export async function createSchedule(
 				name,
 				name_norm,
 				is_host,
+				time_zone,
 				created_at
-			) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+			) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
 		)
-		.bind(hostAttendeeId, id, hostName, nameNorm, 1, createdAt)
+		.bind(hostAttendeeId, id, hostName, nameNorm, 1, hostTimeZone, createdAt)
 		.run()
 
 	await insertAvailabilityRows({
@@ -319,6 +342,10 @@ export async function upsertAttendeeAvailability(
 		allowedSlots,
 	})
 	const nameNorm = normalizeNameForMatch(attendeeName)
+	const attendeeTimeZone = normalizeTimeZone(
+		input.attendeeTimeZone,
+		'attendeeTimeZone',
+	)
 
 	let attendee = await db
 		.prepare(
@@ -341,8 +368,9 @@ export async function upsertAttendeeAvailability(
 					name,
 					name_norm,
 					is_host,
+					time_zone,
 					created_at
-				) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+				) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
 			)
 			.bind(
 				attendeeId,
@@ -350,11 +378,22 @@ export async function upsertAttendeeAvailability(
 				attendeeName,
 				nameNorm,
 				input.isHost ? 1 : 0,
+				attendeeTimeZone,
 				new Date().toISOString(),
 			)
 			.run()
 		attendee = { id: attendeeId }
 	}
+
+	await db
+		.prepare(
+			`UPDATE attendees
+			SET name = ?2,
+				time_zone = COALESCE(?3, time_zone)
+			WHERE id = ?1`,
+		)
+		.bind(attendee.id, attendeeName, attendeeTimeZone)
+		.run()
 
 	await db
 		.prepare(
@@ -395,7 +434,8 @@ export async function getScheduleSnapshot(
 			`SELECT
 				id,
 				name,
-				is_host
+				is_host,
+				time_zone
 			FROM attendees
 			WHERE schedule_id = ?1
 			ORDER BY created_at ASC`,
@@ -418,6 +458,7 @@ export async function getScheduleSnapshot(
 		id: row.id,
 		name: row.name,
 		isHost: row.is_host === 1,
+		timeZone: row.time_zone ?? null,
 	}))
 	const attendeeNameById = new Map(
 		attendees.map((attendee: AttendeeRecord) => [attendee.id, attendee.name]),

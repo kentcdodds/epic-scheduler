@@ -5,6 +5,7 @@ import { type routes } from '#server/routes.ts'
 
 type SubmitAvailabilityRequest = {
 	name?: unknown
+	attendeeTimeZone?: unknown
 	selectedSlots?: unknown
 }
 
@@ -44,6 +45,8 @@ export function createScheduleSubmitAvailabilityHandler(
 			}
 
 			const name = typeof body.name === 'string' ? body.name : ''
+			const attendeeTimeZone =
+				typeof body.attendeeTimeZone === 'string' ? body.attendeeTimeZone : ''
 			const selectedSlots = toStringArray(body.selectedSlots)
 			const roomId = appEnv.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = appEnv.SCHEDULE_ROOM.get(roomId)
@@ -53,6 +56,7 @@ export function createScheduleSubmitAvailabilityHandler(
 				body: JSON.stringify({
 					shareToken,
 					name,
+					attendeeTimeZone,
 					selectedSlots,
 				}),
 			})

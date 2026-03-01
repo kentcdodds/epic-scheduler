@@ -40,6 +40,11 @@ function addDays(date: Date, days: number) {
 	return next
 }
 
+function getBrowserTimeZone() {
+	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
+	return typeof value === 'string' ? value.trim() : ''
+}
+
 function buildSlotsForWeekdays(params: {
 	startDate: string
 	endDate: string
@@ -247,6 +252,7 @@ function setupScheduleWidget() {
 					new Date(`${endDateInput.value}T00:00:00`),
 					1,
 				).toISOString(),
+				hostTimeZone: getBrowserTimeZone(),
 				selectedSlots,
 			}),
 		})
@@ -278,6 +284,7 @@ function setupScheduleWidget() {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				name: attendeeNameInput.value,
+				attendeeTimeZone: getBrowserTimeZone(),
 				selectedSlots,
 			}),
 		})

@@ -9,6 +9,7 @@ type BroadcastPayload = {
 type AvailabilityUpdatePayload = {
 	shareToken?: unknown
 	name?: unknown
+	attendeeTimeZone?: unknown
 	selectedSlots?: unknown
 }
 
@@ -73,6 +74,10 @@ export class ScheduleRoom extends DurableObject<Env> {
 			const shareToken =
 				typeof payload.shareToken === 'string' ? payload.shareToken : ''
 			const name = typeof payload.name === 'string' ? payload.name : ''
+			const attendeeTimeZone =
+				typeof payload.attendeeTimeZone === 'string'
+					? payload.attendeeTimeZone
+					: ''
 			const selectedSlots = Array.isArray(payload.selectedSlots)
 				? payload.selectedSlots.filter(
 						(slot): slot is string => typeof slot === 'string',
@@ -83,6 +88,7 @@ export class ScheduleRoom extends DurableObject<Env> {
 				await upsertAttendeeAvailability(this.env.APP_DB, {
 					shareToken,
 					attendeeName: name,
+					attendeeTimeZone,
 					selectedSlots,
 				})
 				this.broadcast({

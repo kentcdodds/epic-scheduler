@@ -41,6 +41,12 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			inputSchema: {
 				title: z.string().default('Scheduling poll'),
 				hostName: z.string(),
+				hostTimeZone: z
+					.string()
+					.optional()
+					.describe(
+						'Optional IANA time zone for the host (for example "America/Los_Angeles").',
+					),
 				intervalMinutes: intervalSchema.default(30),
 				rangeStartUtc: z.string().describe('ISO datetime in UTC.'),
 				rangeEndUtc: z.string().describe('ISO datetime in UTC.'),
@@ -61,6 +67,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 		async ({
 			title,
 			hostName,
+			hostTimeZone,
 			intervalMinutes,
 			rangeStartUtc,
 			rangeEndUtc,
@@ -68,6 +75,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 		}: {
 			title: string
 			hostName: string
+			hostTimeZone?: string
 			intervalMinutes: 15 | 30 | 60
 			rangeStartUtc: string
 			rangeEndUtc: string
@@ -77,6 +85,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 				const created = await createSchedule(agent.getAppDb(), {
 					title,
 					hostName,
+					hostTimeZone,
 					intervalMinutes,
 					rangeStartUtc,
 					rangeEndUtc,

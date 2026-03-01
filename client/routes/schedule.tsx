@@ -21,7 +21,12 @@ type Snapshot = {
 		createdAt: string
 	}
 	slots: Array<string>
-	attendees: Array<{ id: string; name: string; isHost: boolean }>
+	attendees: Array<{
+		id: string
+		name: string
+		isHost: boolean
+		timeZone: string | null
+	}>
 	availabilityByAttendee: Record<string, Array<string>>
 	countsBySlot: Record<string, number>
 	availableNamesBySlot: Record<string, Array<string>>
@@ -34,6 +39,48 @@ function parseShareToken(pathname: string) {
 	if (segments.length < 2) return ''
 	if (segments[0] !== 's') return ''
 	return segments[1] ?? ''
+}
+
+function getBrowserTimeZone() {
+	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
+	if (typeof value !== 'string') return 'UTC'
+	const normalized = value.trim()
+	return normalized || 'UTC'
+}
+
+const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function formatSlotForAttendeeTimeZone(slot: string, timeZone: string | null) {
+	if (!timeZone) {
+		return {
+			localTime: 'Local time unknown',
+			timeZoneLabel: 'timezone unknown',
+		}
+	}
+	const slotDate = new Date(slot)
+	if (Number.isNaN(slotDate.getTime())) {
+		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
+	}
+	try {
+		let formatter = attendeeLocalTimeFormatters.get(timeZone)
+		if (!formatter) {
+			formatter = new Intl.DateTimeFormat(undefined, {
+				weekday: 'short',
+				month: 'short',
+				day: 'numeric',
+				hour: 'numeric',
+				minute: '2-digit',
+				timeZone,
+			})
+			attendeeLocalTimeFormatters.set(timeZone, formatter)
+		}
+		return {
+			localTime: formatter.format(slotDate),
+			timeZoneLabel: timeZone,
+		}
+	} catch {
+		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
+	}
 }
 
 function createSlotAvailability(snapshot: Snapshot | null) {
@@ -84,6 +131,7 @@ function getSelectionDiff(params: {
 }
 
 export function ScheduleRoute(handle: Handle) {
+	const browserTimeZone = getBrowserTimeZone()
 	let shareToken = ''
 	let attendeeName = ''
 	let snapshot: Snapshot | null = null
@@ -249,6 +297,7 @@ export function ScheduleRoute(handle: Handle) {
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						name: normalizedName,
+						attendeeTimeZone: browserTimeZone,
 						selectedSlots: Array.from(selectedSlots).sort((left, right) =>
 							left.localeCompare(right),
 						),
@@ -509,14 +558,32 @@ export function ScheduleRoute(handle: Handle) {
 				: pendingChangeCount > 0 || isSaving
 					? colors.primary
 					: 'color-mix(in srgb, var(--color-primary) 40%, var(--color-text-muted))'
-		const attendeeNames =
-			currentSnapshot?.attendees.map((entry) => entry.name) ?? []
+		const attendeeEntries = currentSnapshot?.attendees ?? []
 		const activeSlotAvailableNames = activeSlot
 			? (currentSnapshot?.availableNamesBySlot[activeSlot] ?? [])
 			: []
-		const activeSlotUnavailableNames = attendeeNames.filter(
-			(name) => !activeSlotAvailableNames.includes(name),
+		const activeSlotAvailableNameSet = new Set(activeSlotAvailableNames)
+		const activeSlotAvailableAttendees = attendeeEntries.filter((entry) =>
+			activeSlotAvailableNameSet.has(entry.name),
 		)
+		const activeSlotUnavailableAttendees = attendeeEntries.filter(
+			(entry) => !activeSlotAvailableNameSet.has(entry.name),
+		)
+		const activeSlotValue = activeSlot
+		const activeSlotAvailableDetails =
+			activeSlotValue === null
+				? []
+				: activeSlotAvailableAttendees.map((entry) => ({
+						name: entry.name,
+						...formatSlotForAttendeeTimeZone(activeSlotValue, entry.timeZone),
+					}))
+		const activeSlotUnavailableDetails =
+			activeSlotValue === null
+				? []
+				: activeSlotUnavailableAttendees.map((entry) => ({
+						name: entry.name,
+						...formatSlotForAttendeeTimeZone(activeSlotValue, entry.timeZone),
+					}))
 		const activeSlotPendingStatus =
 			activeSlot && pendingDiff.pendingAdded.has(activeSlot)
 				? 'Pending add to your availability.'
@@ -826,6 +893,9 @@ export function ScheduleRoute(handle: Handle) {
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							Desktop: click and drag. Mobile: enable tap start/end mode.
 						</p>
+						<p css={{ margin: 0, color: colors.textMuted }}>
+							Times are shown in your browser timezone: {browserTimeZone}
+						</p>
 					</div>
 
 					{isLoading ? (
@@ -899,12 +969,56 @@ export function ScheduleRoute(handle: Handle) {
 									minute: '2-digit',
 								}).format(new Date(activeSlot))}
 							</p>
-							<p css={{ margin: 0, color: colors.text }}>
-								Available: {activeSlotAvailableNames.join(', ') || 'None'}
-							</p>
-							<p css={{ margin: 0, color: colors.textMuted }}>
-								Unavailable: {activeSlotUnavailableNames.join(', ') || 'None'}
-							</p>
+							<div css={{ display: 'grid', gap: spacing.xs }}>
+								<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
+									Available ({activeSlotAvailableDetails.length})
+								</p>
+								{activeSlotAvailableDetails.length > 0 ? (
+									<ul
+										css={{
+											margin: 0,
+											paddingLeft: '1rem',
+											display: 'grid',
+											gap: spacing.xs,
+										}}
+									>
+										{activeSlotAvailableDetails.map((entry) => (
+											<li key={`available-${entry.name}`}>
+												<strong>{entry.name}</strong> — {entry.localTime} (
+												{entry.timeZoneLabel})
+											</li>
+										))}
+									</ul>
+								) : (
+									<p css={{ margin: 0, color: colors.textMuted }}>None</p>
+								)}
+							</div>
+							<div css={{ display: 'grid', gap: spacing.xs }}>
+								<p
+									css={{ margin: 0, color: colors.textMuted, fontWeight: 600 }}
+								>
+									Unavailable ({activeSlotUnavailableDetails.length})
+								</p>
+								{activeSlotUnavailableDetails.length > 0 ? (
+									<ul
+										css={{
+											margin: 0,
+											paddingLeft: '1rem',
+											display: 'grid',
+											gap: spacing.xs,
+										}}
+									>
+										{activeSlotUnavailableDetails.map((entry) => (
+											<li key={`unavailable-${entry.name}`}>
+												<strong>{entry.name}</strong> — {entry.localTime} (
+												{entry.timeZoneLabel})
+											</li>
+										))}
+									</ul>
+								) : (
+									<p css={{ margin: 0, color: colors.textMuted }}>None</p>
+								)}
+							</div>
 							{activeSlotPendingStatus ? (
 								<p
 									css={{

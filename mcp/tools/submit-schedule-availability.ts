@@ -24,6 +24,12 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 			inputSchema: {
 				shareToken: z.string(),
 				attendeeName: z.string(),
+				attendeeTimeZone: z
+					.string()
+					.optional()
+					.describe(
+						'Optional IANA time zone for this attendee (for example "America/New_York").',
+					),
 				selectedSlots: z.array(z.string()).default([]),
 			},
 			outputSchema: {
@@ -37,10 +43,12 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 		async ({
 			shareToken,
 			attendeeName,
+			attendeeTimeZone,
 			selectedSlots,
 		}: {
 			shareToken: string
 			attendeeName: string
+			attendeeTimeZone?: string
 			selectedSlots: Array<string>
 		}) => {
 			try {
@@ -55,6 +63,7 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 						body: JSON.stringify({
 							shareToken,
 							name: attendeeName,
+							attendeeTimeZone: attendeeTimeZone ?? '',
 							selectedSlots,
 						}),
 					},

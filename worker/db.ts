@@ -24,6 +24,7 @@ export const attendeesTable = createTable({
 		name: string(),
 		name_norm: string(),
 		is_host: number(),
+		time_zone: string(),
 		created_at: string(),
 	},
 	primaryKey: 'id',

@@ -8,7 +8,7 @@ coordination.
 Scheduler data lives in D1:
 
 - `schedules`: link token, interval, range, metadata
-- `attendees`: names per schedule
+- `attendees`: names and optional browser time zones per schedule
 - `availability`: slot selections per attendee
 
 Shared persistence logic is centralized in `shared/schedule-store.ts`.
