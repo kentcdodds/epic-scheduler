@@ -72,6 +72,7 @@ Common commands:
 
 - `bun run test:e2e`
 - `bun run test:e2e e2e/schedule-collaboration.spec.ts`
+- `bun run test:e2e e2e/seo-content.spec.ts`
 
 These tests are executed by the `validate` gate, which also runs `lint:fix` and
 the MCP E2E suite.

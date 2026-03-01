@@ -14,5 +14,6 @@ This folder documents the important runtime architecture for `epic-scheduler`.
 - Worker entrypoint: `worker/index.ts`
 - Server request handler: `server/handler.ts`
 - Router and HTTP route mapping: `server/router.ts` and `server/routes.ts`
+- SEO/marketing content map: `server/seo-content.ts`
 - Scheduler persistence logic: `shared/schedule-store.ts`
 - Realtime schedule DO: `worker/schedule-room.ts`

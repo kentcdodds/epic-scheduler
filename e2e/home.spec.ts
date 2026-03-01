@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('home page renders scheduler creation flow', async ({ page }) => {
 	await page.goto('/')
-	await expect(page).toHaveTitle('Epic Scheduler')
+	await expect(page).toHaveTitle(/Epic Scheduler/)
 	await expect(
 		page.getByRole('heading', {
 			name: 'Plan once, share once, schedule faster.',

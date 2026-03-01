@@ -20,5 +20,7 @@
 	],
 	"theme_color": "#5b3df5",
 	"background_color": "#f5f7ff",
-	"display": "standalone"
+	"display": "standalone",
+	"start_url": "/",
+	"description": "Link-based meeting scheduler with realtime overlap heatmaps."
 }

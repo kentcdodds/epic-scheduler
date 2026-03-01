@@ -70,8 +70,11 @@ export function App(handle: Handle) {
 						<a href="/" css={navLinkCss}>
 							New schedule
 						</a>
-						<a href="/chat" css={navLinkCss}>
-							Why this works
+						<a href="/how-it-works" css={navLinkCss} data-router-reload>
+							How it works
+						</a>
+						<a href="/blog" css={navLinkCss} data-router-reload>
+							Blog
 						</a>
 					</div>
 				</nav>
@@ -97,6 +100,30 @@ export function App(handle: Handle) {
 						),
 					}}
 				/>
+				<footer
+					css={{
+						marginTop: spacing.xl,
+						paddingTop: spacing.md,
+						borderTop: `1px solid ${colors.border}`,
+						display: 'flex',
+						flexWrap: 'wrap',
+						gap: spacing.md,
+					}}
+				>
+					<a href="/privacy" css={navLinkCss} data-router-reload>
+						Privacy
+					</a>
+					<a href="/terms" css={navLinkCss} data-router-reload>
+						Terms
+					</a>
+					<a
+						href="/meeting-scheduler-features"
+						css={navLinkCss}
+						data-router-reload
+					>
+						Features
+					</a>
+				</footer>
 			</main>
 		)
 	}

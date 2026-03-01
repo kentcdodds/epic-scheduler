@@ -16,9 +16,12 @@ Requests are handled in this order:
    - `/mcp`
 3. Realtime websocket endpoint:
    - `/ws/:shareToken` (proxied to `ScheduleRoom` durable object)
-4. Static assets:
+4. SEO crawler endpoints:
+   - `/robots.txt`
+   - `/sitemap.xml`
+5. Static assets:
    - Served from `ASSETS` for `GET` and `HEAD` when available
-5. App server routes:
+6. App server routes:
    - Everything else is handled by `server/handler.ts`
 
 ## App server flow
@@ -26,7 +29,7 @@ Requests are handled in this order:
 `server/handler.ts` validates environment variables then creates the app router.
 
 `server/router.ts` maps route patterns from `server/routes.ts` to handler
-modules (home/about, schedule APIs, and health).
+modules (home app shell, marketing/SEO pages, schedule APIs, and health).
 
 ## Client-side navigation flow
 
