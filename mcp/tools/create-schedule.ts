@@ -47,7 +47,9 @@ export async function registerCreateScheduleTool(agent: MCP) {
 				selectedSlots: z
 					.array(z.string())
 					.default([])
-					.describe('Array of selected slot timestamps in UTC ISO format.'),
+					.describe(
+						'Optional host-selected availability slots in UTC ISO timestamp format (examples: "2026-03-02T14:00:00.000Z", "2026-03-02T14:30:00.000Z"). Each value should align to the selected interval and fall within the [rangeStartUtc, rangeEndUtc) window.',
+					),
 			},
 			outputSchema: {
 				shareToken: z.string(),

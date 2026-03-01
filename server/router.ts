@@ -1,7 +1,6 @@
 import { createRouter } from 'remix/fetch-router'
 import { type AppEnv } from '#types/env-schema.ts'
 import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
-import { chat } from './handlers/chat.ts'
 import { createHealthHandler } from './handlers/health.ts'
 import { home } from './handlers/home.ts'
 import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
@@ -28,7 +27,6 @@ export function createAppRouter(appEnv: AppEnv) {
 	})
 
 	router.map(routes.home, home)
-	router.map(routes.chat, chat)
 	router.map(routes.howItWorks, howItWorks)
 	router.map(routes.features, features)
 	router.map(routes.blog, blogIndex)

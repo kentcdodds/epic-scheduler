@@ -2,7 +2,6 @@ import { post, route } from 'remix/fetch-router/routes'
 
 export const routes = route({
 	home: '/',
-	chat: '/chat',
 	howItWorks: '/how-it-works',
 	features: '/meeting-scheduler-features',
 	blog: '/blog',
