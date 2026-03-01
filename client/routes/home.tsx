@@ -52,6 +52,7 @@ export function HomeRoute(handle: Handle) {
 	let rangeEndUtc = ''
 	let selectedSlots = new Set<string>()
 	let rangeAnchor: string | null = null
+	let tapRangeAction: 'add' | 'remove' | null = null
 	let activeSlot: string | null = null
 	let mobileDayKey: string | null = null
 	let status: RequestStatus = 'idle'
@@ -116,7 +117,11 @@ export function HomeRoute(handle: Handle) {
 		selectedSlots.delete(slot)
 	}
 
-	function applyRange(startSlot: string, endSlot: string) {
+	function applyRange(
+		startSlot: string,
+		endSlot: string,
+		shouldSelect: boolean,
+	) {
 		const startIndex = generatedSlots.indexOf(startSlot)
 		const endIndex = generatedSlots.indexOf(endSlot)
 		if (startIndex < 0 || endIndex < 0) return
@@ -126,7 +131,7 @@ export function HomeRoute(handle: Handle) {
 		for (let index = min; index <= max; index += 1) {
 			const slot = generatedSlots[index]
 			if (!slot) continue
-			selectedSlots.add(slot)
+			setSlotSelection(slot, shouldSelect)
 		}
 	}
 
@@ -239,16 +244,21 @@ export function HomeRoute(handle: Handle) {
 
 		if (!rangeAnchor) {
 			rangeAnchor = slot
+			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
 			activeSlot = slot
 			setMessage(
 				'idle',
-				'Range start selected. Tap another slot to set range end.',
+				tapRangeAction === 'remove'
+					? 'Range start selected. Tap another slot to remove range.'
+					: 'Range start selected. Tap another slot to add range.',
 			)
 			return
 		}
 
-		applyRange(rangeAnchor, slot)
+		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
+		applyRange(rangeAnchor, slot, shouldSelect)
 		rangeAnchor = null
+		tapRangeAction = null
 		activeSlot = slot
 		setMessage('idle', null)
 	}
@@ -546,6 +556,7 @@ export function HomeRoute(handle: Handle) {
 								click: () => {
 									useTapRangeMode = !useTapRangeMode
 									rangeAnchor = null
+									tapRangeAction = null
 									setMessage(
 										'idle',
 										useTapRangeMode
