@@ -29,9 +29,14 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 			* {
 				box-sizing: border-box;
 			}
+			html,
+			body {
+				width: 100%;
+				min-height: 100%;
+			}
 			body {
 				margin: 0;
-				padding: var(--spacing-md);
+				padding: 0;
 				font-family: var(--font-family);
 				background: var(--color-background);
 				color: var(--color-text);
@@ -39,13 +44,24 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 			.scheduler-widget {
 				display: grid;
 				gap: var(--spacing-md);
-				max-width: 40rem;
-				margin: 0 auto;
+				width: 100%;
+				min-height: 100dvh;
+				max-width: none;
+				margin: 0;
 				padding: var(--spacing-lg);
-				border: 1px solid var(--color-border);
-				border-radius: var(--radius-lg);
-				background: var(--color-surface);
-				box-shadow: var(--shadow-sm);
+				border: none;
+				border-radius: 0;
+				background: color-mix(
+					in srgb,
+					var(--color-surface) 92%,
+					var(--color-background)
+				);
+				box-shadow: none;
+			}
+			@supports not (height: 100dvh) {
+				.scheduler-widget {
+					min-height: 100vh;
+				}
 			}
 			.scheduler-widget h1 {
 				margin: 0;

@@ -50,7 +50,7 @@ export async function registerScheduleAppResource(agent: MCP) {
 						mimeType: RESOURCE_MIME_TYPE,
 						_meta: {
 							ui: {
-								prefersBorder: true,
+								prefersBorder: false,
 								domain: resourceDomain,
 								csp: {
 									resourceDomains: [resourceDomain],
