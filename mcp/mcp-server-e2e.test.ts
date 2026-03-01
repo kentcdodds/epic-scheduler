@@ -416,7 +416,8 @@ test(
 		expect(scheduleResource?.mimeType).toBe('text/html;profile=mcp-app')
 		expect(scheduleResource?.text).toContain('data-schedule-widget')
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
-		expect(scheduleResource?.text).toContain('Create schedule')
+		expect(scheduleResource?.text).toContain('Quick create schedule link')
+		expect(scheduleResource?.text).toContain('Create and load schedule')
 		expect(scheduleResource?.text).toContain('Request fullscreen mode')
 
 		const scheduleWidgetResponse = await fetch(
