@@ -70,11 +70,15 @@ test('slot details show attendee timezone and local slot time', async ({
 	await page.reload()
 	const selectedSlotLocator = page.locator('button[aria-pressed="true"]')
 	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
-	for (let index = 0; index < 14; index += 1) {
-		if ((await selectedSlotLocator.count()) > 0) break
-		if (await nextDayButton.isDisabled()) break
-		await nextDayButton.click()
+
+	if ((await nextDayButton.count()) > 0) {
+		for (let index = 0; index < 14; index += 1) {
+			if ((await selectedSlotLocator.count()) > 0) break
+			if (await nextDayButton.isDisabled()) break
+			await nextDayButton.click()
+		}
 	}
+	await expect.poll(async () => selectedSlotLocator.count()).toBeGreaterThan(0)
 	const selectedSlot = selectedSlotLocator.first()
 	await expect(selectedSlot).toBeVisible()
 	await selectedSlot.click()
