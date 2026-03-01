@@ -21,8 +21,6 @@ test('home mobile tap-range mode can deselect a selected slot', async ({
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
 	expect(initialCount).toBeGreaterThan(0)
 
-	await page.getByRole('button', { name: 'Tap start/end mode' }).click()
-
 	const selectedSlotLocator = page.locator(
 		'[data-schedule-grid-shell] table button[aria-pressed="true"]',
 	)

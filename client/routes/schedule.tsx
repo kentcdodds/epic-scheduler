@@ -1,6 +1,12 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { findSelectionForAttendee } from '#client/schedule-utils.ts'
+import {
+	detectTapRangeMode,
+	getTapRangeStartMessage,
+	isTapRangeStartMessage,
+	resolveTapRangeModeFromPointer,
+} from '#client/tap-range-mode.ts'
 import { normalizeName } from '#shared/schedule-store.ts'
 import {
 	colors,
@@ -141,7 +147,7 @@ export function ScheduleRoute(handle: Handle) {
 	let rangeAnchor: string | null = null
 	let tapRangeAction: 'add' | 'remove' | null = null
 	let mobileDayKey: string | null = null
-	let useTapRangeMode = false
+	let useTapRangeMode = detectTapRangeMode()
 	let saveMessage: string | null = null
 	let saveError = false
 	let isSaving = false
@@ -395,8 +401,21 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function handleCellPointerDown(slot: string, event: PointerEvent) {
+		const nextMode = resolveTapRangeModeFromPointer({
+			currentMode: useTapRangeMode,
+			pointerType: event.pointerType,
+		})
+		if (nextMode !== useTapRangeMode) {
+			useTapRangeMode = nextMode
+			rangeAnchor = null
+			tapRangeAction = null
+			if (isTapRangeStartMessage(saveMessage)) {
+				setStatusMessage(null, false)
+			} else {
+				handle.update()
+			}
+		}
 		if (useTapRangeMode) return
-		if (event.pointerType === 'touch') return
 		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		dragging = true
 		lastPointerSlot = slot
@@ -424,11 +443,7 @@ export function ScheduleRoute(handle: Handle) {
 			rangeAnchor = slot
 			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
 			activeSlot = slot
-			setStatusMessage(
-				tapRangeAction === 'remove'
-					? 'Range start selected. Tap another slot to remove range.'
-					: 'Range start selected. Tap another slot to add range.',
-			)
+			setStatusMessage(getTapRangeStartMessage(tapRangeAction))
 			return
 		}
 		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
@@ -870,37 +885,24 @@ export function ScheduleRoute(handle: Handle) {
 							alignItems: 'center',
 						}}
 					>
-						<button
-							type="button"
-							on={{
-								click: () => {
-									useTapRangeMode = !useTapRangeMode
-									rangeAnchor = null
-									tapRangeAction = null
-									setStatusMessage(
-										useTapRangeMode
-											? 'Tap-range mode enabled. Tap start, then tap end.'
-											: null,
-									)
-								},
-							}}
+						<span
 							css={{
 								padding: `${spacing.xs} ${spacing.md}`,
 								borderRadius: radius.full,
 								border: `1px solid ${colors.border}`,
 								backgroundColor: useTapRangeMode
-									? colors.primary
-									: 'transparent',
-								color: useTapRangeMode ? colors.onPrimary : colors.text,
-								cursor: 'pointer',
+									? colors.primarySoft
+									: colors.background,
+								color: useTapRangeMode ? colors.primaryText : colors.textMuted,
 								fontWeight: typography.fontWeight.medium,
 							}}
-							aria-pressed={useTapRangeMode}
 						>
-							{useTapRangeMode ? 'Tap start/end mode on' : 'Tap start/end mode'}
-						</button>
+							Selection mode:{' '}
+							{useTapRangeMode ? 'tap start/end' : 'click and drag'}
+						</span>
 						<p css={{ margin: 0, color: colors.textMuted }}>
-							Desktop: click and drag. Mobile: enable tap start/end mode.
+							Touch input auto-enables tap start/end mode. Mouse and trackpad
+							auto-enable drag paint mode.
 						</p>
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							Times are shown in your browser timezone: {browserTimeZone}
