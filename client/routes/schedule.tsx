@@ -274,7 +274,9 @@ export function ScheduleRoute(handle: Handle) {
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (saveVersion === changeVersion) {
 				hasDirtyChanges = false
-				setStatusMessage('Availability saved.', false)
+				if (saveError || saveMessage) {
+					setStatusMessage(null, false)
+				}
 			}
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
@@ -518,6 +520,8 @@ export function ScheduleRoute(handle: Handle) {
 				: activeSlot && pendingDiff.pendingRemoved.has(activeSlot)
 					? 'Pending removal from your availability.'
 					: null
+		const inlineStatusText = saveMessage ?? '\u00a0'
+		const showInlineStatus = Boolean(saveMessage)
 		const connectionLabel =
 			connectionState === 'live'
 				? 'Realtime connected'
@@ -645,7 +649,14 @@ export function ScheduleRoute(handle: Handle) {
 							>
 								{isSaving ? 'Saving…' : 'Save availability'}
 							</button>
-							<p css={{ margin: 0, color: colors.textMuted }}>
+							<p
+								css={{
+									margin: 0,
+									color: colors.textMuted,
+									whiteSpace: 'nowrap',
+									fontVariantNumeric: 'tabular-nums',
+								}}
+							>
 								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'} ·{' '}
 								{pendingChangeCount} pending
 							</p>
@@ -657,7 +668,7 @@ export function ScheduleRoute(handle: Handle) {
 						aria-live="polite"
 						css={{
 							display: 'grid',
-							gap: spacing.sm,
+							gap: spacing.xs,
 							padding: spacing.md,
 							borderRadius: radius.md,
 							border: `1px solid ${syncBorderColor}`,
@@ -666,8 +677,8 @@ export function ScheduleRoute(handle: Handle) {
 					>
 						<div
 							css={{
-								display: 'flex',
-								flexWrap: 'wrap',
+								display: 'grid',
+								gridTemplateColumns: 'auto minmax(0, 1fr)',
 								gap: spacing.sm,
 								alignItems: 'center',
 							}}
@@ -682,60 +693,95 @@ export function ScheduleRoute(handle: Handle) {
 									backgroundColor: syncDotColor,
 								}}
 							/>
-							<strong
-								css={{ color: colors.text, fontSize: typography.fontSize.sm }}
-							>
-								{syncSummary}
-							</strong>
-							<span
-								css={{
-									color: colors.textMuted,
-									fontSize: typography.fontSize.sm,
-								}}
-							>
-								{syncDetails}
-							</span>
-						</div>
-						{pendingChangeCount > 0 ? (
-							<div
-								css={{
-									display: 'flex',
-									flexWrap: 'wrap',
-									gap: spacing.xs,
-								}}
-							>
-								{pendingAddCount > 0 ? (
-									<span
-										css={{
-											padding: `${spacing.xs} ${spacing.sm}`,
-											borderRadius: radius.full,
-											backgroundColor:
-												'color-mix(in srgb, var(--color-primary) 18%, var(--color-surface))',
-											color: colors.text,
-											fontSize: typography.fontSize.xs,
-											fontWeight: typography.fontWeight.medium,
-										}}
-									>
-										Pending add: {pendingAddCount}
-									</span>
-								) : null}
-								{pendingRemoveCount > 0 ? (
-									<span
-										css={{
-											padding: `${spacing.xs} ${spacing.sm}`,
-											borderRadius: radius.full,
-											backgroundColor:
-												'color-mix(in srgb, var(--color-error) 16%, var(--color-surface))',
-											color: colors.text,
-											fontSize: typography.fontSize.xs,
-											fontWeight: typography.fontWeight.medium,
-										}}
-									>
-										Pending remove: {pendingRemoveCount}
-									</span>
-								) : null}
+							<div css={{ display: 'grid', gap: spacing.xs, minWidth: 0 }}>
+								<strong
+									css={{
+										color: colors.text,
+										fontSize: typography.fontSize.sm,
+										whiteSpace: 'nowrap',
+										overflow: 'hidden',
+										textOverflow: 'ellipsis',
+										minHeight: '1.3rem',
+									}}
+								>
+									{syncSummary}
+								</strong>
+								<span
+									css={{
+										color: colors.textMuted,
+										fontSize: typography.fontSize.sm,
+										whiteSpace: 'nowrap',
+										overflow: 'hidden',
+										textOverflow: 'ellipsis',
+										minHeight: '1.25rem',
+									}}
+								>
+									{syncDetails}
+								</span>
 							</div>
-						) : null}
+						</div>
+						<div
+							css={{
+								display: 'flex',
+								flexWrap: 'nowrap',
+								gap: spacing.xs,
+								overflowX: 'auto',
+								minHeight: '1.65rem',
+								alignItems: 'center',
+							}}
+						>
+							{pendingChangeCount > 0 ? (
+								<>
+									{pendingAddCount > 0 ? (
+										<span
+											css={{
+												padding: `${spacing.xs} ${spacing.sm}`,
+												borderRadius: radius.full,
+												backgroundColor:
+													'color-mix(in srgb, var(--color-primary) 18%, var(--color-surface))',
+												color: colors.text,
+												fontSize: typography.fontSize.xs,
+												fontWeight: typography.fontWeight.medium,
+												whiteSpace: 'nowrap',
+											}}
+										>
+											Pending add: {pendingAddCount}
+										</span>
+									) : null}
+									{pendingRemoveCount > 0 ? (
+										<span
+											css={{
+												padding: `${spacing.xs} ${spacing.sm}`,
+												borderRadius: radius.full,
+												backgroundColor:
+													'color-mix(in srgb, var(--color-error) 16%, var(--color-surface))',
+												color: colors.text,
+												fontSize: typography.fontSize.xs,
+												fontWeight: typography.fontWeight.medium,
+												whiteSpace: 'nowrap',
+											}}
+										>
+											Pending remove: {pendingRemoveCount}
+										</span>
+									) : null}
+								</>
+							) : (
+								<span
+									aria-hidden
+									css={{
+										padding: `${spacing.xs} ${spacing.sm}`,
+										borderRadius: radius.full,
+										border: `1px solid ${colors.border}`,
+										color: 'transparent',
+										fontSize: typography.fontSize.xs,
+										whiteSpace: 'nowrap',
+										pointerEvents: 'none',
+									}}
+								>
+									Pending add: 0
+								</span>
+							)}
+						</div>
 					</section>
 
 					<div
@@ -866,18 +912,28 @@ export function ScheduleRoute(handle: Handle) {
 						</section>
 					) : null}
 
-					{saveMessage ? (
+					<div
+						css={{
+							minHeight: '2.2rem',
+							display: 'grid',
+							alignItems: 'start',
+						}}
+					>
 						<p
-							role={saveError ? 'alert' : undefined}
+							role={saveError && showInlineStatus ? 'alert' : undefined}
+							aria-live="polite"
+							aria-hidden={showInlineStatus ? undefined : true}
 							css={{
 								margin: 0,
 								color: saveError ? colors.error : colors.textMuted,
 								fontSize: typography.fontSize.sm,
+								opacity: showInlineStatus ? 1 : 0,
+								transition: 'opacity 120ms ease',
 							}}
 						>
-							{saveMessage}
+							{inlineStatusText}
 						</p>
-					) : null}
+					</div>
 				</section>
 			</section>
 		)
