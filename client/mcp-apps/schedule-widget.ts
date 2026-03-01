@@ -390,11 +390,23 @@ function setupScheduleWidget() {
 		updateSelectionSummary()
 	}
 
-	function resetSelectionForAttendee() {
+	function resetSelectionForAttendee(preserveDirtySelection = false) {
+		const selectionDiff = preserveDirtySelection
+			? getSelectionDiff({
+					currentSelection: selectedSlots,
+					persistedSelection: persistedSelectedSlots,
+				})
+			: null
+		const hasDirtyChanges =
+			selectionDiff &&
+			(selectionDiff.pendingAdded.size > 0 ||
+				selectionDiff.pendingRemoved.size > 0)
 		persistedSelectedSlots = getPersistedSelectionForName(
 			attendeeNameInput.value,
 		)
-		selectedSlots = new Set(persistedSelectedSlots)
+		if (!hasDirtyChanges) {
+			selectedSlots = new Set(persistedSelectedSlots)
+		}
 		if (activeSlot && snapshot?.slots.includes(activeSlot)) {
 			return
 		}
@@ -491,8 +503,8 @@ function setupScheduleWidget() {
 	}
 
 	async function fetchSnapshot() {
-		const token = currentShareToken?.trim() ?? ''
-		if (!token) {
+		const requestShareToken = currentShareToken?.trim() ?? ''
+		if (!requestShareToken) {
 			throw new Error(
 				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
 			)
@@ -503,10 +515,13 @@ function setupScheduleWidget() {
 		}, fetchSnapshotTimeoutMs)
 		let response: Response
 		try {
-			response = await fetch(`/api/schedules/${token}`, {
+			response = await fetch(`/api/schedules/${requestShareToken}`, {
 				signal: controller.signal,
 			})
 		} catch (error) {
+			if (requestShareToken !== (currentShareToken?.trim() ?? '')) {
+				return null
+			}
 			if (error instanceof DOMException && error.name === 'AbortError') {
 				throw new Error('Loading schedule timed out. Please try again.')
 			}
@@ -519,6 +534,9 @@ function setupScheduleWidget() {
 			snapshot?: ScheduleSnapshot
 			error?: string
 		} | null
+		if (requestShareToken !== (currentShareToken?.trim() ?? '')) {
+			return payload
+		}
 		if (!response.ok || !payload?.ok || !payload.snapshot) {
 			throw new Error(
 				typeof payload?.error === 'string'
@@ -635,7 +653,7 @@ function setupScheduleWidget() {
 
 	attendeeNameInput.addEventListener('input', () => {
 		if (!snapshot) return
-		resetSelectionForAttendee()
+		resetSelectionForAttendee(true)
 		renderGrid()
 		renderSlotDetails()
 		setStatus('Loaded saved availability for this attendee.')
