@@ -1,9 +1,7 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import {
-	findSelectionForAttendee,
-	normalizeName,
-} from '#client/schedule-utils.ts'
+import { findSelectionForAttendee } from '#client/schedule-utils.ts'
+import { normalizeName } from '#shared/schedule-store.ts'
 import {
 	colors,
 	mq,

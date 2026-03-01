@@ -1,3 +1,5 @@
+import { normalizeName } from '#shared/schedule-store.ts'
+
 export type GridModel = {
 	dayKeys: Array<string>
 	dayLabels: Record<string, string>
@@ -120,10 +122,6 @@ export function buildGridModel(slots: Array<string>): GridModel {
 		timeLabels,
 		cellByDayAndTime,
 	}
-}
-
-export function normalizeName(value: string) {
-	return value.trim().replace(/\s+/g, ' ')
 }
 
 export function findSelectionForAttendee(params: {
