@@ -148,6 +148,15 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 			<header>
 				<h1>Epic Scheduler MCP App</h1>
 				<p>Create schedule links, submit attendee availability, and inspect overlap.</p>
+				<div class="row">
+					<button
+						type="button"
+						class="muted-button"
+						data-action="request-fullscreen"
+					>
+						Request fullscreen mode
+					</button>
+				</div>
 			</header>
 
 			<section>

@@ -417,6 +417,7 @@ test(
 		expect(scheduleResource?.text).toContain('data-schedule-widget')
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
 		expect(scheduleResource?.text).toContain('Create schedule')
+		expect(scheduleResource?.text).toContain('Request fullscreen mode')
 
 		const scheduleWidgetResponse = await fetch(
 			new URL('/mcp-apps/schedule-widget.js', server.origin),
@@ -428,6 +429,7 @@ test(
 		const scheduleWidgetSource = await scheduleWidgetResponse.text()
 		expect(scheduleWidgetSource).toContain('createWidgetHostBridge')
 		expect(scheduleWidgetSource).toContain('/api/schedules')
+		expect(scheduleWidgetSource).toContain('ui/request-display-mode')
 
 		const stylesResponse = await fetch(new URL('/styles.css', server.origin))
 		expect(stylesResponse.ok).toBe(true)

@@ -12,6 +12,21 @@ function parseSlots(input: string) {
 		.filter((line) => line.length > 0)
 }
 
+function isDisplayMode(
+	value: unknown,
+): value is 'inline' | 'fullscreen' | 'pip' {
+	return value === 'inline' || value === 'fullscreen' || value === 'pip'
+}
+
+function readAvailableDisplayModes(
+	source: Record<string, unknown> | undefined,
+) {
+	if (!Array.isArray(source?.availableDisplayModes)) {
+		return [] as Array<'inline' | 'fullscreen' | 'pip'>
+	}
+	return source.availableDisplayModes.filter((mode) => isDisplayMode(mode))
+}
+
 function formatDateInput(date: Date) {
 	const year = date.getFullYear()
 	const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -177,6 +192,26 @@ function setupScheduleWidget() {
 		},
 	})
 
+	async function requestFullscreenMode() {
+		const availableModes = readAvailableDisplayModes(
+			hostBridge.getHostContext(),
+		)
+		if (availableModes.length > 0 && !availableModes.includes('fullscreen')) {
+			throw new Error(
+				`Host does not advertise fullscreen mode support. Available modes: ${availableModes.join(', ')}`,
+			)
+		}
+		const grantedMode = await hostBridge.requestDisplayMode('fullscreen')
+		if (!grantedMode) {
+			throw new Error('Host did not grant fullscreen mode request.')
+		}
+		return {
+			ok: true,
+			requestedMode: 'fullscreen',
+			grantedMode,
+		}
+	}
+
 	async function withOutput(
 		label: string,
 		fn: () => Promise<unknown>,
@@ -285,6 +320,12 @@ function setupScheduleWidget() {
 				intervalMinutes,
 			})
 			createSlotsInput.value = slots.join('\n')
+		})
+
+	rootElement
+		.querySelector('[data-action="request-fullscreen"]')
+		?.addEventListener('click', () => {
+			void withOutput('Requesting fullscreen mode', requestFullscreenMode)
 		})
 
 	rootElement

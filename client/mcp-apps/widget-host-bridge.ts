@@ -1,6 +1,7 @@
 type WidgetHostBridgeOptions = {
 	protocolVersion?: string
 	requestTimeoutMs?: number
+	availableDisplayModes?: Array<WidgetDisplayMode>
 	appInfo?: {
 		name: string
 		version: string
@@ -11,11 +12,15 @@ type WidgetHostBridgeOptions = {
 	) => void
 }
 
+type WidgetDisplayMode = 'inline' | 'fullscreen' | 'pip'
+
 type WidgetHostBridge = {
 	handleHostMessage(message: unknown): void
 	initialize(): Promise<boolean>
 	sendUserMessage(text: string): Promise<boolean>
 	sendUserMessageWithFallback(text: string): Promise<boolean>
+	requestDisplayMode(mode: WidgetDisplayMode): Promise<WidgetDisplayMode | null>
+	getHostContext(): Record<string, unknown> | undefined
 	requestRenderData(): boolean
 }
 
@@ -47,11 +52,27 @@ function getBridgeErrorMessage(error: unknown) {
 	return 'Bridge request failed'
 }
 
+function isWidgetDisplayMode(value: unknown): value is WidgetDisplayMode {
+	return value === 'inline' || value === 'fullscreen' || value === 'pip'
+}
+
+function normalizeDisplayModes(input: Array<WidgetDisplayMode> | undefined) {
+	const defaults: Array<WidgetDisplayMode> = ['inline', 'fullscreen']
+	if (!input || input.length === 0) return defaults
+	const uniqueModes = input.filter(
+		(mode, index) => input.indexOf(mode) === index,
+	)
+	return uniqueModes.length > 0 ? uniqueModes : defaults
+}
+
 export function createWidgetHostBridge(
 	options: WidgetHostBridgeOptions = {},
 ): WidgetHostBridge {
 	const protocolVersion = options.protocolVersion ?? '2026-01-26'
 	const requestTimeoutMs = options.requestTimeoutMs ?? 1500
+	const availableDisplayModes = normalizeDisplayModes(
+		options.availableDisplayModes,
+	)
 	const appInfo = options.appInfo ?? {
 		name: 'mcp-widget',
 		version: '1.0.0',
@@ -61,6 +82,7 @@ export function createWidgetHostBridge(
 
 	let requestCounter = 0
 	let initialized = false
+	let hostContext: Record<string, unknown> | undefined = undefined
 	let initializationPromise: Promise<boolean> | null = null
 	const pendingRequests = new Map<string, PendingBridgeRequest>()
 
@@ -77,11 +99,10 @@ export function createWidgetHostBridge(
 		options.onRenderData(isRecord(renderData) ? renderData : undefined)
 	}
 
-	function dispatchHostContext(hostContext: unknown) {
+	function dispatchHostContext(nextHostContext: unknown) {
+		hostContext = isRecord(nextHostContext) ? nextHostContext : undefined
 		if (!options.onHostContextChanged) return
-		options.onHostContextChanged(
-			isRecord(hostContext) ? hostContext : undefined,
-		)
+		options.onHostContextChanged(hostContext)
 	}
 
 	function handleBridgeResponseMessage(message: unknown) {
@@ -169,7 +190,9 @@ export function createWidgetHostBridge(
 
 		initializationPromise = sendBridgeRequest('ui/initialize', {
 			appInfo,
-			appCapabilities: {},
+			appCapabilities: {
+				availableDisplayModes,
+			},
 			protocolVersion,
 		})
 			.then((response) => {
@@ -226,6 +249,37 @@ export function createWidgetHostBridge(
 		}
 	}
 
+	async function requestDisplayMode(mode: WidgetDisplayMode) {
+		const bridgeReady = await initialize()
+		if (!bridgeReady) return null
+
+		const hostDisplayModes = Array.isArray(hostContext?.availableDisplayModes)
+			? hostContext.availableDisplayModes.filter((value) =>
+					isWidgetDisplayMode(value),
+				)
+			: []
+		if (hostDisplayModes.length > 0 && !hostDisplayModes.includes(mode)) {
+			return null
+		}
+
+		try {
+			const response = await sendBridgeRequest('ui/request-display-mode', {
+				mode,
+			})
+			const resolvedMode = response.result?.mode
+			if (!isWidgetDisplayMode(resolvedMode)) {
+				return null
+			}
+			dispatchHostContext({
+				...(hostContext ?? {}),
+				displayMode: resolvedMode,
+			})
+			return resolvedMode
+		} catch {
+			return null
+		}
+	}
+
 	function requestRenderData() {
 		try {
 			postMessageToHost({
@@ -243,6 +297,8 @@ export function createWidgetHostBridge(
 		initialize,
 		sendUserMessage,
 		sendUserMessageWithFallback,
+		requestDisplayMode,
+		getHostContext: () => hostContext,
 		requestRenderData,
 	}
 }
