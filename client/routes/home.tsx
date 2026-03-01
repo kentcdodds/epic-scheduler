@@ -45,6 +45,7 @@ export function HomeRoute(handle: Handle) {
 	let selectedSlots = new Set<string>()
 	let rangeAnchor: string | null = null
 	let activeSlot: string | null = null
+	let mobileDayKey: string | null = null
 	let status: RequestStatus = 'idle'
 	let message: string | null = null
 	let useTapRangeMode = false
@@ -572,10 +573,15 @@ export function HomeRoute(handle: Handle) {
 					{renderScheduleGrid({
 						slots: generatedSlots,
 						selectedSlots,
+						mobileDayKey,
 						slotAvailability,
 						maxAvailabilityCount: 1,
 						activeSlot,
 						rangeAnchor,
+						onMobileDayChange: (dayKey) => {
+							mobileDayKey = dayKey
+							handle.update()
+						},
 						onCellPointerDown,
 						onCellPointerEnter: (slot, _event) => {
 							onCellPointerEnter(slot)

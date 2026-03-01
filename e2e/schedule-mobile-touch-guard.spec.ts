@@ -16,10 +16,21 @@ test('mobile touch pointerdown does not paint-select while scrolling', async ({
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 
 	const selectedCountLabel = page.getByText(/selected slot/)
+	await expect
+		.poll(async () => readSelectedCount(await selectedCountLabel.textContent()))
+		.toBeGreaterThan(0)
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
 	expect(initialCount).toBeGreaterThan(0)
 
-	const selectedSlot = page.locator('button[aria-pressed="true"]').first()
+	const selectedSlotLocator = page.locator('button[aria-pressed="true"]')
+	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
+	for (let index = 0; index < 14; index += 1) {
+		if ((await selectedSlotLocator.count()) > 0) break
+		if (await nextDayButton.isDisabled()) break
+		await nextDayButton.click()
+	}
+	const selectedSlot = selectedSlotLocator.first()
+	await expect(selectedSlot).toBeVisible()
 	await selectedSlot.scrollIntoViewIfNeeded()
 
 	await selectedSlot.dispatchEvent('pointerdown', {

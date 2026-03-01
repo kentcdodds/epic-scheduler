@@ -11,7 +11,15 @@ test('mobile selection keeps schedule grid vertically stable', async ({
 
 	const grid = page.locator('table').first()
 	await expect(grid).toBeVisible()
-	const selectedSlot = page.locator('button[aria-pressed="true"]').first()
+	const selectedSlotLocator = page.locator('button[aria-pressed="true"]')
+	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
+	for (let index = 0; index < 14; index += 1) {
+		if ((await selectedSlotLocator.count()) > 0) break
+		if (await nextDayButton.isDisabled()) break
+		await nextDayButton.click()
+	}
+	const selectedSlot = selectedSlotLocator.first()
+	await expect(selectedSlot).toBeVisible()
 	await selectedSlot.scrollIntoViewIfNeeded()
 
 	const initialGridBox = await grid.boundingBox()

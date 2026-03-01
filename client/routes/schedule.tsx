@@ -91,6 +91,7 @@ export function ScheduleRoute(handle: Handle) {
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
 	let rangeAnchor: string | null = null
+	let mobileDayKey: string | null = null
 	let useTapRangeMode = false
 	let saveMessage: string | null = null
 	let saveError = false
@@ -435,6 +436,7 @@ export function ScheduleRoute(handle: Handle) {
 		persistedSelectedSlots = new Set<string>()
 		activeSlot = null
 		rangeAnchor = null
+		mobileDayKey = null
 		hasDirtyChanges = false
 		changeVersion = 0
 		pendingSave = false
@@ -836,10 +838,15 @@ export function ScheduleRoute(handle: Handle) {
 							selectedSlots,
 							pendingAddedSlots: pendingDiff.pendingAdded,
 							pendingRemovedSlots: pendingDiff.pendingRemoved,
+							mobileDayKey,
 							slotAvailability,
 							maxAvailabilityCount,
 							activeSlot,
 							rangeAnchor,
+							onMobileDayChange: (dayKey) => {
+								mobileDayKey = dayKey
+								handle.update()
+							},
 							onCellPointerDown: handleCellPointerDown,
 							onCellPointerEnter: (slot, _event) => {
 								handleCellPointerEnter(slot)
