@@ -5,11 +5,8 @@ import {
 	getMaxAvailabilityCount,
 } from '#client/schedule-snapshot-utils.ts'
 import {
-	addDays,
 	buildGridModel,
-	createSlotRangeFromDateInputs,
 	findSelectionForAttendee,
-	formatDateInputValue,
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
@@ -27,13 +24,6 @@ const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
 function readTheme(source: Record<string, unknown> | undefined) {
 	const value = source?.theme
 	return value === 'dark' || value === 'light' ? value : undefined
-}
-
-function parseSlots(input: string) {
-	return input
-		.split('\n')
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0)
 }
 
 function isDisplayMode(
@@ -58,26 +48,53 @@ function getBrowserTimeZone() {
 	return normalized || 'UTC'
 }
 
-function buildSlotsForWeekdays(params: {
-	startDate: string
-	endDate: string
-	intervalMinutes: number
-}) {
-	try {
-		const range = createSlotRangeFromDateInputs({
-			startDateInput: params.startDate,
-			endDateInput: params.endDate,
-			intervalMinutes: params.intervalMinutes,
-		})
-		return range.slots.filter((slot) => {
-			const date = new Date(slot)
-			const weekday = date.getDay()
-			const hour = date.getHours()
-			return weekday >= 1 && weekday <= 5 && hour >= 9 && hour < 17
-		})
-	} catch {
-		return []
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
+}
+
+function readNonEmptyString(value: unknown) {
+	if (typeof value !== 'string') return null
+	const normalized = value.trim()
+	return normalized.length > 0 ? normalized : null
+}
+
+function findNestedStringByKey(params: {
+	source: unknown
+	key: string
+	depth?: number
+}): string | null {
+	const depth = params.depth ?? 0
+	if (depth > 4 || !isRecord(params.source)) return null
+
+	const directValue = readNonEmptyString(params.source[params.key])
+	if (directValue) {
+		return directValue
 	}
+
+	const nestedKeys = [
+		'arguments',
+		'structuredContent',
+		'toolInput',
+		'toolResult',
+		'result',
+		'params',
+		'payload',
+		'context',
+	]
+
+	for (const nestedKey of nestedKeys) {
+		const nestedValue = params.source[nestedKey]
+		const resolved: string | null = findNestedStringByKey({
+			source: nestedValue,
+			key: params.key,
+			depth: depth + 1,
+		})
+		if (resolved) {
+			return resolved
+		}
+	}
+
+	return null
 }
 
 function getFormElement<T extends HTMLElement>(
@@ -179,30 +196,6 @@ function setupScheduleWidget() {
 		'[data-browser-timezone]',
 	)
 
-	const titleInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="title"]',
-	)
-	const hostNameInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="hostName"]',
-	)
-	const intervalSelect = getFormElement<HTMLSelectElement>(
-		rootElement,
-		'select[name="interval"]',
-	)
-	const startDateInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="startDate"]',
-	)
-	const endDateInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="endDate"]',
-	)
-	const createSlotsInput = getFormElement<HTMLTextAreaElement>(
-		rootElement,
-		'textarea[name="createSlots"]',
-	)
 	const snapshotTokenInput = getFormElement<HTMLInputElement>(
 		rootElement,
 		'input[name="snapshotToken"]',
@@ -212,15 +205,13 @@ function setupScheduleWidget() {
 		'input[name="attendeeName"]',
 	)
 
-	const now = new Date()
-	startDateInput.value = formatDateInputValue(now)
-	endDateInput.value = formatDateInputValue(addDays(now, 6))
 	browserTimeZoneElement.textContent = getBrowserTimeZone()
 
 	let snapshot: ScheduleSnapshot | null = null
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
+	let autoLoadedShareToken: string | null = null
 
 	function writeOutput(value: unknown) {
 		outputElement.textContent =
@@ -493,6 +484,33 @@ function setupScheduleWidget() {
 			} else {
 				appRoot.removeAttribute('data-theme')
 			}
+
+			const shareTokenFromRenderData = findNestedStringByKey({
+				source: renderData,
+				key: 'shareToken',
+			})
+			if (
+				shareTokenFromRenderData &&
+				shareTokenFromRenderData !== autoLoadedShareToken
+			) {
+				autoLoadedShareToken = shareTokenFromRenderData
+				snapshotTokenInput.value = shareTokenFromRenderData
+				void withOutput('Loading snapshot', () =>
+					fetchSnapshot(shareTokenFromRenderData),
+				)
+			}
+			const attendeeNameFromRenderData =
+				findNestedStringByKey({
+					source: renderData,
+					key: 'attendeeName',
+				}) ??
+				findNestedStringByKey({
+					source: renderData,
+					key: 'name',
+				})
+			if (attendeeNameFromRenderData && !attendeeNameInput.value.trim()) {
+				attendeeNameInput.value = attendeeNameFromRenderData
+			}
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -563,56 +581,6 @@ function setupScheduleWidget() {
 			)
 		}
 		setSnapshot(payload.snapshot)
-		return payload
-	}
-
-	async function createSchedule() {
-		const selectedCreateSlots = parseSlots(createSlotsInput.value)
-		if (selectedCreateSlots.length === 0) {
-			throw new Error(
-				'Select at least one host slot before creating a schedule.',
-			)
-		}
-
-		const response = await fetch('/api/schedules', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				title: titleInput.value,
-				hostName: hostNameInput.value,
-				intervalMinutes: Number.parseInt(intervalSelect.value, 10),
-				rangeStartUtc: new Date(
-					`${startDateInput.value}T00:00:00`,
-				).toISOString(),
-				rangeEndUtc: addDays(
-					new Date(`${endDateInput.value}T00:00:00`),
-					1,
-				).toISOString(),
-				hostTimeZone: getBrowserTimeZone(),
-				selectedSlots: selectedCreateSlots,
-			}),
-		})
-		const payload = (await response.json().catch(() => null)) as {
-			ok?: boolean
-			shareToken?: string
-			error?: string
-		} | null
-		if (
-			!response.ok ||
-			!payload?.ok ||
-			typeof payload.shareToken !== 'string'
-		) {
-			throw new Error(
-				typeof payload?.error === 'string'
-					? payload.error
-					: `Request failed (${response.status})`,
-			)
-		}
-		snapshotTokenInput.value = payload.shareToken
-		if (!attendeeNameInput.value.trim()) {
-			attendeeNameInput.value = hostNameInput.value.trim()
-		}
-		await fetchSnapshot(payload.shareToken)
 		return payload
 	}
 
@@ -704,31 +672,9 @@ function setupScheduleWidget() {
 	})
 
 	rootElement
-		.querySelector('[data-action="fill-demo-slots"]')
-		?.addEventListener('click', () => {
-			const intervalMinutes = Number.parseInt(intervalSelect.value, 10)
-			const slots = buildSlotsForWeekdays({
-				startDate: startDateInput.value,
-				endDate: endDateInput.value,
-				intervalMinutes,
-			})
-			createSlotsInput.value = slots.join('\n')
-			setStatus('Filled host slots with weekday 9-5 defaults.')
-		})
-
-	rootElement
 		.querySelector('[data-action="request-fullscreen"]')
 		?.addEventListener('click', () => {
 			void withOutput('Requesting fullscreen mode', requestFullscreenMode)
-		})
-
-	rootElement
-		.querySelector('[data-action="create"]')
-		?.addEventListener('click', () => {
-			void withOutput('Creating schedule', createSchedule, {
-				hostMessage:
-					'Created and loaded an Epic Scheduler schedule in MCP app.',
-			})
 		})
 
 	rootElement
@@ -763,6 +709,21 @@ function setupScheduleWidget() {
 	void hostBridge.initialize()
 	hostBridge.requestRenderData()
 	updateSelectionSummary()
+	setStatus('Load a share token from create_schedule to begin.')
+	const shareTokenFromUrl = readNonEmptyString(
+		new URL(window.location.href).searchParams.get('shareToken'),
+	)
+	if (shareTokenFromUrl) {
+		autoLoadedShareToken = shareTokenFromUrl
+		snapshotTokenInput.value = shareTokenFromUrl
+		void withOutput('Loading snapshot', () => fetchSnapshot(shareTokenFromUrl))
+	}
+	const attendeeNameFromUrl = readNonEmptyString(
+		new URL(window.location.href).searchParams.get('name'),
+	)
+	if (attendeeNameFromUrl && !attendeeNameInput.value.trim()) {
+		attendeeNameInput.value = attendeeNameFromUrl
+	}
 	writeOutput('Ready.')
 }
 

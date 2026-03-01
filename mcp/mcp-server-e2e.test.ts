@@ -372,6 +372,10 @@ test(
 
 		const result = await mcpClient.client.callTool({
 			name: 'open_schedule_ui',
+			arguments: {
+				shareToken: 'demo-token',
+				attendeeName: 'Alex',
+			},
 		})
 
 		const structuredResult = (result as CallToolResult).structuredContent as
@@ -379,13 +383,15 @@ test(
 			| undefined
 		expect(structuredResult?.widget).toBe('schedule')
 		expect(structuredResult?.resourceUri).toBe(scheduleUiResourceUri)
+		expect(structuredResult?.shareToken).toBe('demo-token')
+		expect(structuredResult?.attendeeName).toBe('Alex')
 
 		const textOutput =
 			(result as CallToolResult).content.find(
 				(item): item is Extract<ContentBlock, { type: 'text' }> =>
 					item.type === 'text',
 			)?.text ?? ''
-		expect(textOutput).toContain('Epic Scheduler UI')
+		expect(textOutput).toContain('share token demo-token')
 
 		const resourceResult = await mcpClient.client.readResource({
 			uri: scheduleUiResourceUri,
@@ -416,8 +422,8 @@ test(
 		expect(scheduleResource?.mimeType).toBe('text/html;profile=mcp-app')
 		expect(scheduleResource?.text).toContain('data-schedule-widget')
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
-		expect(scheduleResource?.text).toContain('Quick create schedule link')
-		expect(scheduleResource?.text).toContain('Create and load schedule')
+		expect(scheduleResource?.text).toContain('Open schedule link')
+		expect(scheduleResource?.text).toContain('Need a new link first? Use the')
 		expect(scheduleResource?.text).toContain('Request fullscreen mode')
 
 		const scheduleWidgetResponse = await fetch(

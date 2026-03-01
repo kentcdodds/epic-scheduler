@@ -43,6 +43,11 @@ Create a dedicated module under `mcp/apps/`:
 
 Keep file names lower-kebab-case and prefer one entry point per app.
 
+When your domain has a clear "create" step (for example creating a share link),
+prefer keeping creation in a dedicated MCP tool and keep the app UI focused on
+post-create workflows (for example loading a token, editing state, and viewing
+results).
+
 ### 2) Register the app resource
 
 In `mcp/resources/<your-resource>.ts`:

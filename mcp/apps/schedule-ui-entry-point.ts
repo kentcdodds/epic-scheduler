@@ -122,11 +122,6 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				grid-template-columns: minmax(0, 1fr) auto;
 				align-items: end;
 			}
-			.scheduler-grid-columns {
-				display: grid;
-				gap: var(--spacing-md);
-				grid-template-columns: repeat(2, minmax(0, 1fr));
-			}
 			.scheduler-button-row {
 				display: flex;
 				flex-wrap: wrap;
@@ -143,8 +138,7 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				font-weight: var(--font-weight-medium);
 			}
 			.scheduler-field input,
-			.scheduler-field select,
-			.scheduler-field textarea {
+			.scheduler-field select {
 				padding: var(--spacing-sm);
 				border-radius: var(--radius-md);
 				border: 1px solid var(--color-border);
@@ -152,10 +146,6 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				color: var(--color-text);
 				font-family: inherit;
 				font-size: var(--font-size-sm);
-			}
-			.scheduler-field textarea {
-				min-height: 5.5rem;
-				resize: vertical;
 			}
 			.scheduler-primary-button,
 			.scheduler-secondary-button {
@@ -289,8 +279,7 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				.scheduler-widget {
 					padding: var(--spacing-md);
 				}
-				.scheduler-row-split,
-				.scheduler-grid-columns {
+				.scheduler-row-split {
 					grid-template-columns: 1fr;
 				}
 				.scheduler-grid-wrap table {
@@ -312,12 +301,12 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 					<img src="/epic-scheduler-logo.svg" alt="Epic Scheduler" />
 					<h1 data-schedule-title>Schedule availability</h1>
 					<p class="scheduler-muted">
-						Load any share token, select your slots directly in the grid, and save
-						your availability from this MCP app.
+						Create links with the create_schedule tool, then load a share token
+						here to select availability and review overlap.
 					</p>
 					<div class="scheduler-chip-row">
+						<span class="scheduler-chip">Tool-driven link creation</span>
 						<span class="scheduler-chip">Shared schedule grid</span>
-						<span class="scheduler-chip">15/30/60 minute slots</span>
 						<span class="scheduler-chip">Timezone-friendly updates</span>
 					</div>
 					<p class="scheduler-muted">
@@ -352,58 +341,10 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 					<p class="scheduler-muted" data-connection-label>
 						Snapshot not loaded.
 					</p>
-				</section>
-
-				<section class="scheduler-card">
-					<h2>Quick create schedule link</h2>
-					<div class="scheduler-grid-columns">
-						<label class="scheduler-field">
-							<span>Schedule title</span>
-							<input name="title" type="text" value="Scheduling poll" />
-						</label>
-						<label class="scheduler-field">
-							<span>Host name</span>
-							<input name="hostName" type="text" value="Host" />
-						</label>
-					</div>
-					<div class="scheduler-grid-columns">
-						<label class="scheduler-field">
-							<span>Slot interval</span>
-							<select name="interval">
-								<option value="15">15 minutes</option>
-								<option value="30" selected>30 minutes</option>
-								<option value="60">1 hour</option>
-							</select>
-						</label>
-						<label class="scheduler-field">
-							<span>Start date</span>
-							<input name="startDate" type="date" />
-						</label>
-						<label class="scheduler-field">
-							<span>End date</span>
-							<input name="endDate" type="date" />
-						</label>
-					</div>
-					<label class="scheduler-field">
-						<span>Selected slots for host (ISO, one per line)</span>
-						<textarea name="createSlots"></textarea>
-					</label>
-					<div class="scheduler-button-row">
-						<button
-							type="button"
-							class="scheduler-primary-button"
-							data-action="create"
-						>
-							Create and load schedule
-						</button>
-						<button
-							type="button"
-							class="scheduler-secondary-button"
-							data-action="fill-demo-slots"
-						>
-							Fill 9-5 weekdays
-						</button>
-					</div>
+					<p class="scheduler-muted">
+						Need a new link first? Use the create_schedule MCP tool, then paste the
+						returned token here.
+					</p>
 				</section>
 
 				<section class="scheduler-card">
