@@ -49,3 +49,16 @@ We use bun for installing dependencies and running scripts. Do not use npm.
 - [Request Lifecycle](./docs/architecture/request-lifecycle.md)
 - [Authentication](./docs/architecture/authentication.md)
 - [Data Storage](./docs/architecture/data-storage.md)
+
+## Cursor Cloud specific instructions
+
+- `bun run dev` uses dynamic port allocation (default starting at 3742, not
+  8787). Check the terminal output for the actual port.
+- No Docker or external services are needed; Wrangler manages D1 (SQLite)
+  locally.
+- E2E tests (`bun run test:e2e`) auto-start their own Wrangler server via
+  Playwright's `webServer` config — no need to run `bun run dev` first.
+- MCP tests (`bun run test:mcp`) also start their own server internally.
+- The `workerd` broken-pipe errors in E2E test output are harmless WebSocket
+  teardown noise; tests still pass.
+- See `.cursor/CLOUD.md` for the quick-reference command table.
