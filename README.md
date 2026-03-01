@@ -39,12 +39,14 @@ verification commands.
 bunx degit kentcdodds/epic-scheduler my-epic-scheduler-app
 cd my-epic-scheduler-app
 bun install
-bun ./docs/post-download.ts --guided
+cp .env.test .env
+bun run migrate:local
 bun run dev
 ```
 
-See [`docs/getting-started.md`](./docs/getting-started.md) for guided setup,
-Cloudflare resource provisioning, and deploy instructions.
+See [`docs/setup-manifest.md`](./docs/setup-manifest.md) for required Cloudflare
+resources and [`docs/getting-started.md`](./docs/getting-started.md) for setup
+and deploy guidance.
 
 ## Tech Stack
 
@@ -61,7 +63,7 @@ Cloudflare resource provisioning, and deploy instructions.
 
 ## Request Lifecycle (high-level)
 
-```
+```text
 Request → worker/index.ts
               │
               ├─→ /mcp (MCP server)
