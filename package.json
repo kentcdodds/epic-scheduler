@@ -9,7 +9,7 @@
   "description": "A starter and reference for building full stack web applications",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/epicweb-dev/epicflare.git"
+    "url": "git+ssh://git@github.com/kentcdodds/epic-scheduler.git"
   },
   "scripts": {
     "dev": "bun cli.ts",
@@ -60,5 +60,16 @@
     "get-port": "^7.1.0",
     "remix": "3.0.0-alpha.3",
     "zod": "^4.3.6"
-  }
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "Kent C. Dodds <me@kentcdodds.com> (https://kentcdodds.com/)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kentcdodds/epic-scheduler/issues"
+  },
+  "homepage": "https://github.com/kentcdodds/epic-scheduler#readme"
 }
