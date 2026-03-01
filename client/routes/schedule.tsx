@@ -5,7 +5,10 @@ import {
 	createSlotAvailability,
 	getMaxAvailabilityCount,
 } from '#client/schedule-snapshot-utils.ts'
-import { findSelectionForAttendee } from '#client/schedule-utils.ts'
+import {
+	findSelectionForAttendee,
+	formatSlotForAttendeeTimeZone,
+} from '#client/schedule-utils.ts'
 import {
 	detectTapRangeMode,
 	getTapRangeStartMessage,
@@ -36,41 +39,6 @@ function getBrowserTimeZone() {
 	if (typeof value !== 'string') return 'UTC'
 	const normalized = value.trim()
 	return normalized || 'UTC'
-}
-
-const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
-
-function formatSlotForAttendeeTimeZone(slot: string, timeZone: string | null) {
-	if (!timeZone) {
-		return {
-			localTime: 'Local time unknown',
-			timeZoneLabel: 'timezone unknown',
-		}
-	}
-	const slotDate = new Date(slot)
-	if (Number.isNaN(slotDate.getTime())) {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
-	try {
-		let formatter = attendeeLocalTimeFormatters.get(timeZone)
-		if (!formatter) {
-			formatter = new Intl.DateTimeFormat(undefined, {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-				hour: 'numeric',
-				minute: '2-digit',
-				timeZone,
-			})
-			attendeeLocalTimeFormatters.set(timeZone, formatter)
-		}
-		return {
-			localTime: formatter.format(slotDate),
-			timeZoneLabel: timeZone,
-		}
-	} catch {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
 }
 
 function toWebSocketUrl(path: string) {

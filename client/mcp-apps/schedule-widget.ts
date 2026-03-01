@@ -7,6 +7,7 @@ import {
 import {
 	buildGridModel,
 	findSelectionForAttendee,
+	formatSlotForAttendeeTimeZone,
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
@@ -18,8 +19,6 @@ const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
 	hour: 'numeric',
 	minute: '2-digit',
 })
-
-const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
 
 function readTheme(source: Record<string, unknown> | undefined) {
 	const value = source?.theme
@@ -115,39 +114,6 @@ function escapeHtml(value: string) {
 		.replaceAll('>', '&gt;')
 		.replaceAll('"', '&quot;')
 		.replaceAll("'", '&#39;')
-}
-
-function formatSlotForAttendeeTimeZone(slot: string, timeZone: string | null) {
-	if (!timeZone) {
-		return {
-			localTime: 'Local time unknown',
-			timeZoneLabel: 'timezone unknown',
-		}
-	}
-	const slotDate = new Date(slot)
-	if (Number.isNaN(slotDate.getTime())) {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
-	try {
-		let formatter = attendeeLocalTimeFormatters.get(timeZone)
-		if (!formatter) {
-			formatter = new Intl.DateTimeFormat(undefined, {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-				hour: 'numeric',
-				minute: '2-digit',
-				timeZone,
-			})
-			attendeeLocalTimeFormatters.set(timeZone, formatter)
-		}
-		return {
-			localTime: formatter.format(slotDate),
-			timeZoneLabel: timeZone,
-		}
-	} catch {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
 }
 
 function setupScheduleWidget() {
@@ -709,14 +675,16 @@ function setupScheduleWidget() {
 	void hostBridge.initialize()
 	hostBridge.requestRenderData()
 	updateSelectionSummary()
-	setStatus('Load a share token from create_schedule to begin.')
 	const shareTokenFromUrl = readNonEmptyString(
 		new URL(window.location.href).searchParams.get('shareToken'),
 	)
 	if (shareTokenFromUrl) {
 		autoLoadedShareToken = shareTokenFromUrl
 		snapshotTokenInput.value = shareTokenFromUrl
+		setStatus('Loading snapshot from share token...')
 		void withOutput('Loading snapshot', () => fetchSnapshot(shareTokenFromUrl))
+	} else {
+		setStatus('Load a share token from create_schedule to begin.')
 	}
 	const attendeeNameFromUrl = readNonEmptyString(
 		new URL(window.location.href).searchParams.get('name'),
@@ -724,7 +692,9 @@ function setupScheduleWidget() {
 	if (attendeeNameFromUrl && !attendeeNameInput.value.trim()) {
 		attendeeNameInput.value = attendeeNameFromUrl
 	}
-	writeOutput('Ready.')
+	if (!shareTokenFromUrl) {
+		writeOutput('Ready.')
+	}
 }
 
 if (document.readyState === 'loading') {
