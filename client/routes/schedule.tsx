@@ -396,9 +396,6 @@ export function ScheduleRoute(handle: Handle) {
 		dragging = true
 		lastPointerSlot = slot
 		setSlotSelection(slot, paintMode === 'add')
-		;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(
-			event.pointerId,
-		)
 		markDirty()
 	}
 

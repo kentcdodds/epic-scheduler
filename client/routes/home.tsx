@@ -216,9 +216,6 @@ export function HomeRoute(handle: Handle) {
 		dragging = true
 		lastPointerSlot = slot
 		setSlotSelection(slot, paintMode === 'add')
-		;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(
-			event.pointerId,
-		)
 		handle.update()
 	}
 
@@ -257,6 +254,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellFocus(slot: string) {
 		activeSlot = slot
+		handle.update()
 	}
 
 	syncSlots()
