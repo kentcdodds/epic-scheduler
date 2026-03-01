@@ -21,12 +21,27 @@ function formatTimeKey(date: Date) {
 }
 
 function parseDateInputToLocalDate(dateInput: string) {
-	const [year, month, day] = dateInput
-		.split('-')
-		.map((part) => Number.parseInt(part, 10))
-	if (!year || !month || !day) return null
+	const [rawYear, rawMonth, rawDay] = dateInput.split('-')
+	if (!rawYear || !rawMonth || !rawDay) return null
+	const year = Number.parseInt(rawYear, 10)
+	const month = Number.parseInt(rawMonth, 10)
+	const day = Number.parseInt(rawDay, 10)
+	if (
+		!Number.isInteger(year) ||
+		!Number.isInteger(month) ||
+		!Number.isInteger(day)
+	)
+		return null
+	if (month < 1 || month > 12 || day < 1 || day > 31) return null
 	const date = new Date(year, month - 1, day, 0, 0, 0, 0)
 	if (Number.isNaN(date.getTime())) return null
+	if (
+		date.getFullYear() !== year ||
+		date.getMonth() !== month - 1 ||
+		date.getDate() !== day
+	) {
+		return null
+	}
 	return date
 }
 
@@ -63,8 +78,15 @@ export function createSlotRangeFromDateInputs(params: {
 		throw new Error('End date must be after start date.')
 	}
 
+	const intervalMs = interval * 60_000
+	const maxSlots = 24 * 31 * 4
+	const estimatedSlots = Math.ceil((endMs - startMs) / intervalMs)
+	if (estimatedSlots > maxSlots) {
+		throw new Error('Requested range is too large.')
+	}
+
 	const slots: Array<string> = []
-	for (let value = startMs; value < endMs; value += interval * 60_000) {
+	for (let value = startMs; value < endMs; value += intervalMs) {
 		slots.push(new Date(value).toISOString())
 	}
 

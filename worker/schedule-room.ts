@@ -114,7 +114,7 @@ export class ScheduleRoom extends DurableObject<Env> {
 			}
 		}
 
-		return Response.json({ ok: true })
+		return Response.json({ ok: false, error: 'Not found.' }, { status: 404 })
 	}
 
 	private broadcast(payload: BroadcastPayload) {

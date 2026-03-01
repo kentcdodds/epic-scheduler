@@ -32,25 +32,35 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 			annotations: getScheduleSnapshotTool.annotations,
 		},
 		async ({ shareToken }: { shareToken: string }) => {
-			const snapshot = await getScheduleSnapshot(agent.getAppDb(), shareToken)
-			if (!snapshot) {
+			try {
+				const snapshot = await getScheduleSnapshot(agent.getAppDb(), shareToken)
+				if (!snapshot) {
+					return {
+						content: [{ type: 'text', text: 'Schedule not found.' }],
+						isError: true,
+					}
+				}
+
 				return {
-					content: [{ type: 'text', text: 'Schedule not found.' }],
+					content: [
+						{
+							type: 'text',
+							text: `Loaded snapshot with ${snapshot.attendees.length} attendee(s).`,
+						},
+					],
+					structuredContent: {
+						ok: true,
+						snapshot: snapshot as unknown as Record<string, unknown>,
+					},
+				}
+			} catch (error) {
+				console.error('get_schedule_snapshot tool failed:', error)
+				return {
+					content: [
+						{ type: 'text', text: 'Unable to load schedule snapshot.' },
+					],
 					isError: true,
 				}
-			}
-
-			return {
-				content: [
-					{
-						type: 'text',
-						text: `Loaded snapshot with ${snapshot.attendees.length} attendee(s).`,
-					},
-				],
-				structuredContent: {
-					ok: true,
-					snapshot: snapshot as unknown as Record<string, unknown>,
-				},
 			}
 		},
 	)

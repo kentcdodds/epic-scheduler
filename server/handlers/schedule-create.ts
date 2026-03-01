@@ -35,6 +35,10 @@ function toIntervalMinutes(value: unknown) {
 	return 0
 }
 
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 function isCreateScheduleValidationError(message: string) {
 	return /(invalid|required|must|later than|range|interval|too large)/i.test(
 		message,
@@ -47,7 +51,14 @@ export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 		async action({ request }) {
 			let body: CreateScheduleRequest
 			try {
-				body = (await request.json()) as CreateScheduleRequest
+				const parsed = await request.json()
+				if (!isRecordValue(parsed)) {
+					return Response.json(
+						{ ok: false, error: 'Invalid JSON payload.' },
+						{ status: 400 },
+					)
+				}
+				body = parsed as CreateScheduleRequest
 			} catch {
 				return Response.json(
 					{ ok: false, error: 'Invalid JSON payload.' },

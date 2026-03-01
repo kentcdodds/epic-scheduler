@@ -42,7 +42,9 @@ function addDays(date: Date, days: number) {
 
 function getBrowserTimeZone() {
 	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	return typeof value === 'string' ? value.trim() : ''
+	if (typeof value !== 'string') return 'UTC'
+	const normalized = value.trim()
+	return normalized || 'UTC'
 }
 
 function buildSlotsForWeekdays(params: {

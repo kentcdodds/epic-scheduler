@@ -95,9 +95,10 @@ export function HomeRoute(handle: Handle) {
 		endDateInput?: string
 		intervalMinutes?: number
 	}) {
-		if (next.startDateInput) startDateInput = next.startDateInput
-		if (next.endDateInput) endDateInput = next.endDateInput
-		if (next.intervalMinutes) intervalMinutes = next.intervalMinutes
+		if (next.startDateInput !== undefined) startDateInput = next.startDateInput
+		if (next.endDateInput !== undefined) endDateInput = next.endDateInput
+		if (next.intervalMinutes !== undefined)
+			intervalMinutes = next.intervalMinutes
 		try {
 			syncSlots()
 			setMessage('idle', null)
