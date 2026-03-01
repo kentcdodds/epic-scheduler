@@ -341,6 +341,7 @@ export function ScheduleRoute(handle: Handle) {
 
 	function handleCellPointerDown(slot: string, event: PointerEvent) {
 		if (useTapRangeMode) return
+		if (event.pointerType === 'touch') return
 		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		dragging = true
 		lastPointerSlot = slot

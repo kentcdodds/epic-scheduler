@@ -201,6 +201,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
 		if (useTapRangeMode) return
+		if (event.pointerType === 'touch') return
 		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		dragging = true
 		lastPointerSlot = slot

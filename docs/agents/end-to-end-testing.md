@@ -17,6 +17,8 @@ on the Epic Web E2E workshop and our existing setup.
   pending/saving/saved availability indicators).
 - Mobile layout stability for interactive flows so status updates do not shift
   the grid while users are selecting slots.
+- Touch-scroll safety on mobile so drag/scroll gestures do not mutate selection
+  unless the user intentionally enables tap-based selection mode.
 - Integration across the worker, client router, and API endpoints.
 - Regressions that are expensive to catch in unit tests.
 
