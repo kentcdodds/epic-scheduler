@@ -3,10 +3,10 @@ import { type Locator, expect, test } from '@playwright/test'
 const tapRangeStartMessagePattern =
 	/Range start selected\. Tap another slot to (add|remove) range\./
 
-function readSelectedCount(text: string | null) {
+function readSelectedCount(text: string | null): number | null {
 	const match = text?.match(/(\d+)\s+selected slot/)
-	if (!match) return -1
-	return Number.parseInt(match[1] ?? '-1', 10)
+	if (!match?.[1]) return null
+	return Number.parseInt(match[1], 10)
 }
 
 async function dispatchTouchTap(target: Locator) {
@@ -36,9 +36,16 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 
 	await expect(selectedSlot).toBeVisible()
 	await expect
-		.poll(async () => readSelectedCount(await selectedCountLabel.textContent()))
-		.toBeGreaterThan(0)
+		.poll(async () => {
+			const count = readSelectedCount(await selectedCountLabel.textContent())
+			return count !== null && count > 0
+		})
+		.toBe(true)
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
+	expect(initialCount).not.toBeNull()
+	if (initialCount === null) {
+		throw new Error('Unable to parse selected slot count.')
+	}
 	expect(initialCount).toBeGreaterThan(0)
 
 	await dispatchTouchTap(selectedSlot)
@@ -47,6 +54,7 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 	const countAfterTouchTap = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
+	expect(countAfterTouchTap).not.toBeNull()
 	expect(countAfterTouchTap).toBe(initialCount)
 
 	await selectedSlot.click()
@@ -54,6 +62,7 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 	const countAfterMouseClick = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
+	expect(countAfterMouseClick).not.toBeNull()
 	expect(countAfterMouseClick).toBe(initialCount - 1)
 })
 
@@ -71,9 +80,16 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 
 	await expect(selectedSlot).toBeVisible()
 	await expect
-		.poll(async () => readSelectedCount(await selectedCountLabel.textContent()))
-		.toBeGreaterThan(0)
+		.poll(async () => {
+			const count = readSelectedCount(await selectedCountLabel.textContent())
+			return count !== null && count > 0
+		})
+		.toBe(true)
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
+	expect(initialCount).not.toBeNull()
+	if (initialCount === null) {
+		throw new Error('Unable to parse selected slot count.')
+	}
 	expect(initialCount).toBeGreaterThan(0)
 
 	await dispatchTouchTap(selectedSlot)
@@ -82,6 +98,7 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 	const countAfterTouchTap = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
+	expect(countAfterTouchTap).not.toBeNull()
 	expect(countAfterTouchTap).toBe(initialCount)
 
 	await selectedSlot.click()
@@ -90,5 +107,6 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 	const countAfterMouseClick = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
+	expect(countAfterMouseClick).not.toBeNull()
 	expect(countAfterMouseClick).toBe(initialCount - 1)
 })
