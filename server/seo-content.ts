@@ -175,19 +175,25 @@ const blogPosts: Array<BlogPost> = [
 					MCP app widget flow for interactive scheduling actions.
 				</p>
 			</div>
-			<h2>Production notes</h2>
-			<p>
-				Epic Scheduler is intentionally link-based in v1. For stricter
-				production controls, add platform security in front of MCP:
-			</p>
+			<h2>Why teams love this workflow</h2>
 			<ul>
-				<li>Cloudflare Access (or equivalent auth) for <code>/mcp</code></li>
-				<li>Rate limits and abuse detection</li>
-				<li>Narrow tool permissions where possible</li>
+				<li>
+					<strong>Less back-and-forth:</strong> one shared link replaces long
+					scheduling threads.
+				</li>
+				<li>
+					<strong>Faster decisions:</strong> overlap summaries make the best
+					windows obvious.
+				</li>
+				<li>
+					<strong>Agent-ready:</strong> ChatGPT and Claude can act on the same
+					MCP server and process.
+				</li>
 			</ul>
 			<p>
-				The highest-leverage habit is simple: treat scheduling as a one-link
-				handoff, then let the agent execute the mechanics.
+				If your team coordinates meetings across timezones, Epic Scheduler gives
+				you a practical speed boost: create once, share once, and let AI handle
+				the repetitive scheduling mechanics.
 			</p>`,
 	},
 	{
