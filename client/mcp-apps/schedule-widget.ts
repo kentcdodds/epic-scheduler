@@ -165,6 +165,7 @@ function setupScheduleWidget() {
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
+	const fetchSnapshotTimeoutMs = 10_000
 
 	function setStatus(message: string, error = false) {
 		statusElement.textContent = message
@@ -496,7 +497,23 @@ function setupScheduleWidget() {
 				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
 			)
 		}
-		const response = await fetch(`/api/schedules/${token}`)
+		const controller = new AbortController()
+		const timeoutId = window.setTimeout(() => {
+			controller.abort()
+		}, fetchSnapshotTimeoutMs)
+		let response: Response
+		try {
+			response = await fetch(`/api/schedules/${token}`, {
+				signal: controller.signal,
+			})
+		} catch (error) {
+			if (error instanceof DOMException && error.name === 'AbortError') {
+				throw new Error('Loading schedule timed out. Please try again.')
+			}
+			throw error
+		} finally {
+			window.clearTimeout(timeoutId)
+		}
 		const payload = (await response.json().catch(() => null)) as {
 			ok?: boolean
 			snapshot?: ScheduleSnapshot
@@ -697,12 +714,12 @@ function setupScheduleWidget() {
 	hostBridge.requestRenderData()
 	updateSelectionSummary()
 	setStatus('Waiting for share token input.')
+	const widgetUrl = new URL(window.location.href)
 	maybeApplyToolInput({
-		shareToken: readNonEmptyString(
-			new URL(window.location.href).searchParams.get('shareToken'),
-		),
+		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
 		attendeeName: readNonEmptyString(
-			new URL(window.location.href).searchParams.get('name'),
+			widgetUrl.searchParams.get('attendeeName') ??
+				widgetUrl.searchParams.get('name'),
 		),
 	})
 }

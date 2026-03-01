@@ -4,8 +4,8 @@ test('schedule MCP widget loads an existing link and saves availability', async 
 	page,
 	request,
 }) => {
-	const rangeStart = new Date()
-	rangeStart.setMinutes(0, 0, 0)
+	const hourMs = 3_600_000
+	const rangeStart = new Date(Math.ceil(Date.now() / hourMs) * hourMs + hourMs)
 	const rangeEnd = new Date(rangeStart.getTime())
 	rangeEnd.setDate(rangeEnd.getDate() + 2)
 
@@ -26,11 +26,16 @@ test('schedule MCP widget loads an existing link and saves availability', async 
 		shareToken?: string
 	}
 	expect(createPayload.ok).toBe(true)
-	expect(typeof createPayload.shareToken).toBe('string')
-	const shareToken = createPayload.shareToken ?? ''
+	if (
+		typeof createPayload.shareToken !== 'string' ||
+		createPayload.shareToken.trim().length === 0
+	) {
+		throw new Error('Expected /api/schedules to return a non-empty shareToken')
+	}
+	const shareToken = createPayload.shareToken
 
 	await page.goto(
-		`/dev/schedule-ui?shareToken=${encodeURIComponent(shareToken)}&name=${encodeURIComponent('Alex')}`,
+		`/dev/schedule-ui?shareToken=${encodeURIComponent(shareToken)}&attendeeName=${encodeURIComponent('Alex')}`,
 	)
 
 	await expect(
