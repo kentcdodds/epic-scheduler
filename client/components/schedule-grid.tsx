@@ -17,6 +17,8 @@ const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
 type ScheduleGridProps = {
 	slots: Array<string>
 	selectedSlots: ReadonlySet<string>
+	pendingAddedSlots?: ReadonlySet<string>
+	pendingRemovedSlots?: ReadonlySet<string>
 	slotAvailability: Record<string, SlotAvailability>
 	maxAvailabilityCount: number
 	activeSlot: string | null
@@ -162,6 +164,14 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									availableNames: [],
 								}
 								const isSelected = props.selectedSlots.has(slot)
+								const isPendingAdd = props.pendingAddedSlots?.has(slot) ?? false
+								const isPendingRemove =
+									props.pendingRemovedSlots?.has(slot) ?? false
+								const pendingStateLabel = isPendingAdd
+									? 'pending add'
+									: isPendingRemove
+										? 'pending removal'
+										: ''
 								const isRangeAnchor = props.rangeAnchor === slot
 								const isActive = props.activeSlot === slot
 								const background = getHeatBackgroundColor({
@@ -178,6 +188,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									availability.count > 0
 										? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
 										: 'no attendees available'
+								const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${pendingStateLabel ? `, ${pendingStateLabel}` : ''}`
 
 								return (
 									<td
@@ -190,21 +201,28 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									>
 										<button
 											type="button"
-											aria-label={`${slotLabel}, ${selectionLabel}, ${attendeeLabel}`}
+											aria-label={ariaLabel}
 											aria-pressed={props.readOnly ? undefined : isSelected}
-											title={`${slotLabel}\n${attendeeLabel}`}
+											title={`${slotLabel}\n${attendeeLabel}${pendingStateLabel ? `\n${pendingStateLabel}` : ''}`}
 											css={{
 												display: 'grid',
 												placeItems: 'center',
+												position: 'relative',
 												width: '100%',
 												minHeight: '2.25rem',
 												padding: spacing.xs,
 												border: 'none',
 												background,
+												backgroundImage: isPendingRemove
+													? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-error) 20%, transparent) 0 6px, transparent 6px 12px)'
+													: undefined,
 												color: colors.text,
 												cursor: props.readOnly ? 'default' : 'pointer',
 												fontSize: typography.fontSize.xs,
 												fontWeight: typography.fontWeight.medium,
+												boxShadow: isPendingAdd
+													? `inset 0 0 0 2px ${colors.primary}`
+													: undefined,
 												outline:
 													isRangeAnchor || isActive
 														? `2px solid ${colors.primary}`
@@ -234,7 +252,35 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											}}
 											disabled={props.readOnly}
 										>
-											{availability.count > 0 ? availability.count : ''}
+											{isPendingAdd || isPendingRemove ? (
+												<span
+													aria-hidden
+													css={{
+														position: 'absolute',
+														top: '0.2rem',
+														right: '0.2rem',
+														display: 'inline-flex',
+														minWidth: '0.9rem',
+														height: '0.9rem',
+														paddingInline: '0.2rem',
+														alignItems: 'center',
+														justifyContent: 'center',
+														borderRadius: radius.full,
+														backgroundColor: isPendingAdd
+															? colors.primary
+															: colors.error,
+														color: colors.onPrimary,
+														fontSize: '0.6rem',
+														fontWeight: typography.fontWeight.bold,
+														lineHeight: 1,
+													}}
+												>
+													{isPendingAdd ? '+' : '−'}
+												</span>
+											) : null}
+											<span css={{ position: 'relative', zIndex: 1 }}>
+												{availability.count > 0 ? availability.count : ''}
+											</span>
 										</button>
 									</td>
 								)

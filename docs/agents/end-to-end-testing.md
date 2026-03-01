@@ -13,6 +13,8 @@ on the Epic Web E2E workshop and our existing setup.
 
 - Primary routes and flows (navigation, schedule creation, availability
   updates).
+- User-visible sync states for optimistic flows (for example
+  pending/saving/saved availability indicators).
 - Integration across the worker, client router, and API endpoints.
 - Regressions that are expensive to catch in unit tests.
 

@@ -59,11 +59,36 @@ function toWebSocketUrl(path: string) {
 	return `${protocol}//${window.location.host}${path}`
 }
 
+function getSelectionDiff(params: {
+	currentSelection: ReadonlySet<string>
+	persistedSelection: ReadonlySet<string>
+}) {
+	const pendingAdded = new Set<string>()
+	const pendingRemoved = new Set<string>()
+
+	for (const slot of params.currentSelection) {
+		if (!params.persistedSelection.has(slot)) {
+			pendingAdded.add(slot)
+		}
+	}
+	for (const slot of params.persistedSelection) {
+		if (!params.currentSelection.has(slot)) {
+			pendingRemoved.add(slot)
+		}
+	}
+
+	return {
+		pendingAdded,
+		pendingRemoved,
+	}
+}
+
 export function ScheduleRoute(handle: Handle) {
 	let shareToken = ''
 	let attendeeName = ''
 	let snapshot: Snapshot | null = null
 	let selectedSlots = new Set<string>()
+	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
 	let rangeAnchor: string | null = null
 	let useTapRangeMode = false
@@ -100,6 +125,17 @@ export function ScheduleRoute(handle: Handle) {
 		const params = new URLSearchParams(window.location.search)
 		const value = params.get('name')
 		return value ? normalizeName(value) : ''
+	}
+
+	function getPersistedSelectionForName(name: string) {
+		if (!snapshot) return new Set<string>()
+		return new Set(
+			findSelectionForAttendee({
+				attendeeName: name,
+				attendees: snapshot.attendees,
+				availabilityByAttendee: snapshot.availabilityByAttendee,
+			}),
+		)
 	}
 
 	function clearSaveDebounceTimer() {
@@ -173,13 +209,9 @@ export function ScheduleRoute(handle: Handle) {
 				initialNameLoaded = true
 			}
 
-			if (attendeeName && !hasDirtyChanges) {
-				const slots = findSelectionForAttendee({
-					attendeeName,
-					attendees: snapshot.attendees,
-					availabilityByAttendee: snapshot.availabilityByAttendee,
-				})
-				selectedSlots = new Set(slots)
+			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
+			if (!hasDirtyChanges) {
+				selectedSlots = new Set(persistedSelectedSlots)
 			}
 
 			handle.update()
@@ -239,6 +271,7 @@ export function ScheduleRoute(handle: Handle) {
 			}
 
 			snapshot = payload.snapshot
+			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (saveVersion === changeVersion) {
 				hasDirtyChanges = false
 				setStatusMessage('Availability saved.', false)
@@ -396,6 +429,7 @@ export function ScheduleRoute(handle: Handle) {
 		shareToken = parseShareToken(nextPathname)
 		snapshot = null
 		selectedSlots = new Set<string>()
+		persistedSelectedSlots = new Set<string>()
 		activeSlot = null
 		rangeAnchor = null
 		hasDirtyChanges = false
@@ -421,6 +455,55 @@ export function ScheduleRoute(handle: Handle) {
 			...Object.values(slotAvailability).map((value) => value.count),
 		)
 		const selectedCount = selectedSlots.size
+		const pendingDiff = getSelectionDiff({
+			currentSelection: selectedSlots,
+			persistedSelection: persistedSelectedSlots,
+		})
+		const pendingAddCount = pendingDiff.pendingAdded.size
+		const pendingRemoveCount = pendingDiff.pendingRemoved.size
+		const pendingChangeCount = pendingAddCount + pendingRemoveCount
+		const isDebouncingSave =
+			saveDebounceTimer !== null && !isSaving && pendingChangeCount > 0
+		const normalizedAttendeeName = normalizeName(attendeeName)
+		const isSyncBlocked = !normalizedAttendeeName && pendingChangeCount > 0
+		const hasStableSyncError =
+			saveError && pendingChangeCount === 0 && !isSaving && !isSyncBlocked
+		const syncSummary = isSyncBlocked
+			? 'Sync blocked: name required'
+			: isSaving && pendingSave
+				? 'Saving changes (more queued)...'
+				: isSaving
+					? 'Saving changes...'
+					: pendingChangeCount > 0 && isDebouncingSave
+						? 'Changes queued for autosave'
+						: pendingChangeCount > 0
+							? 'Unsynced local changes'
+							: saveError
+								? 'Last sync failed'
+								: 'All changes saved'
+		const syncDetails =
+			pendingChangeCount > 0
+				? `${pendingAddCount} add · ${pendingRemoveCount} remove`
+				: 'Server and local selections match.'
+		const syncSurfaceColor = hasStableSyncError
+			? 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))'
+			: isSyncBlocked
+				? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface))'
+				: pendingChangeCount > 0
+					? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))'
+					: 'color-mix(in srgb, var(--color-primary) 5%, var(--color-surface))'
+		const syncBorderColor =
+			hasStableSyncError || isSyncBlocked
+				? 'color-mix(in srgb, var(--color-error) 48%, var(--color-border))'
+				: pendingChangeCount > 0
+					? 'color-mix(in srgb, var(--color-primary) 42%, var(--color-border))'
+					: colors.border
+		const syncDotColor =
+			hasStableSyncError || isSyncBlocked
+				? colors.error
+				: pendingChangeCount > 0 || isSaving
+					? colors.primary
+					: 'color-mix(in srgb, var(--color-primary) 40%, var(--color-text-muted))'
 		const attendeeNames =
 			currentSnapshot?.attendees.map((entry) => entry.name) ?? []
 		const activeSlotAvailableNames = activeSlot
@@ -429,6 +512,12 @@ export function ScheduleRoute(handle: Handle) {
 		const activeSlotUnavailableNames = attendeeNames.filter(
 			(name) => !activeSlotAvailableNames.includes(name),
 		)
+		const activeSlotPendingStatus =
+			activeSlot && pendingDiff.pendingAdded.has(activeSlot)
+				? 'Pending add to your availability.'
+				: activeSlot && pendingDiff.pendingRemoved.has(activeSlot)
+					? 'Pending removal from your availability.'
+					: null
 		const connectionLabel =
 			connectionState === 'live'
 				? 'Realtime connected'
@@ -511,15 +600,10 @@ export function ScheduleRoute(handle: Handle) {
 								on={{
 									input: (event) => {
 										attendeeName = event.currentTarget.value
-										if (snapshot) {
-											const existingSlots = findSelectionForAttendee({
-												attendeeName,
-												attendees: snapshot.attendees,
-												availabilityByAttendee: snapshot.availabilityByAttendee,
-											})
-											if (existingSlots.length > 0) {
-												selectedSlots = new Set(existingSlots)
-											}
+										persistedSelectedSlots =
+											getPersistedSelectionForName(attendeeName)
+										if (!hasDirtyChanges) {
+											selectedSlots = new Set(persistedSelectedSlots)
 										}
 										handle.update()
 									},
@@ -553,16 +637,106 @@ export function ScheduleRoute(handle: Handle) {
 									fontWeight: typography.fontWeight.semibold,
 									cursor: isSaving ? 'not-allowed' : 'pointer',
 									opacity: isSaving ? 0.8 : 1,
+									boxShadow:
+										pendingChangeCount > 0 && !isSaving
+											? `0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent)`
+											: 'none',
 								}}
 							>
 								{isSaving ? 'Saving…' : 'Save availability'}
 							</button>
 							<p css={{ margin: 0, color: colors.textMuted }}>
-								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
-								{hasDirtyChanges ? ' (unsaved changes)' : ''}
+								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'} ·{' '}
+								{pendingChangeCount} pending
 							</p>
 						</div>
 					</div>
+
+					<section
+						role="status"
+						aria-live="polite"
+						css={{
+							display: 'grid',
+							gap: spacing.sm,
+							padding: spacing.md,
+							borderRadius: radius.md,
+							border: `1px solid ${syncBorderColor}`,
+							backgroundColor: syncSurfaceColor,
+						}}
+					>
+						<div
+							css={{
+								display: 'flex',
+								flexWrap: 'wrap',
+								gap: spacing.sm,
+								alignItems: 'center',
+							}}
+						>
+							<span
+								aria-hidden
+								css={{
+									display: 'inline-block',
+									width: '0.65rem',
+									height: '0.65rem',
+									borderRadius: radius.full,
+									backgroundColor: syncDotColor,
+								}}
+							/>
+							<strong
+								css={{ color: colors.text, fontSize: typography.fontSize.sm }}
+							>
+								{syncSummary}
+							</strong>
+							<span
+								css={{
+									color: colors.textMuted,
+									fontSize: typography.fontSize.sm,
+								}}
+							>
+								{syncDetails}
+							</span>
+						</div>
+						{pendingChangeCount > 0 ? (
+							<div
+								css={{
+									display: 'flex',
+									flexWrap: 'wrap',
+									gap: spacing.xs,
+								}}
+							>
+								{pendingAddCount > 0 ? (
+									<span
+										css={{
+											padding: `${spacing.xs} ${spacing.sm}`,
+											borderRadius: radius.full,
+											backgroundColor:
+												'color-mix(in srgb, var(--color-primary) 18%, var(--color-surface))',
+											color: colors.text,
+											fontSize: typography.fontSize.xs,
+											fontWeight: typography.fontWeight.medium,
+										}}
+									>
+										Pending add: {pendingAddCount}
+									</span>
+								) : null}
+								{pendingRemoveCount > 0 ? (
+									<span
+										css={{
+											padding: `${spacing.xs} ${spacing.sm}`,
+											borderRadius: radius.full,
+											backgroundColor:
+												'color-mix(in srgb, var(--color-error) 16%, var(--color-surface))',
+											color: colors.text,
+											fontSize: typography.fontSize.xs,
+											fontWeight: typography.fontWeight.medium,
+										}}
+									>
+										Pending remove: {pendingRemoveCount}
+									</span>
+								) : null}
+							</div>
+						) : null}
+					</section>
 
 					<div
 						css={{
@@ -613,6 +787,8 @@ export function ScheduleRoute(handle: Handle) {
 						renderScheduleGrid({
 							slots: currentSnapshot.slots,
 							selectedSlots,
+							pendingAddedSlots: pendingDiff.pendingAdded,
+							pendingRemovedSlots: pendingDiff.pendingRemoved,
 							slotAvailability,
 							maxAvailabilityCount,
 							activeSlot,
@@ -675,6 +851,18 @@ export function ScheduleRoute(handle: Handle) {
 							<p css={{ margin: 0, color: colors.textMuted }}>
 								Unavailable: {activeSlotUnavailableNames.join(', ') || 'None'}
 							</p>
+							{activeSlotPendingStatus ? (
+								<p
+									css={{
+										margin: 0,
+										color: colors.primaryText,
+										fontSize: typography.fontSize.sm,
+										fontWeight: typography.fontWeight.medium,
+									}}
+								>
+									{activeSlotPendingStatus}
+								</p>
+							) : null}
 						</section>
 					) : null}
 
