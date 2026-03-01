@@ -18,13 +18,20 @@ const createScheduleTool = {
 
 const intervalSchema = z.union([z.literal(15), z.literal(30), z.literal(60)])
 
+const safeCreateScheduleValidationMessages = new Set([
+	'Host name is required.',
+	'Interval must be one of 15, 30, or 60 minutes.',
+	'rangeEndUtc must be later than rangeStartUtc.',
+	'Requested range is too large.',
+	'Invalid rangeStartUtc. Expected an ISO date string.',
+	'Invalid rangeEndUtc. Expected an ISO date string.',
+	'Invalid selectedSlots item. Expected an ISO date string.',
+	'Invalid hostTimeZone.',
+])
+
 function toSafeCreateScheduleError(error: unknown) {
 	const message = error instanceof Error ? error.message : ''
-	if (
-		/host name is required|invalid|must be|must|later than|too large|required/i.test(
-			message,
-		)
-	) {
+	if (safeCreateScheduleValidationMessages.has(message)) {
 		return message
 	}
 
