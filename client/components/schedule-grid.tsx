@@ -6,6 +6,14 @@ type SlotAvailability = {
 	availableNames: Array<string>
 }
 
+const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
+	weekday: 'long',
+	month: 'long',
+	day: 'numeric',
+	hour: 'numeric',
+	minute: '2-digit',
+})
+
 type ScheduleGridProps = {
 	slots: Array<string>
 	selectedSlots: ReadonlySet<string>
@@ -162,13 +170,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									isSelected,
 								})
 								const slotDate = new Date(slot)
-								const slotLabel = new Intl.DateTimeFormat(undefined, {
-									weekday: 'long',
-									month: 'long',
-									day: 'numeric',
-									hour: 'numeric',
-									minute: '2-digit',
-								}).format(slotDate)
+								const slotLabel = slotDateFormatter.format(slotDate)
 								const selectionLabel = isSelected
 									? 'selected for your availability'
 									: 'not selected for your availability'

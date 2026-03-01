@@ -78,6 +78,8 @@ export function ScheduleRoute(handle: Handle) {
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
 	let hasDirtyChanges = false
+	let changeVersion = 0
+	let pendingSave = false
 	let paintMode: 'add' | 'remove' | null = null
 	let dragging = false
 	let lastPointerSlot: string | null = null
@@ -110,6 +112,21 @@ export function ScheduleRoute(handle: Handle) {
 			clearTimeout(reconnectTimer)
 			reconnectTimer = null
 		}
+	}
+
+	function cleanupResources() {
+		clearSocketResources()
+		if (saveDebounceTimer) {
+			clearTimeout(saveDebounceTimer)
+			saveDebounceTimer = null
+		}
+		pendingSave = false
+	}
+
+	if (handle.signal.aborted) {
+		cleanupResources()
+	} else {
+		handle.signal.addEventListener('abort', cleanupResources)
 	}
 
 	async function loadSnapshot() {
@@ -161,12 +178,18 @@ export function ScheduleRoute(handle: Handle) {
 
 	async function saveAvailability() {
 		if (!snapshot || !shareToken) return
+		if (handle.signal.aborted) return
+		if (isSaving) {
+			pendingSave = true
+			return
+		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
 			setStatusMessage('Enter your name before saving availability.', true)
 			return
 		}
 
+		const saveVersion = changeVersion
 		isSaving = true
 		handle.update()
 
@@ -200,13 +223,21 @@ export function ScheduleRoute(handle: Handle) {
 			}
 
 			snapshot = payload.snapshot
-			hasDirtyChanges = false
-			setStatusMessage('Availability saved.', false)
+			if (saveVersion === changeVersion) {
+				hasDirtyChanges = false
+				setStatusMessage('Availability saved.', false)
+			}
 		} catch {
 			setStatusMessage('Network error while saving availability.', true)
 		} finally {
 			isSaving = false
 			handle.update()
+			const shouldReschedule =
+				pendingSave && hasDirtyChanges && !handle.signal.aborted
+			pendingSave = false
+			if (shouldReschedule) {
+				scheduleAutoSave()
+			}
 		}
 	}
 
@@ -215,8 +246,13 @@ export function ScheduleRoute(handle: Handle) {
 			clearTimeout(saveDebounceTimer)
 			saveDebounceTimer = null
 		}
+		if (handle.signal.aborted) return
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) return
+		if (isSaving) {
+			pendingSave = true
+			return
+		}
 		saveDebounceTimer = setTimeout(() => {
 			void saveAvailability()
 		}, 650)
@@ -224,6 +260,7 @@ export function ScheduleRoute(handle: Handle) {
 
 	function markDirty() {
 		hasDirtyChanges = true
+		changeVersion += 1
 		scheduleAutoSave()
 		handle.update()
 	}
@@ -294,16 +331,18 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function connectSocket() {
-		if (!shareToken) return
+		if (!shareToken || handle.signal.aborted) return
 		clearSocketResources()
 		connectionState = 'connecting'
 		const ws = new WebSocket(toWebSocketUrl(`/ws/${shareToken}`))
 		socket = ws
 		ws.onopen = () => {
+			if (socket !== ws || handle.signal.aborted) return
 			connectionState = 'live'
 			handle.update()
 		}
 		ws.onmessage = (event) => {
+			if (socket !== ws || handle.signal.aborted) return
 			try {
 				const payload = JSON.parse(String(event.data)) as {
 					type?: string
@@ -316,10 +355,12 @@ export function ScheduleRoute(handle: Handle) {
 			}
 		}
 		ws.onerror = () => {
+			if (socket !== ws || handle.signal.aborted) return
 			connectionState = 'offline'
 			handle.update()
 		}
 		ws.onclose = () => {
+			if (socket !== ws || handle.signal.aborted) return
 			connectionState = 'offline'
 			handle.update()
 			reconnectTimer = setTimeout(() => {
