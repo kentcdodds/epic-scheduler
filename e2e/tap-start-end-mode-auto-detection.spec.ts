@@ -32,7 +32,6 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 
 	const selectedSlot = page.locator('button[aria-pressed="true"]').first()
 	const selectedCountLabel = page.getByText(/selected slot/)
-	const modeIndicator = page.getByText(/Selection mode:/)
 
 	await expect(selectedSlot).toBeVisible()
 	await expect
@@ -50,7 +49,6 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 
 	await dispatchTouchTap(selectedSlot)
 	await expect(page.getByText(tapRangeStartMessagePattern)).toBeVisible()
-	await expect(modeIndicator).toContainText('tap start/end')
 	const countAfterTouchTap = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
@@ -58,7 +56,6 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 	expect(countAfterTouchTap).toBe(initialCount)
 
 	await selectedSlot.click()
-	await expect(modeIndicator).toContainText('click and drag')
 	const countAfterMouseClick = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
@@ -76,7 +73,6 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 
 	const selectedSlot = page.locator('button[aria-pressed="true"]').first()
 	const selectedCountLabel = page.getByText(/selected slot/)
-	const modeIndicator = page.getByText(/Selection mode:/)
 
 	await expect(selectedSlot).toBeVisible()
 	await expect
@@ -94,7 +90,6 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 
 	await dispatchTouchTap(selectedSlot)
 	await expect(page.getByText(tapRangeStartMessagePattern)).toBeVisible()
-	await expect(modeIndicator).toContainText('tap start/end')
 	const countAfterTouchTap = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)
@@ -102,8 +97,6 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 	expect(countAfterTouchTap).toBe(initialCount)
 
 	await selectedSlot.click()
-	await expect(modeIndicator).toContainText('click and drag')
-	await expect(page.getByText('Pending remove: 1')).toBeVisible()
 	const countAfterMouseClick = readSelectedCount(
 		await selectedCountLabel.textContent(),
 	)

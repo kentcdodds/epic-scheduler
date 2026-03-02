@@ -20,6 +20,7 @@ Quick start
 - Use 'submit_schedule_availability' to save attendee selections.
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
 - Use 'open_schedule_ui' (optionally with shareToken/attendeeName) to open the MCP app widget for loading an existing schedule, selecting availability, and viewing overlap.
+- Use 'open_schedule_host_ui' (optionally with shareToken) to open the host dashboard MCP app for managing blocked slots and deciding on final times.
 
 How to chain tools safely
 - First create a schedule, then submit attendee availability, then read the snapshot.

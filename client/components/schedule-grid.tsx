@@ -1,5 +1,4 @@
 import {
-	breakpoints,
 	colors,
 	mq,
 	radius,
@@ -27,6 +26,13 @@ type ScheduleGridProps = {
 	selectedSlots: ReadonlySet<string>
 	pendingAddedSlots?: ReadonlySet<string>
 	pendingRemovedSlots?: ReadonlySet<string>
+	disabledSlots?: ReadonlySet<string>
+	highlightedSlots?: ReadonlySet<string>
+	highlightedSlotLabel?: string
+	selectedSlotLabel?: string
+	unselectedSlotLabel?: string
+	selectedBackground?: string
+	pending?: boolean
 	mobileDayKey?: string | null
 	slotAvailability: Record<string, SlotAvailability>
 	maxAvailabilityCount: number
@@ -39,6 +45,7 @@ type ScheduleGridProps = {
 	onCellPointerUp?: (slot: string, event: PointerEvent) => void
 	onCellClick?: (slot: string, event: MouseEvent) => void
 	onCellFocus?: (slot: string) => void
+	onCellHover?: (slot: string | null) => void
 }
 
 function toDayKey(slot: string | null) {
@@ -51,10 +58,39 @@ function toDayKey(slot: string | null) {
 	return `${year}-${month}-${day}`
 }
 
-function isMobileViewport() {
-	if (typeof window === 'undefined') return false
-	if (typeof window.matchMedia !== 'function') return false
-	return window.matchMedia(`(max-width: ${breakpoints.mobile})`).matches
+function toSelectionLabel(params: {
+	selected: boolean
+	selectedSlotLabel?: string
+	unselectedSlotLabel?: string
+}) {
+	if (params.selected) {
+		return params.selectedSlotLabel ?? 'selected for your availability'
+	}
+	return params.unselectedSlotLabel ?? 'not selected for your availability'
+}
+
+function getCellBackground(params: {
+	count: number
+	maxCount: number
+	isSelected: boolean
+	isDisabled: boolean
+	isHighlighted: boolean
+	selectedBackground?: string
+}) {
+	if (params.isDisabled) {
+		return 'color-mix(in srgb, var(--color-background) 86%, var(--color-surface))'
+	}
+	if (params.isSelected && params.selectedBackground) {
+		return params.selectedBackground
+	}
+	if (params.isHighlighted) {
+		return 'color-mix(in srgb, #22c55e 46%, var(--color-surface))'
+	}
+	return getScheduleCellBackgroundColor({
+		count: params.count,
+		maxCount: params.maxCount,
+		isSelected: params.isSelected,
+	})
 }
 
 export function renderScheduleGrid(props: ScheduleGridProps) {
@@ -69,7 +105,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		props.mobileDayKey && dayKeys.includes(props.mobileDayKey)
 			? props.mobileDayKey
 			: defaultMobileDayKey
-	const isMobile = isMobileViewport()
 	const mobileDayIndex = resolvedMobileDayKey
 		? dayKeys.indexOf(resolvedMobileDayKey)
 		: -1
@@ -79,8 +114,305 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		mobileDayIndex >= 0 && mobileDayIndex < dayKeys.length - 1
 			? (dayKeys[mobileDayIndex + 1] ?? null)
 			: null
-	const visibleDayKeys =
-		isMobile && resolvedMobileDayKey ? [resolvedMobileDayKey] : dayKeys
+	const mobileVisibleDayKeys = resolvedMobileDayKey
+		? [resolvedMobileDayKey]
+		: dayKeys
+	const desktopVisibleDayKeys = dayKeys
+
+	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
+		return (
+			<div
+				css={{
+					border: `1px solid ${colors.border}`,
+					borderRadius: radius.lg,
+					overflow: 'auto',
+					backgroundColor: colors.surface,
+					[mq.mobile]: compact
+						? {
+								borderRadius: 0,
+								borderInline: 'none',
+								overflowX: 'hidden',
+							}
+						: {},
+				}}
+			>
+				<table
+					css={{
+						borderCollapse: 'separate',
+						borderSpacing: 0,
+						minWidth: compact ? '100%' : `max(44rem, ${dayKeys.length * 8}rem)`,
+						width: '100%',
+					}}
+				>
+					<thead>
+						<tr>
+							<th
+								scope="col"
+								css={{
+									position: 'sticky',
+									left: 0,
+									top: 0,
+									zIndex: 3,
+									backgroundColor: colors.surface,
+									padding: `${spacing.sm} ${spacing.sm}`,
+									textAlign: 'left',
+									fontSize: typography.fontSize.sm,
+									color: colors.textMuted,
+									borderBottom: `1px solid ${colors.border}`,
+									borderRight: `1px solid ${colors.border}`,
+									minWidth: '5rem',
+									[mq.mobile]: compact
+										? {
+												minWidth: '4.8rem',
+												paddingInline: spacing.xs,
+											}
+										: {},
+								}}
+							>
+								Time
+							</th>
+							{visibleDayKeys.map((dayKey) => (
+								<th
+									key={dayKey}
+									scope="col"
+									css={{
+										position: 'sticky',
+										top: 0,
+										zIndex: 2,
+										backgroundColor: colors.surface,
+										padding: `${spacing.sm} ${spacing.sm}`,
+										textAlign: 'center',
+										fontSize: typography.fontSize.sm,
+										color: colors.text,
+										borderBottom: `1px solid ${colors.border}`,
+									}}
+								>
+									{dayLabels[dayKey]}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{timeKeys.map((timeKey) => (
+							<tr key={timeKey}>
+								<th
+									scope="row"
+									css={{
+										position: 'sticky',
+										left: 0,
+										zIndex: 1,
+										backgroundColor: colors.surface,
+										padding: `${spacing.xs} ${spacing.sm}`,
+										fontSize: typography.fontSize.xs,
+										color: colors.textMuted,
+										borderRight: `1px solid ${colors.border}`,
+										borderBottom: `1px solid ${colors.border}`,
+										textAlign: 'left',
+										fontWeight: typography.fontWeight.medium,
+									}}
+								>
+									{timeLabels[timeKey]}
+								</th>
+								{visibleDayKeys.map((dayKey) => {
+									const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
+									if (!slot) {
+										return (
+											<td
+												key={`${dayKey}:${timeKey}:empty`}
+												css={{
+													borderBottom: `1px solid ${colors.border}`,
+													backgroundColor:
+														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
+													height: '2.25rem',
+													[mq.mobile]: compact
+														? {
+																height: '2.65rem',
+															}
+														: {},
+												}}
+											/>
+										)
+									}
+
+									const availability = props.slotAvailability[slot] ?? {
+										count: 0,
+										availableNames: [],
+									}
+									const isSelected = props.selectedSlots.has(slot)
+									const isPendingAdd =
+										props.pendingAddedSlots?.has(slot) ?? false
+									const isPendingRemove =
+										props.pendingRemovedSlots?.has(slot) ?? false
+									const isDisabled = props.disabledSlots?.has(slot) ?? false
+									const isHighlighted =
+										props.highlightedSlots?.has(slot) ?? false
+									const pendingStateLabel = isPendingAdd
+										? 'pending add'
+										: isPendingRemove
+											? 'pending removal'
+											: ''
+									const isRangeAnchor = props.rangeAnchor === slot
+									const isActive = props.activeSlot === slot
+									const background = getCellBackground({
+										count: availability.count,
+										maxCount: props.maxAvailabilityCount,
+										isSelected,
+										isDisabled,
+										isHighlighted,
+										selectedBackground: props.selectedBackground,
+									})
+									const slotDate = new Date(slot)
+									const slotLabel = slotDateFormatter.format(slotDate)
+									const selectionLabel = toSelectionLabel({
+										selected: isSelected,
+										selectedSlotLabel: props.selectedSlotLabel,
+										unselectedSlotLabel: props.unselectedSlotLabel,
+									})
+									const attendeeLabel =
+										availability.count > 0
+											? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
+											: 'no attendees available'
+									const highlightedLabel =
+										isHighlighted && props.highlightedSlotLabel
+											? `, ${props.highlightedSlotLabel}`
+											: ''
+									const disabledLabel = isDisabled
+										? ', unavailable for scheduling'
+										: ''
+									const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${pendingStateLabel ? `, ${pendingStateLabel}` : ''}${highlightedLabel}${disabledLabel}`
+									const interactive = !props.readOnly && !isDisabled
+
+									return (
+										<td
+											key={`${dayKey}:${timeKey}`}
+											css={{
+												padding: 0,
+												borderBottom: `1px solid ${colors.border}`,
+												borderRight: `1px solid ${colors.border}`,
+											}}
+										>
+											<button
+												type="button"
+												data-slot={slot}
+												aria-label={ariaLabel}
+												aria-pressed={
+													props.readOnly || isDisabled ? undefined : isSelected
+												}
+												aria-disabled={isDisabled ? 'true' : undefined}
+												title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}${pendingStateLabel ? `\n${pendingStateLabel}` : ''}`}
+												css={{
+													display: 'grid',
+													placeItems: 'center',
+													position: 'relative',
+													width: '100%',
+													minHeight: '2.25rem',
+													padding: spacing.xs,
+													border: 'none',
+													background,
+													backgroundImage: isDisabled
+														? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-text) 11%, transparent) 0 5px, transparent 5px 10px)'
+														: isPendingRemove
+															? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-error) 20%, transparent) 0 6px, transparent 6px 12px)'
+															: undefined,
+													color: colors.text,
+													cursor:
+														props.readOnly || isDisabled
+															? 'default'
+															: 'pointer',
+													fontSize: typography.fontSize.xs,
+													fontWeight: typography.fontWeight.medium,
+													boxShadow: isPendingAdd
+														? `inset 0 0 0 2px ${colors.primary}`
+														: undefined,
+													outline:
+														isRangeAnchor || isActive
+															? `2px solid ${colors.primary}`
+															: 'none',
+													outlineOffset: '-2px',
+													opacity: isDisabled ? 0.58 : 1,
+													'&:focus-visible': {
+														outline: `2px solid ${colors.primary}`,
+														outlineOffset: '-2px',
+													},
+													[mq.mobile]: compact
+														? {
+																minHeight: '2.65rem',
+																fontSize: typography.fontSize.sm,
+															}
+														: {},
+												}}
+												on={{
+													pointerdown:
+														interactive && props.onCellPointerDown
+															? (event) =>
+																	props.onCellPointerDown?.(slot, event)
+															: undefined,
+													pointerenter:
+														interactive && props.onCellPointerEnter
+															? (event) =>
+																	props.onCellPointerEnter?.(slot, event)
+															: props.onCellHover
+																? () => props.onCellHover?.(slot)
+																: undefined,
+													pointerleave: props.onCellHover
+														? () => props.onCellHover?.(null)
+														: undefined,
+													pointerup:
+														interactive && props.onCellPointerUp
+															? (event) => props.onCellPointerUp?.(slot, event)
+															: undefined,
+													click:
+														interactive && props.onCellClick
+															? (event) => props.onCellClick?.(slot, event)
+															: undefined,
+													focus: props.onCellFocus
+														? () => props.onCellFocus?.(slot)
+														: undefined,
+													blur: props.onCellHover
+														? () => props.onCellHover?.(null)
+														: undefined,
+												}}
+											>
+												{isPendingAdd || isPendingRemove ? (
+													<span
+														aria-hidden
+														css={{
+															position: 'absolute',
+															top: '0.2rem',
+															right: '0.2rem',
+															display: 'inline-flex',
+															minWidth: '0.9rem',
+															height: '0.9rem',
+															paddingInline: '0.2rem',
+															alignItems: 'center',
+															justifyContent: 'center',
+															borderRadius: radius.full,
+															backgroundColor: isPendingAdd
+																? colors.primary
+																: colors.error,
+															color: colors.onPrimary,
+															fontSize: '0.6rem',
+															fontWeight: typography.fontWeight.bold,
+															lineHeight: 1,
+														}}
+													>
+														{isPendingAdd ? '+' : '−'}
+													</span>
+												) : null}
+												<span css={{ position: 'relative', zIndex: 1 }}>
+													{availability.count > 0 ? availability.count : ''}
+												</span>
+											</button>
+										</td>
+									)
+								})}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		)
+	}
 
 	if (dayKeys.length === 0 || timeKeys.length === 0) {
 		return (
@@ -96,12 +428,22 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 			css={{
 				display: 'grid',
 				gap: spacing.sm,
+				opacity: props.pending ? 0.6 : 1,
+				transition: 'opacity 120ms ease',
 				[mq.mobile]: {
 					marginInline: 'calc(50% - 50vw)',
 				},
 			}}
 		>
-			{isMobile ? (
+			<div
+				css={{
+					display: 'none',
+					[mq.mobile]: {
+						display: 'grid',
+						gap: spacing.sm,
+					},
+				}}
+			>
 				<div
 					role="status"
 					aria-live="polite"
@@ -202,251 +544,26 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 						{'>'}
 					</button>
 				</div>
-			) : null}
+			</div>
 			<div
 				css={{
-					border: `1px solid ${colors.border}`,
-					borderRadius: radius.lg,
-					overflow: 'auto',
-					backgroundColor: colors.surface,
+					display: 'grid',
 					[mq.mobile]: {
-						borderRadius: 0,
-						borderInline: 'none',
-						overflowX: 'hidden',
+						display: 'none',
 					},
 				}}
 			>
-				<table
-					css={{
-						borderCollapse: 'separate',
-						borderSpacing: 0,
-						minWidth: isMobile
-							? '100%'
-							: `max(44rem, ${dayKeys.length * 8}rem)`,
-						width: '100%',
-					}}
-				>
-					<thead>
-						<tr>
-							<th
-								scope="col"
-								css={{
-									position: 'sticky',
-									left: 0,
-									top: 0,
-									zIndex: 3,
-									backgroundColor: colors.surface,
-									padding: `${spacing.sm} ${spacing.sm}`,
-									textAlign: 'left',
-									fontSize: typography.fontSize.sm,
-									color: colors.textMuted,
-									borderBottom: `1px solid ${colors.border}`,
-									borderRight: `1px solid ${colors.border}`,
-									minWidth: '5rem',
-									[mq.mobile]: {
-										minWidth: '4.8rem',
-										paddingInline: spacing.xs,
-									},
-								}}
-							>
-								Time
-							</th>
-							{visibleDayKeys.map((dayKey) => (
-								<th
-									key={dayKey}
-									scope="col"
-									css={{
-										position: 'sticky',
-										top: 0,
-										zIndex: 2,
-										backgroundColor: colors.surface,
-										padding: `${spacing.sm} ${spacing.sm}`,
-										textAlign: 'center',
-										fontSize: typography.fontSize.sm,
-										color: colors.text,
-										borderBottom: `1px solid ${colors.border}`,
-									}}
-								>
-									{dayLabels[dayKey]}
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{timeKeys.map((timeKey) => (
-							<tr key={timeKey}>
-								<th
-									scope="row"
-									css={{
-										position: 'sticky',
-										left: 0,
-										zIndex: 1,
-										backgroundColor: colors.surface,
-										padding: `${spacing.xs} ${spacing.sm}`,
-										fontSize: typography.fontSize.xs,
-										color: colors.textMuted,
-										borderRight: `1px solid ${colors.border}`,
-										borderBottom: `1px solid ${colors.border}`,
-										textAlign: 'left',
-										fontWeight: typography.fontWeight.medium,
-									}}
-								>
-									{timeLabels[timeKey]}
-								</th>
-								{visibleDayKeys.map((dayKey) => {
-									const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
-									if (!slot) {
-										return (
-											<td
-												key={`${dayKey}:${timeKey}:empty`}
-												css={{
-													borderBottom: `1px solid ${colors.border}`,
-													backgroundColor:
-														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
-													height: '2.25rem',
-													[mq.mobile]: {
-														height: '2.65rem',
-													},
-												}}
-											/>
-										)
-									}
-
-									const availability = props.slotAvailability[slot] ?? {
-										count: 0,
-										availableNames: [],
-									}
-									const isSelected = props.selectedSlots.has(slot)
-									const isPendingAdd =
-										props.pendingAddedSlots?.has(slot) ?? false
-									const isPendingRemove =
-										props.pendingRemovedSlots?.has(slot) ?? false
-									const pendingStateLabel = isPendingAdd
-										? 'pending add'
-										: isPendingRemove
-											? 'pending removal'
-											: ''
-									const isRangeAnchor = props.rangeAnchor === slot
-									const isActive = props.activeSlot === slot
-									const background = getScheduleCellBackgroundColor({
-										count: availability.count,
-										maxCount: props.maxAvailabilityCount,
-										isSelected,
-									})
-									const slotDate = new Date(slot)
-									const slotLabel = slotDateFormatter.format(slotDate)
-									const selectionLabel = isSelected
-										? 'selected for your availability'
-										: 'not selected for your availability'
-									const attendeeLabel =
-										availability.count > 0
-											? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
-											: 'no attendees available'
-									const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${pendingStateLabel ? `, ${pendingStateLabel}` : ''}`
-
-									return (
-										<td
-											key={`${dayKey}:${timeKey}`}
-											css={{
-												padding: 0,
-												borderBottom: `1px solid ${colors.border}`,
-												borderRight: `1px solid ${colors.border}`,
-											}}
-										>
-											<button
-												type="button"
-												aria-label={ariaLabel}
-												aria-pressed={props.readOnly ? undefined : isSelected}
-												title={`${slotLabel}\n${attendeeLabel}${pendingStateLabel ? `\n${pendingStateLabel}` : ''}`}
-												css={{
-													display: 'grid',
-													placeItems: 'center',
-													position: 'relative',
-													width: '100%',
-													minHeight: '2.25rem',
-													padding: spacing.xs,
-													border: 'none',
-													background,
-													backgroundImage: isPendingRemove
-														? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-error) 20%, transparent) 0 6px, transparent 6px 12px)'
-														: undefined,
-													color: colors.text,
-													cursor: props.readOnly ? 'default' : 'pointer',
-													fontSize: typography.fontSize.xs,
-													fontWeight: typography.fontWeight.medium,
-													boxShadow: isPendingAdd
-														? `inset 0 0 0 2px ${colors.primary}`
-														: undefined,
-													outline:
-														isRangeAnchor || isActive
-															? `2px solid ${colors.primary}`
-															: 'none',
-													outlineOffset: '-2px',
-													'&:focus-visible': {
-														outline: `2px solid ${colors.primary}`,
-														outlineOffset: '-2px',
-													},
-													[mq.mobile]: {
-														minHeight: '2.65rem',
-														fontSize: typography.fontSize.sm,
-													},
-												}}
-												on={{
-													pointerdown: props.onCellPointerDown
-														? (event) => props.onCellPointerDown?.(slot, event)
-														: undefined,
-													pointerenter: props.onCellPointerEnter
-														? (event) => props.onCellPointerEnter?.(slot, event)
-														: undefined,
-													pointerup: props.onCellPointerUp
-														? (event) => props.onCellPointerUp?.(slot, event)
-														: undefined,
-													click: props.onCellClick
-														? (event) => props.onCellClick?.(slot, event)
-														: undefined,
-													focus: props.onCellFocus
-														? () => props.onCellFocus?.(slot)
-														: undefined,
-												}}
-												disabled={props.readOnly}
-											>
-												{isPendingAdd || isPendingRemove ? (
-													<span
-														aria-hidden
-														css={{
-															position: 'absolute',
-															top: '0.2rem',
-															right: '0.2rem',
-															display: 'inline-flex',
-															minWidth: '0.9rem',
-															height: '0.9rem',
-															paddingInline: '0.2rem',
-															alignItems: 'center',
-															justifyContent: 'center',
-															borderRadius: radius.full,
-															backgroundColor: isPendingAdd
-																? colors.primary
-																: colors.error,
-															color: colors.onPrimary,
-															fontSize: '0.6rem',
-															fontWeight: typography.fontWeight.bold,
-															lineHeight: 1,
-														}}
-													>
-														{isPendingAdd ? '+' : '−'}
-													</span>
-												) : null}
-												<span css={{ position: 'relative', zIndex: 1 }}>
-													{availability.count > 0 ? availability.count : ''}
-												</span>
-											</button>
-										</td>
-									)
-								})}
-							</tr>
-						))}
-					</tbody>
-				</table>
+				{renderGridTable(desktopVisibleDayKeys, false)}
+			</div>
+			<div
+				css={{
+					display: 'none',
+					[mq.mobile]: {
+						display: 'grid',
+					},
+				}}
+			>
+				{renderGridTable(mobileVisibleDayKeys, true)}
 			</div>
 		</div>
 	)

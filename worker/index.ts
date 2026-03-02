@@ -312,6 +312,22 @@ const appHandler = withCors({
 			})
 		}
 
+		// Dev route: serve schedule host UI for iframe testing (simulates ChatGPT/MCP Jam)
+		if (
+			url.pathname === '/dev/schedule-host-ui' &&
+			(request.method === 'GET' || request.method === 'HEAD')
+		) {
+			const { renderScheduleHostUiEntryPoint } =
+				await import('#mcp/apps/schedule-host-ui-entry-point.ts')
+			const baseUrl = new URL('/', url.origin)
+			const html = renderScheduleHostUiEntryPoint(baseUrl)
+			return new Response(html, {
+				headers: {
+					'Content-Type': 'text/html; charset=utf-8',
+				},
+			})
+		}
+
 		// Try to serve static assets for safe methods only
 		if (env.ASSETS && (request.method === 'GET' || request.method === 'HEAD')) {
 			const response = await env.ASSETS.fetch(request)

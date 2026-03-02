@@ -58,13 +58,14 @@ export function ScheduleRoute(handle: Handle) {
 	let tapRangeAction: 'add' | 'remove' | null = null
 	let mobileDayKey: string | null = null
 	let useTapRangeMode = detectTapRangeMode()
-	let saveMessage: string | null = null
-	let saveError = false
+	let statusMessage: string | null = null
+	let statusError = false
 	let isSaving = false
 	let isLoading = true
 	let connectionState: ConnectionState = 'connecting'
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+	let offlinePollTimer: ReturnType<typeof setInterval> | null = null
 	let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
 	let hasDirtyChanges = false
 	let changeVersion = 0
@@ -77,10 +78,12 @@ export function ScheduleRoute(handle: Handle) {
 	let snapshotLoadInFlight = false
 	let snapshotReloadQueued = false
 	const autoSaveDelayMs = 650
+	const reconnectDelayMs = 1200
+	const offlinePollIntervalMs = 4000
 
-	function setStatusMessage(message: string | null, error = false) {
-		saveMessage = message
-		saveError = error
+	function setStatus(nextMessage: string | null, error = false) {
+		statusMessage = nextMessage
+		statusError = error
 		handle.update()
 	}
 
@@ -95,33 +98,44 @@ export function ScheduleRoute(handle: Handle) {
 		return value ? normalizeName(value) : ''
 	}
 
+	function getBlockedSlots() {
+		return new Set(snapshot?.blockedSlots ?? [])
+	}
+
 	function getPersistedSelectionForName(name: string) {
 		if (!snapshot) return new Set<string>()
+		const blockedSlots = getBlockedSlots()
 		return new Set(
 			findSelectionForAttendee({
 				attendeeName: name,
 				attendees: snapshot.attendees,
 				availabilityByAttendee: snapshot.availabilityByAttendee,
-			}),
+			}).filter((slot) => !blockedSlots.has(slot)),
+		)
+	}
+
+	function normalizeLocalSelectionAgainstBlockedSlots() {
+		const blockedSlots = getBlockedSlots()
+		selectedSlots = new Set(
+			Array.from(selectedSlots).filter((slot) => !blockedSlots.has(slot)),
 		)
 	}
 
 	function clearSaveDebounceTimer() {
-		if (saveDebounceTimer) {
-			clearTimeout(saveDebounceTimer)
-			saveDebounceTimer = null
-		}
+		if (!saveDebounceTimer) return
+		clearTimeout(saveDebounceTimer)
+		saveDebounceTimer = null
 	}
 
 	function clearSocketResources() {
 		if (socket) {
-			const current = socket
+			const currentSocket = socket
 			socket = null
-			current.onopen = null
-			current.onmessage = null
-			current.onerror = null
-			current.onclose = null
-			current.close()
+			currentSocket.onopen = null
+			currentSocket.onmessage = null
+			currentSocket.onerror = null
+			currentSocket.onclose = null
+			currentSocket.close()
 		}
 		if (reconnectTimer) {
 			clearTimeout(reconnectTimer)
@@ -129,12 +143,16 @@ export function ScheduleRoute(handle: Handle) {
 		}
 	}
 
+	function clearOfflinePollTimer() {
+		if (!offlinePollTimer) return
+		clearInterval(offlinePollTimer)
+		offlinePollTimer = null
+	}
+
 	function cleanupResources() {
 		clearSocketResources()
-		if (saveDebounceTimer) {
-			clearTimeout(saveDebounceTimer)
-			saveDebounceTimer = null
-		}
+		clearOfflinePollTimer()
+		clearSaveDebounceTimer()
 		pendingSave = false
 	}
 
@@ -142,6 +160,20 @@ export function ScheduleRoute(handle: Handle) {
 		cleanupResources()
 	} else {
 		handle.signal.addEventListener('abort', cleanupResources)
+	}
+
+	function setConnectionState(nextState: ConnectionState) {
+		connectionState = nextState
+		if (nextState === 'offline') {
+			if (!offlinePollTimer) {
+				offlinePollTimer = setInterval(() => {
+					void loadSnapshot()
+				}, offlinePollIntervalMs)
+			}
+		} else {
+			clearOfflinePollTimer()
+		}
+		handle.update()
 	}
 
 	async function loadSnapshot() {
@@ -171,7 +203,7 @@ export function ScheduleRoute(handle: Handle) {
 							typeof payload?.error === 'string'
 								? payload.error
 								: 'Unable to load schedule.'
-						setStatusMessage(errorText, true)
+						setStatus(errorText, true)
 						isLoading = false
 						handle.update()
 						continue
@@ -189,6 +221,8 @@ export function ScheduleRoute(handle: Handle) {
 					persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 					if (!hasDirtyChanges) {
 						selectedSlots = new Set(persistedSelectedSlots)
+					} else {
+						normalizeLocalSelectionAgainstBlockedSlots()
 					}
 
 					handle.update()
@@ -196,7 +230,7 @@ export function ScheduleRoute(handle: Handle) {
 					if (requestShareToken !== shareToken || handle.signal.aborted)
 						continue
 					isLoading = false
-					setStatusMessage('Unable to load schedule.', true)
+					setStatus('Unable to load schedule.', true)
 				}
 			} while (snapshotReloadQueued && !handle.signal.aborted)
 		} finally {
@@ -214,9 +248,15 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
-			setStatusMessage('Enter your name before saving availability.', true)
+			setStatus('Enter your name before selecting availability.', true)
 			return
 		}
+
+		const blockedSlots = getBlockedSlots()
+		const sanitizedSelection = Array.from(selectedSlots)
+			.filter((slot) => !blockedSlots.has(slot))
+			.sort((left, right) => left.localeCompare(right))
+		selectedSlots = new Set(sanitizedSelection)
 
 		const saveVersion = changeVersion
 		isSaving = true
@@ -231,9 +271,7 @@ export function ScheduleRoute(handle: Handle) {
 					body: JSON.stringify({
 						name: normalizedName,
 						attendeeTimeZone: browserTimeZone,
-						selectedSlots: Array.from(selectedSlots).sort((left, right) =>
-							left.localeCompare(right),
-						),
+						selectedSlots: sanitizedSelection,
 					}),
 				},
 			)
@@ -249,7 +287,7 @@ export function ScheduleRoute(handle: Handle) {
 					typeof payload?.error === 'string'
 						? payload.error
 						: 'Unable to save availability.'
-				setStatusMessage(errorMessage, true)
+				setStatus(errorMessage, true)
 				return
 			}
 
@@ -257,13 +295,10 @@ export function ScheduleRoute(handle: Handle) {
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (saveVersion === changeVersion) {
 				hasDirtyChanges = false
-				if (saveError || saveMessage) {
-					setStatusMessage(null, false)
-				}
 			}
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
-			setStatusMessage('Network error while saving availability.', true)
+			setStatus('Network error while saving availability.', true)
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isSaving = false
@@ -319,11 +354,27 @@ export function ScheduleRoute(handle: Handle) {
 		if (startIndex < 0 || endIndex < 0) return
 		const min = Math.min(startIndex, endIndex)
 		const max = Math.max(startIndex, endIndex)
+		const blockedSlots = getBlockedSlots()
 		for (let index = min; index <= max; index += 1) {
 			const slot = snapshot.slots[index]
-			if (!slot) continue
+			if (!slot || blockedSlots.has(slot)) continue
 			setSlotSelection(slot, shouldSelect)
 		}
+	}
+
+	function ensureSlotIsEditable(slot: string) {
+		activeSlot = slot
+		const blockedSlots = getBlockedSlots()
+		if (blockedSlots.has(slot)) {
+			handle.update()
+			return false
+		}
+		const normalizedName = normalizeName(attendeeName)
+		if (!normalizedName) {
+			setStatus('Enter your name before selecting availability.', true)
+			return false
+		}
+		return true
 	}
 
 	function handleCellPointerDown(slot: string, event: PointerEvent) {
@@ -335,13 +386,14 @@ export function ScheduleRoute(handle: Handle) {
 			useTapRangeMode = nextMode
 			rangeAnchor = null
 			tapRangeAction = null
-			if (isTapRangeStartMessage(saveMessage)) {
-				setStatusMessage(null, false)
+			if (isTapRangeStartMessage(statusMessage)) {
+				setStatus(null, false)
 			} else {
 				handle.update()
 			}
 		}
 		if (useTapRangeMode) return
+		if (!ensureSlotIsEditable(slot)) return
 		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		dragging = true
 		lastPointerSlot = slot
@@ -352,6 +404,8 @@ export function ScheduleRoute(handle: Handle) {
 	function handleCellPointerEnter(slot: string) {
 		if (!dragging || !paintMode || useTapRangeMode) return
 		if (lastPointerSlot === slot) return
+		const blockedSlots = getBlockedSlots()
+		if (blockedSlots.has(slot)) return
 		lastPointerSlot = slot
 		setSlotSelection(slot, paintMode === 'add')
 		markDirty()
@@ -365,11 +419,12 @@ export function ScheduleRoute(handle: Handle) {
 
 	function handleCellClick(slot: string) {
 		if (!useTapRangeMode) return
+		if (!ensureSlotIsEditable(slot)) return
 		if (!rangeAnchor) {
 			rangeAnchor = slot
 			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
 			activeSlot = slot
-			setStatusMessage(getTapRangeStartMessage(tapRangeAction))
+			setStatus(getTapRangeStartMessage(tapRangeAction))
 			return
 		}
 		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
@@ -377,47 +432,48 @@ export function ScheduleRoute(handle: Handle) {
 		rangeAnchor = null
 		tapRangeAction = null
 		activeSlot = slot
-		setStatusMessage(null, false)
+		setStatus(null, false)
 		markDirty()
 	}
 
 	function connectSocket() {
 		if (!shareToken || handle.signal.aborted) return
 		clearSocketResources()
-		connectionState = 'connecting'
-		const ws = new WebSocket(toWebSocketUrl(`/ws/${shareToken}`))
-		socket = ws
-		ws.onopen = () => {
-			if (socket !== ws || handle.signal.aborted) return
-			connectionState = 'live'
-			handle.update()
-		}
-		ws.onmessage = (event) => {
-			if (socket !== ws || handle.signal.aborted) return
-			try {
-				const payload = JSON.parse(String(event.data)) as {
-					type?: string
-				} | null
-				if (payload?.type === 'schedule-updated') {
-					void loadSnapshot()
-				}
-			} catch {
-				return
+		setConnectionState('connecting')
+		try {
+			const ws = new WebSocket(toWebSocketUrl(`/ws/${shareToken}`))
+			socket = ws
+			ws.onopen = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('live')
 			}
-		}
-		ws.onerror = () => {
-			if (socket !== ws || handle.signal.aborted) return
-			connectionState = 'offline'
-			handle.update()
-		}
-		ws.onclose = () => {
-			if (socket !== ws || handle.signal.aborted) return
-			connectionState = 'offline'
-			handle.update()
-			reconnectTimer = setTimeout(() => {
-				if (socket !== ws) return
-				connectSocket()
-			}, 1200)
+			ws.onmessage = (event) => {
+				if (socket !== ws || handle.signal.aborted) return
+				try {
+					const payload = JSON.parse(String(event.data)) as {
+						type?: string
+					} | null
+					if (payload?.type === 'schedule-updated') {
+						void loadSnapshot()
+					}
+				} catch {
+					return
+				}
+			}
+			ws.onerror = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('offline')
+			}
+			ws.onclose = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('offline')
+				reconnectTimer = setTimeout(() => {
+					if (socket !== ws) return
+					connectSocket()
+				}, reconnectDelayMs)
+			}
+		} catch {
+			setConnectionState('offline')
 		}
 	}
 
@@ -427,6 +483,7 @@ export function ScheduleRoute(handle: Handle) {
 		lastPathname = nextPathname
 		clearSaveDebounceTimer()
 		clearSocketResources()
+		clearOfflinePollTimer()
 		shareToken = parseShareToken(nextPathname)
 		snapshot = null
 		selectedSlots = new Set<string>()
@@ -445,13 +502,14 @@ export function ScheduleRoute(handle: Handle) {
 		connectionState = 'offline'
 		isLoading = true
 		initialNameLoaded = false
-		setStatusMessage(null, false)
+		setStatus(null, false)
 		await loadSnapshot()
 		connectSocket()
 	})
 
 	return () => {
 		const currentSnapshot = snapshot
+		const blockedSlots = new Set(currentSnapshot?.blockedSlots ?? [])
 		const slotAvailability = createSlotAvailability(currentSnapshot)
 		const maxAvailabilityCount = getMaxAvailabilityCount(slotAvailability)
 		const selectedCount = selectedSlots.size
@@ -459,51 +517,10 @@ export function ScheduleRoute(handle: Handle) {
 			currentSelection: selectedSlots,
 			persistedSelection: persistedSelectedSlots,
 		})
-		const pendingAddCount = pendingDiff.pendingAdded.size
-		const pendingRemoveCount = pendingDiff.pendingRemoved.size
-		const pendingChangeCount = pendingAddCount + pendingRemoveCount
-		const isDebouncingSave =
-			saveDebounceTimer !== null && !isSaving && pendingChangeCount > 0
+		const pendingChangeCount =
+			pendingDiff.pendingAdded.size + pendingDiff.pendingRemoved.size
+		const pendingSync = pendingChangeCount > 0 || isSaving
 		const normalizedAttendeeName = normalizeName(attendeeName)
-		const isSyncBlocked = !normalizedAttendeeName && pendingChangeCount > 0
-		const hasStableSyncError =
-			saveError && pendingChangeCount === 0 && !isSaving && !isSyncBlocked
-		const syncSummary = isSyncBlocked
-			? 'Sync blocked: name required'
-			: isSaving && pendingSave
-				? 'Saving changes (more queued)...'
-				: isSaving
-					? 'Saving changes...'
-					: pendingChangeCount > 0 && isDebouncingSave
-						? 'Changes queued for autosave'
-						: pendingChangeCount > 0
-							? 'Unsynced local changes'
-							: saveError
-								? 'Last sync failed'
-								: 'All changes saved'
-		const syncDetails =
-			pendingChangeCount > 0
-				? `${pendingAddCount} add · ${pendingRemoveCount} remove`
-				: 'Server and local selections match.'
-		const syncSurfaceColor = hasStableSyncError
-			? 'color-mix(in srgb, var(--color-error) 10%, var(--color-surface))'
-			: isSyncBlocked
-				? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface))'
-				: pendingChangeCount > 0
-					? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))'
-					: 'color-mix(in srgb, var(--color-primary) 5%, var(--color-surface))'
-		const syncBorderColor =
-			hasStableSyncError || isSyncBlocked
-				? 'color-mix(in srgb, var(--color-error) 48%, var(--color-border))'
-				: pendingChangeCount > 0
-					? 'color-mix(in srgb, var(--color-primary) 42%, var(--color-border))'
-					: colors.border
-		const syncDotColor =
-			hasStableSyncError || isSyncBlocked
-				? colors.error
-				: pendingChangeCount > 0 || isSaving
-					? colors.primary
-					: 'color-mix(in srgb, var(--color-primary) 40%, var(--color-text-muted))'
 		const attendeeEntries = currentSnapshot?.attendees ?? []
 		const activeSlotAvailableNames = activeSlot
 			? (currentSnapshot?.availableNamesBySlot[activeSlot] ?? [])
@@ -530,20 +547,14 @@ export function ScheduleRoute(handle: Handle) {
 						name: entry.name,
 						...formatSlotForAttendeeTimeZone(activeSlotValue, entry.timeZone),
 					}))
-		const activeSlotPendingStatus =
-			activeSlot && pendingDiff.pendingAdded.has(activeSlot)
-				? 'Pending add to your availability.'
-				: activeSlot && pendingDiff.pendingRemoved.has(activeSlot)
-					? 'Pending removal from your availability.'
-					: null
-		const inlineStatusText = saveMessage ?? '\u00a0'
-		const showInlineStatus = Boolean(saveMessage)
+		const activeSlotBlocked =
+			activeSlotValue !== null && blockedSlots.has(activeSlotValue)
 		const connectionLabel =
 			connectionState === 'live'
 				? 'Realtime connected'
 				: connectionState === 'connecting'
 					? 'Connecting realtime…'
-					: 'Realtime offline (retrying)'
+					: `Realtime unavailable; polling every ${Math.floor(offlinePollIntervalMs / 1000)}s`
 
 		if (!shareToken) {
 			return (
@@ -584,6 +595,14 @@ export function ScheduleRoute(handle: Handle) {
 						Share token: <code>{shareToken}</code>
 					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
+					<p css={{ margin: 0 }}>
+						<a
+							href={`/s/${shareToken}/host`}
+							css={{ color: colors.primaryText }}
+						>
+							Open host dashboard
+						</a>
+					</p>
 				</header>
 
 				<section
@@ -625,6 +644,11 @@ export function ScheduleRoute(handle: Handle) {
 										if (!hasDirtyChanges) {
 											selectedSlots = new Set(persistedSelectedSlots)
 										}
+										if (!normalizeName(attendeeName)) {
+											clearSaveDebounceTimer()
+										} else if (hasDirtyChanges) {
+											scheduleAutoSave()
+										}
 										handle.update()
 									},
 								}}
@@ -644,192 +668,13 @@ export function ScheduleRoute(handle: Handle) {
 								gap: spacing.xs,
 							}}
 						>
-							<button
-								type="button"
-								on={{ click: () => void saveAvailability() }}
-								disabled={isSaving || !snapshot}
-								css={{
-									padding: `${spacing.sm} ${spacing.lg}`,
-									borderRadius: radius.full,
-									border: 'none',
-									backgroundColor: colors.primary,
-									color: colors.onPrimary,
-									fontWeight: typography.fontWeight.semibold,
-									cursor: isSaving ? 'not-allowed' : 'pointer',
-									opacity: isSaving ? 0.8 : 1,
-									boxShadow:
-										pendingChangeCount > 0 && !isSaving
-											? `0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent)`
-											: 'none',
-								}}
-							>
-								{isSaving ? 'Saving…' : 'Save availability'}
-							</button>
-							<p
-								css={{
-									margin: 0,
-									color: colors.textMuted,
-									whiteSpace: 'nowrap',
-									fontVariantNumeric: 'tabular-nums',
-								}}
-							>
-								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'} ·{' '}
-								{pendingChangeCount} pending
+							<p css={{ margin: 0, color: colors.textMuted }}>
+								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
+							</p>
+							<p css={{ margin: 0, color: colors.textMuted }}>
+								Times are shown in your browser timezone: {browserTimeZone}
 							</p>
 						</div>
-					</div>
-
-					<section
-						role="status"
-						aria-live="polite"
-						css={{
-							display: 'grid',
-							gap: spacing.xs,
-							padding: spacing.md,
-							borderRadius: radius.md,
-							border: `1px solid ${syncBorderColor}`,
-							backgroundColor: syncSurfaceColor,
-						}}
-					>
-						<div
-							css={{
-								display: 'grid',
-								gridTemplateColumns: 'auto minmax(0, 1fr)',
-								gap: spacing.sm,
-								alignItems: 'center',
-							}}
-						>
-							<span
-								aria-hidden
-								css={{
-									display: 'inline-block',
-									width: '0.65rem',
-									height: '0.65rem',
-									borderRadius: radius.full,
-									backgroundColor: syncDotColor,
-								}}
-							/>
-							<div css={{ display: 'grid', gap: spacing.xs, minWidth: 0 }}>
-								<strong
-									css={{
-										color: colors.text,
-										fontSize: typography.fontSize.sm,
-										whiteSpace: 'nowrap',
-										overflow: 'hidden',
-										textOverflow: 'ellipsis',
-										minHeight: '1.3rem',
-									}}
-								>
-									{syncSummary}
-								</strong>
-								<span
-									css={{
-										color: colors.textMuted,
-										fontSize: typography.fontSize.sm,
-										whiteSpace: 'nowrap',
-										overflow: 'hidden',
-										textOverflow: 'ellipsis',
-										minHeight: '1.25rem',
-									}}
-								>
-									{syncDetails}
-								</span>
-							</div>
-						</div>
-						<div
-							css={{
-								display: 'flex',
-								flexWrap: 'nowrap',
-								gap: spacing.xs,
-								overflowX: 'auto',
-								minHeight: '1.65rem',
-								alignItems: 'center',
-							}}
-						>
-							{pendingChangeCount > 0 ? (
-								<>
-									{pendingAddCount > 0 ? (
-										<span
-											css={{
-												padding: `${spacing.xs} ${spacing.sm}`,
-												borderRadius: radius.full,
-												backgroundColor:
-													'color-mix(in srgb, var(--color-primary) 18%, var(--color-surface))',
-												color: colors.text,
-												fontSize: typography.fontSize.xs,
-												fontWeight: typography.fontWeight.medium,
-												whiteSpace: 'nowrap',
-											}}
-										>
-											Pending add: {pendingAddCount}
-										</span>
-									) : null}
-									{pendingRemoveCount > 0 ? (
-										<span
-											css={{
-												padding: `${spacing.xs} ${spacing.sm}`,
-												borderRadius: radius.full,
-												backgroundColor:
-													'color-mix(in srgb, var(--color-error) 16%, var(--color-surface))',
-												color: colors.text,
-												fontSize: typography.fontSize.xs,
-												fontWeight: typography.fontWeight.medium,
-												whiteSpace: 'nowrap',
-											}}
-										>
-											Pending remove: {pendingRemoveCount}
-										</span>
-									) : null}
-								</>
-							) : (
-								<span
-									aria-hidden
-									css={{
-										padding: `${spacing.xs} ${spacing.sm}`,
-										borderRadius: radius.full,
-										border: `1px solid ${colors.border}`,
-										color: 'transparent',
-										fontSize: typography.fontSize.xs,
-										whiteSpace: 'nowrap',
-										pointerEvents: 'none',
-									}}
-								>
-									Pending add: 0
-								</span>
-							)}
-						</div>
-					</section>
-
-					<div
-						css={{
-							display: 'flex',
-							flexWrap: 'wrap',
-							gap: spacing.sm,
-							alignItems: 'center',
-						}}
-					>
-						<span
-							css={{
-								padding: `${spacing.xs} ${spacing.md}`,
-								borderRadius: radius.full,
-								border: `1px solid ${colors.border}`,
-								backgroundColor: useTapRangeMode
-									? colors.primarySoft
-									: colors.background,
-								color: useTapRangeMode ? colors.primaryText : colors.textMuted,
-								fontWeight: typography.fontWeight.medium,
-							}}
-						>
-							Selection mode:{' '}
-							{useTapRangeMode ? 'tap start/end' : 'click and drag'}
-						</span>
-						<p css={{ margin: 0, color: colors.textMuted }}>
-							Touch input auto-enables tap start/end mode. Mouse and trackpad
-							auto-enable drag paint mode.
-						</p>
-						<p css={{ margin: 0, color: colors.textMuted }}>
-							Times are shown in your browser timezone: {browserTimeZone}
-						</p>
 					</div>
 
 					{isLoading ? (
@@ -840,13 +685,13 @@ export function ScheduleRoute(handle: Handle) {
 						renderScheduleGrid({
 							slots: currentSnapshot.slots,
 							selectedSlots,
-							pendingAddedSlots: pendingDiff.pendingAdded,
-							pendingRemovedSlots: pendingDiff.pendingRemoved,
+							disabledSlots: blockedSlots,
 							mobileDayKey,
 							slotAvailability,
 							maxAvailabilityCount,
 							activeSlot,
 							rangeAnchor,
+							pending: pendingSync,
 							onMobileDayChange: (dayKey) => {
 								mobileDayKey = dayKey
 								handle.update()
@@ -903,6 +748,11 @@ export function ScheduleRoute(handle: Handle) {
 									minute: '2-digit',
 								}).format(new Date(activeSlot))}
 							</p>
+							{activeSlotBlocked ? (
+								<p css={{ margin: 0, color: colors.error, fontWeight: 600 }}>
+									This slot is unavailable because the host blocked it.
+								</p>
+							) : null}
 							<div css={{ display: 'grid', gap: spacing.xs }}>
 								<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
 									Available ({activeSlotAvailableDetails.length})
@@ -953,43 +803,27 @@ export function ScheduleRoute(handle: Handle) {
 									<p css={{ margin: 0, color: colors.textMuted }}>None</p>
 								)}
 							</div>
-							{activeSlotPendingStatus ? (
-								<p
-									css={{
-										margin: 0,
-										color: colors.primaryText,
-										fontSize: typography.fontSize.sm,
-										fontWeight: typography.fontWeight.medium,
-									}}
-								>
-									{activeSlotPendingStatus}
-								</p>
-							) : null}
 						</section>
 					) : null}
 
-					<div
-						css={{
-							minHeight: '2.2rem',
-							display: 'grid',
-							alignItems: 'start',
-						}}
-					>
+					{!normalizedAttendeeName ? (
+						<p css={{ margin: 0, color: colors.textMuted }}>
+							Add your name before selecting availability.
+						</p>
+					) : null}
+					{statusMessage ? (
 						<p
-							role={saveError && showInlineStatus ? 'alert' : undefined}
+							role={statusError ? 'alert' : undefined}
 							aria-live="polite"
-							aria-hidden={showInlineStatus ? undefined : true}
 							css={{
 								margin: 0,
-								color: saveError ? colors.error : colors.textMuted,
+								color: statusError ? colors.error : colors.textMuted,
 								fontSize: typography.fontSize.sm,
-								opacity: showInlineStatus ? 1 : 0,
-								transition: 'opacity 120ms ease',
 							}}
 						>
-							{inlineStatusText}
+							{statusMessage}
 						</p>
-					</div>
+					) : null}
 				</section>
 			</section>
 		)

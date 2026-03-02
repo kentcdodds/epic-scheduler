@@ -20,6 +20,7 @@ export type AttendeeRecord = {
 export type ScheduleSnapshot = {
 	schedule: ScheduleRecord
 	slots: Array<string>
+	blockedSlots: Array<string>
 	attendees: Array<AttendeeRecord>
 	availabilityByAttendee: Record<string, Array<string>>
 	countsBySlot: Record<string, number>
@@ -56,6 +57,12 @@ type UpsertAvailabilityInput = {
 	isHost?: boolean
 }
 
+type UpdateScheduleHostSettingsInput = {
+	shareToken: string
+	title?: string
+	blockedSlots?: Array<string>
+}
+
 type ScheduleRow = {
 	id: string
 	share_token: string
@@ -75,6 +82,10 @@ type AttendeeRow = {
 
 type AvailabilityRow = {
 	attendee_id: string
+	slot_start_utc: string
+}
+
+type BlockedSlotRow = {
 	slot_start_utc: string
 }
 
@@ -209,6 +220,51 @@ async function insertAvailabilityRows(params: {
 	}
 }
 
+async function insertBlockedSlotRows(params: {
+	db: D1DatabaseLike
+	scheduleId: string
+	blockedSlots: Array<string>
+}) {
+	if (params.blockedSlots.length === 0) return
+
+	const now = new Date().toISOString()
+	const statements = params.blockedSlots.map((slot) =>
+		params.db
+			.prepare(
+				`INSERT OR REPLACE INTO schedule_blocked_slots (
+					schedule_id,
+					slot_start_utc,
+					updated_at
+				) VALUES (?1, ?2, ?3)`,
+			)
+			.bind(params.scheduleId, slot, now),
+	)
+	if (typeof params.db.batch === 'function') {
+		await params.db.batch(statements)
+		return
+	}
+
+	for (const statement of statements) {
+		await statement.run()
+	}
+}
+
+async function getBlockedSlotsForScheduleId(
+	db: D1DatabaseLike,
+	scheduleId: string,
+) {
+	const blockedRows = await db
+		.prepare(
+			`SELECT
+				slot_start_utc
+			FROM schedule_blocked_slots
+			WHERE schedule_id = ?1`,
+		)
+		.bind(scheduleId)
+		.all<BlockedSlotRow>()
+	return blockedRows.results.map((row) => row.slot_start_utc)
+}
+
 export async function getScheduleByShareToken(
 	db: D1DatabaseLike,
 	shareToken: string,
@@ -337,6 +393,10 @@ export async function upsertAttendeeAvailability(
 			intervalMinutes: schedule.intervalMinutes,
 		}),
 	)
+	const blockedSlots = await getBlockedSlotsForScheduleId(db, schedule.id)
+	for (const blockedSlot of blockedSlots) {
+		allowedSlots.delete(blockedSlot)
+	}
 	const selectedSlots = normalizeSelectedSlots({
 		selectedSlots: input.selectedSlots,
 		allowedSlots,
@@ -416,6 +476,93 @@ export async function upsertAttendeeAvailability(
 	}
 }
 
+export async function updateScheduleHostSettings(
+	db: D1DatabaseLike,
+	input: UpdateScheduleHostSettingsInput,
+) {
+	const schedule = await getScheduleByShareToken(db, input.shareToken)
+	if (!schedule) {
+		throw new Error('Schedule not found.')
+	}
+
+	const updates: Array<PreparedStatementLike> = []
+	if (typeof input.title === 'string') {
+		const normalizedTitle = input.title.trim() || 'New schedule'
+		updates.push(
+			db
+				.prepare(
+					`UPDATE schedules
+					SET title = ?2
+					WHERE id = ?1`,
+				)
+				.bind(schedule.id, normalizedTitle),
+		)
+	}
+
+	let normalizedBlockedSlots: Array<string> | null = null
+	if (Array.isArray(input.blockedSlots)) {
+		const allowedSlots = new Set(
+			buildSlots({
+				rangeStartUtc: schedule.rangeStartUtc,
+				rangeEndUtc: schedule.rangeEndUtc,
+				intervalMinutes: schedule.intervalMinutes,
+			}),
+		)
+		normalizedBlockedSlots = normalizeSelectedSlots({
+			selectedSlots: input.blockedSlots,
+			allowedSlots,
+		})
+
+		updates.push(
+			db
+				.prepare(
+					`DELETE FROM schedule_blocked_slots
+					WHERE schedule_id = ?1`,
+				)
+				.bind(schedule.id),
+		)
+	}
+
+	if (updates.length > 0) {
+		if (typeof db.batch === 'function') {
+			await db.batch(updates)
+		} else {
+			for (const statement of updates) {
+				await statement.run()
+			}
+		}
+	}
+
+	if (normalizedBlockedSlots !== null) {
+		await insertBlockedSlotRows({
+			db,
+			scheduleId: schedule.id,
+			blockedSlots: normalizedBlockedSlots,
+		})
+
+		if (normalizedBlockedSlots.length > 0) {
+			const deleteStatements = normalizedBlockedSlots.map((slot) =>
+				db
+					.prepare(
+						`DELETE FROM availability
+						WHERE schedule_id = ?1
+							AND slot_start_utc = ?2`,
+					)
+					.bind(schedule.id, slot),
+			)
+			if (typeof db.batch === 'function') {
+				await db.batch(deleteStatements)
+			} else {
+				for (const statement of deleteStatements) {
+					await statement.run()
+				}
+			}
+		}
+	}
+
+	return { scheduleId: schedule.id }
+}
+
 export async function getScheduleSnapshot(
 	db: D1DatabaseLike,
 	shareToken: string,
@@ -428,6 +575,14 @@ export async function getScheduleSnapshot(
 		rangeEndUtc: schedule.rangeEndUtc,
 		intervalMinutes: schedule.intervalMinutes,
 	})
+	const blockedSlotsSet = new Set(
+		(await getBlockedSlotsForScheduleId(db, schedule.id)).filter((slot) =>
+			slots.includes(slot),
+		),
+	)
+	const blockedSlots = Array.from(blockedSlotsSet).sort((left, right) =>
+		left.localeCompare(right),
+	)
 
 	const attendeeRows = await db
 		.prepare(
@@ -480,6 +635,7 @@ export async function getScheduleSnapshot(
 
 	for (const row of availabilityRows.results) {
 		if (!validSlots.has(row.slot_start_utc)) continue
+		if (blockedSlotsSet.has(row.slot_start_utc)) continue
 		if (!availabilityByAttendee[row.attendee_id]) {
 			availabilityByAttendee[row.attendee_id] = []
 		}
@@ -499,6 +655,7 @@ export async function getScheduleSnapshot(
 	return {
 		schedule,
 		slots,
+		blockedSlots,
 		attendees,
 		availabilityByAttendee,
 		countsBySlot,

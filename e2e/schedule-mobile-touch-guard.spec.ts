@@ -22,8 +22,12 @@ test('mobile touch pointerdown does not paint-select while scrolling', async ({
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
 	expect(initialCount).toBeGreaterThan(0)
 
-	const selectedSlotLocator = page.locator('button[aria-pressed="true"]')
-	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
+	const selectedSlotLocator = page.locator(
+		'[data-schedule-grid-shell] table:visible button[aria-pressed="true"]',
+	)
+	const nextDayButton = page.locator(
+		'button[aria-label="Show next day"]:visible',
+	)
 	for (let index = 0; index < 14; index += 1) {
 		if ((await selectedSlotLocator.count()) > 0) break
 		if (await nextDayButton.isDisabled()) break

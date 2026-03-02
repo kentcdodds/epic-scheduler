@@ -4,36 +4,36 @@ import {
 } from '@modelcontextprotocol/ext-apps/server'
 import { createUIResource } from '@mcp-ui/server'
 import {
-	renderScheduleUiEntryPoint,
-	scheduleUiResourceUri,
-} from '#mcp/apps/schedule-ui-entry-point.ts'
+	renderScheduleHostUiEntryPoint,
+	scheduleHostUiResourceUri,
+} from '#mcp/apps/schedule-host-ui-entry-point.ts'
 import { type MCP } from '#mcp/index.ts'
 
-const scheduleAppResource = {
-	name: 'schedule_app_resource',
-	title: 'Schedule App Resource',
+const scheduleHostAppResource = {
+	name: 'schedule_host_app_resource',
+	title: 'Schedule Host App Resource',
 	description:
-		'Interactive attendee MCP app for selecting availability and viewing overlap on existing links.',
+		'Interactive host dashboard MCP app for managing share links, blocking unavailable slots, and reviewing best overlap windows.',
 } as const
 
-export async function registerScheduleAppResource(agent: MCP) {
+export async function registerScheduleHostAppResource(agent: MCP) {
 	const baseUrl = agent.requireDomain()
 	const resourceDomain = new URL('/styles.css', baseUrl).origin
 
 	registerAppResource(
 		agent.server,
-		scheduleAppResource.name,
-		scheduleUiResourceUri,
+		scheduleHostAppResource.name,
+		scheduleHostUiResourceUri,
 		{
-			title: scheduleAppResource.title,
-			description: scheduleAppResource.description,
+			title: scheduleHostAppResource.title,
+			description: scheduleHostAppResource.description,
 		},
 		async () => {
 			const resource = createUIResource({
-				uri: scheduleUiResourceUri,
+				uri: scheduleHostUiResourceUri,
 				content: {
 					type: 'rawHtml',
-					htmlString: renderScheduleUiEntryPoint(baseUrl),
+					htmlString: renderScheduleHostUiEntryPoint(baseUrl),
 				},
 				encoding: 'text',
 				adapters: {

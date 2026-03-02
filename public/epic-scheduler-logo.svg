@@ -14,6 +14,22 @@
 			<stop offset="100%" stop-color="#e4e9ff" />
 		</linearGradient>
 	</defs>
+	<style>
+		.logo-wordmark-primary {
+			fill: #111827;
+		}
+		.logo-wordmark-secondary {
+			fill: #475569;
+		}
+		@media (prefers-color-scheme: dark) {
+			.logo-wordmark-primary {
+				fill: #e8ecff;
+			}
+			.logo-wordmark-secondary {
+				fill: #a5b0d1;
+			}
+		}
+	</style>
 
 	<g transform="translate(16 16)">
 		<rect width="148" height="148" rx="34" fill="url(#logo-bg)" />
@@ -47,7 +63,7 @@
 			font-size="66"
 			font-weight="780"
 			letter-spacing="-1.1"
-			fill="#111827"
+			class="logo-wordmark-primary"
 		>
 			Epic Scheduler
 		</text>
@@ -58,7 +74,7 @@
 			font-size="30"
 			font-weight="560"
 			letter-spacing="0.12"
-			fill="#475569"
+			class="logo-wordmark-secondary"
 		>
 			Fast overlap, fewer messages.
 		</text>

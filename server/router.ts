@@ -4,6 +4,7 @@ import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
 import { createHealthHandler } from './handlers/health.ts'
 import { home } from './handlers/home.ts'
 import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
+import { createScheduleHostUpdateHandler } from './handlers/schedule-host-update.ts'
 import { createScheduleReadHandler } from './handlers/schedule-read.ts'
 import { createScheduleSubmitAvailabilityHandler } from './handlers/schedule-submit-availability.ts'
 import {
@@ -42,6 +43,7 @@ export function createAppRouter(appEnv: AppEnv) {
 		routes.scheduleSubmitAvailability,
 		createScheduleSubmitAvailabilityHandler(appEnv),
 	)
+	router.map(routes.scheduleHostUpdate, createScheduleHostUpdateHandler(appEnv))
 
 	return router
 }

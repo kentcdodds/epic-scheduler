@@ -47,6 +47,10 @@ Prefer stable, user-facing selectors:
 
 Avoid `page.locator('css')` unless no accessible alternative exists.
 
+For schedule-grid interactions, scope locators to visible elements (for example
+`table:visible` and `button:visible`) because both desktop and mobile tables are
+rendered in the DOM and one is hidden with CSS.
+
 ## Server and routing
 
 - The test server is started via Playwright `webServer` using Wrangler.

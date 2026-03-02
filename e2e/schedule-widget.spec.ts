@@ -46,7 +46,7 @@ test('schedule MCP widget loads an existing link and saves availability', async 
 	})
 	await expect(
 		page.getByText(
-			'This view uses the share token provided to open_schedule_ui.',
+			'This attendee UI uses the share token provided to open_schedule_ui.',
 		),
 	).toBeVisible()
 

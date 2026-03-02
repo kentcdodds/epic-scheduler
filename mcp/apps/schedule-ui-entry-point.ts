@@ -136,6 +136,22 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				background: transparent;
 				color: var(--color-text);
 			}
+			.scheduler-tertiary-button {
+				padding: var(--spacing-xs) var(--spacing-sm);
+				border-radius: var(--radius-full);
+				border: 1px solid var(--color-border);
+				background: transparent;
+				color: var(--color-text-muted);
+				font-size: var(--font-size-xs);
+				font-weight: var(--font-weight-medium);
+				cursor: pointer;
+				font-family: inherit;
+				opacity: 0.72;
+			}
+			.scheduler-tertiary-button:hover,
+			.scheduler-tertiary-button:focus-visible {
+				opacity: 1;
+			}
 			.scheduler-status {
 				font-size: var(--font-size-sm);
 				color: var(--color-text-muted);
@@ -283,8 +299,8 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 			<section class="scheduler-card">
 				<h1 data-schedule-title>Your availability</h1>
 				<p class="scheduler-muted">
-					This view uses the share token provided to open_schedule_ui. Create links
-					with create_schedule, then open this UI with the token input.
+					This attendee UI uses the share token provided to open_schedule_ui. Use
+					open_schedule_host_ui for host-side link management.
 				</p>
 				<p class="scheduler-muted">
 					Share token: <code data-share-token>Not provided</code>
@@ -292,10 +308,10 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				<div class="scheduler-button-row">
 					<button
 						type="button"
-						class="scheduler-secondary-button"
+						class="scheduler-tertiary-button"
 						data-action="request-fullscreen"
 					>
-						Request fullscreen mode
+						Fullscreen
 					</button>
 				</div>
 				<div class="scheduler-row scheduler-row-split">

@@ -9,9 +9,9 @@ test('mobile schedule grid shows one day with prev/next navigation', async ({
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 
-	const table = page.locator('table').first()
+	const table = page.locator('table').nth(1)
 	await expect(table).toBeVisible()
-	await expect(page.locator('thead tr th')).toHaveCount(2)
+	await expect(table.locator('thead tr th')).toHaveCount(2)
 
 	const previousDayButton = page.getByRole('button', {
 		name: 'Show previous day',
@@ -20,7 +20,7 @@ test('mobile schedule grid shows one day with prev/next navigation', async ({
 	await expect(previousDayButton).toBeDisabled()
 	await expect(nextDayButton).toBeEnabled()
 
-	const dayHeader = page.locator('thead tr th').nth(1)
+	const dayHeader = table.locator('thead tr th').nth(1)
 	const firstDayText = (await dayHeader.textContent())?.trim() ?? ''
 	await nextDayButton.click()
 	await expect(previousDayButton).toBeEnabled()

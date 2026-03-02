@@ -564,33 +564,13 @@ export function HomeRoute(handle: Handle) {
 							alignItems: 'center',
 						}}
 					>
-						<span
-							css={{
-								padding: `${spacing.xs} ${spacing.md}`,
-								borderRadius: radius.full,
-								border: `1px solid ${colors.border}`,
-								backgroundColor: useTapRangeMode
-									? colors.primarySoft
-									: colors.background,
-								color: useTapRangeMode ? colors.primaryText : colors.textMuted,
-								fontWeight: typography.fontWeight.medium,
-							}}
-						>
-							Selection mode:{' '}
-							{useTapRangeMode ? 'tap start/end' : 'click and drag'}
-						</span>
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 						</p>
+						<p css={{ margin: 0, color: colors.textMuted }}>
+							Times are shown in your browser timezone: {browserTimeZone}
+						</p>
 					</div>
-
-					<p css={{ margin: 0, color: colors.textMuted }}>
-						Touch input auto-enables tap start/end mode. Mouse and trackpad
-						auto-enable drag paint mode.
-					</p>
-					<p css={{ margin: 0, color: colors.textMuted }}>
-						Times are shown in your browser timezone: {browserTimeZone}
-					</p>
 
 					{renderScheduleGrid({
 						slots: generatedSlots,

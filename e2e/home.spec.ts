@@ -19,7 +19,6 @@ test('create schedule link navigates to schedule page', async ({ page }) => {
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
-	await expect(
-		page.getByRole('button', { name: 'Save availability' }),
-	).toBeVisible()
+	await expect(page.getByLabel('Your name')).toHaveValue('Host')
+	await expect(page.getByText(/selected slot/)).toBeVisible()
 })

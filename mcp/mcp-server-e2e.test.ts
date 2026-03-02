@@ -16,6 +16,7 @@ const migrationsDir = join(projectRoot, 'migrations')
 const bunBin = process.execPath
 const defaultTimeoutMs = 60_000
 const scheduleUiResourceUri = 'ui://schedule-app/entry-point.html'
+const scheduleHostUiResourceUri = 'ui://schedule-host-app/entry-point.html'
 
 function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
@@ -273,6 +274,7 @@ test(
 		expect(toolNames.sort()).toEqual([
 			'create_schedule',
 			'get_schedule_snapshot',
+			'open_schedule_host_ui',
 			'open_schedule_ui',
 			'submit_schedule_availability',
 		])
@@ -296,6 +298,7 @@ test(
 		)
 
 		expect(resourceUris).toContain(scheduleUiResourceUri)
+		expect(resourceUris).toContain(scheduleHostUiResourceUri)
 	},
 	{ timeout: defaultTimeoutMs },
 )
@@ -429,7 +432,7 @@ test(
 			'Share token: <code data-share-token>',
 		)
 		expect(scheduleResource?.text).toContain('Waiting for share token input.')
-		expect(scheduleResource?.text).toContain('Request fullscreen mode')
+		expect(scheduleResource?.text).toContain('Fullscreen')
 
 		const scheduleWidgetResponse = await fetch(
 			new URL('/mcp-apps/schedule-widget.js', server.origin),
@@ -442,6 +445,17 @@ test(
 		expect(scheduleWidgetSource).toContain('createWidgetHostBridge')
 		expect(scheduleWidgetSource).toContain('/api/schedules')
 		expect(scheduleWidgetSource).toContain('ui/request-display-mode')
+
+		const scheduleHostWidgetResponse = await fetch(
+			new URL('/mcp-apps/schedule-host-widget.js', server.origin),
+		)
+		expect(scheduleHostWidgetResponse.ok).toBe(true)
+		expect(
+			scheduleHostWidgetResponse.headers.get('access-control-allow-origin'),
+		).toBe('*')
+		const scheduleHostWidgetSource = await scheduleHostWidgetResponse.text()
+		expect(scheduleHostWidgetSource).toContain('schedule-host-widget')
+		expect(scheduleHostWidgetSource).toContain('/s/')
 
 		const stylesResponse = await fetch(new URL('/styles.css', server.origin))
 		expect(stylesResponse.ok).toBe(true)
@@ -481,6 +495,43 @@ test(
 				widgetDomain,
 			)
 		}
+	},
+	{ timeout: defaultTimeoutMs },
+)
+
+test(
+	'mcp server serves schedule host ui resource',
+	async () => {
+		await using database = await createTestDatabase()
+		await using server = await startDevServer(database.persistDir)
+		await using mcpClient = await createMcpClient(server.origin)
+
+		const result = await mcpClient.client.callTool({
+			name: 'open_schedule_host_ui',
+			arguments: {
+				shareToken: 'demo-host-token',
+			},
+		})
+		const structuredResult = (result as CallToolResult).structuredContent as
+			| Record<string, unknown>
+			| undefined
+		expect(structuredResult?.widget).toBe('schedule_host')
+		expect(structuredResult?.resourceUri).toBe(scheduleHostUiResourceUri)
+		expect(structuredResult?.shareToken).toBe('demo-host-token')
+
+		const resourceResult = await mcpClient.client.readResource({
+			uri: scheduleHostUiResourceUri,
+		})
+		const hostResource = resourceResult.contents.find(
+			(content): content is { uri: string; text: string } =>
+				content.uri === scheduleHostUiResourceUri &&
+				'text' in content &&
+				typeof content.text === 'string',
+		)
+		expect(hostResource).toBeDefined()
+		expect(hostResource?.text).toContain('Host dashboard')
+		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
+		expect(hostResource?.text).toContain('Waiting for share token input')
 	},
 	{ timeout: defaultTimeoutMs },
 )

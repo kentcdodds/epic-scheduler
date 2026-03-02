@@ -8,7 +8,7 @@ const openScheduleUiTool = {
 	name: 'open_schedule_ui',
 	title: 'Open Schedule UI',
 	description:
-		'Open the Epic Scheduler MCP app widget for loading a share token, selecting attendee availability, and viewing overlap.',
+		'Open the attendee-focused Epic Scheduler MCP app widget for loading a share token, selecting attendee availability, and viewing overlap.',
 	annotations: {
 		readOnlyHint: true,
 		destructiveHint: false,
@@ -66,7 +66,7 @@ export async function registerOpenScheduleUiTool(agent: MCP) {
 						type: 'text',
 						text: normalizedShareToken
 							? `Epic Scheduler availability UI is attached for share token ${normalizedShareToken}.`
-							: 'Epic Scheduler availability UI is attached. Create links with create_schedule, then load the share token in this UI.',
+							: 'Epic Scheduler attendee availability UI is attached. Use open_schedule_host_ui for host link management.',
 					},
 				],
 				structuredContent: {
