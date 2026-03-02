@@ -1,6 +1,7 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { type MCP } from '#mcp/index.ts'
+import { summarizeShareToken } from './summarize-share-token.ts'
 
 const submitAvailabilityTool = {
 	name: 'submit_schedule_availability',
@@ -14,11 +15,6 @@ const submitAvailabilityTool = {
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
 } as const
-
-function summarizeShareToken(token: string) {
-	if (token.length <= 8) return token
-	return `${token.slice(0, 4)}...${token.slice(-4)}`
-}
 
 export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 	agent.server.registerTool(

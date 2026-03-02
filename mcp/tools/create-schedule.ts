@@ -2,6 +2,7 @@ import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import { createSchedule } from '#shared/schedule-store.ts'
 import { type MCP } from '#mcp/index.ts'
+import { summarizeShareToken } from './summarize-share-token.ts'
 
 const createScheduleTool = {
 	name: 'create_schedule',
@@ -28,11 +29,6 @@ const safeCreateScheduleValidationMessages = new Set([
 	'Invalid selectedSlots item. Expected an ISO date string.',
 	'Invalid hostTimeZone.',
 ])
-
-function summarizeShareToken(token: string) {
-	if (token.length <= 8) return token
-	return `${token.slice(0, 4)}...${token.slice(-4)}`
-}
 
 function toSafeCreateScheduleError(error: unknown) {
 	const message = error instanceof Error ? error.message : ''
