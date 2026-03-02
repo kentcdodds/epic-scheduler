@@ -58,8 +58,9 @@ In `mcp/resources/<your-resource>.ts`:
   injection.
 - Enable the `mcpApps` adapter when UI events should be translated into MCP Apps
   host JSON-RPC.
-- Set `_meta.ui.domain` on resource contents to the widget origin (required for
-  app submission).
+- Set `_meta.ui.domain` to a host-compatible widget domain. For Claude remote
+  MCP connectors, this must be
+  `{sha256("<public-mcp-url>").slice(0,32)}.claudemcpcontent.com` (no scheme).
 - Add `_meta["openai/widgetDomain"]` as a compatibility alias for ChatGPT.
 
 ### 3) Register the app-opening tool
@@ -153,8 +154,10 @@ token values into widget CSS. If you do this in an MCP App resource, set
   opaque origins can fetch assets in ChatGPT/MCP Jam.
 - If you use Workers static assets, configure `assets.run_worker_first` for
   widget asset paths so those requests pass through your CORS logic.
-- Always set `_meta.ui.domain` and `_meta["openai/widgetDomain"]` to your app's
-  dedicated widget origin.
+- For Claude remote MCP connectors, set `_meta.ui.domain` to the hashed
+  `*.claudemcpcontent.com` host derived from your public `/mcp` URL.
+- For ChatGPT compatibility, set `_meta["openai/widgetDomain"]` to your app
+  origin (for example `https://your-app.workers.dev`).
 - Request only required permissions in `_meta.ui.permissions`.
 - Avoid embedding secrets or private tokens in UI payloads.
 
