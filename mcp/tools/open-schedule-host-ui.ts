@@ -8,7 +8,7 @@ const openScheduleHostUiTool = {
 	name: 'open_schedule_host_ui',
 	title: 'Open Schedule Host UI',
 	description:
-		'Open the Epic Scheduler host dashboard MCP app for managing link settings, blocking unavailable slots, and reviewing overlap.',
+		'Open the Epic Scheduler host dashboard MCP app for managing link settings, blocking unavailable slots, and reviewing overlap. This host UI is distinct from attendee availability submission.',
 	annotations: {
 		readOnlyHint: true,
 		destructiveHint: false,
@@ -51,7 +51,7 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 					{
 						type: 'text',
 						text: normalizedShareToken
-							? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}.`
+							? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}. Use this for schedule configuration, not attendee availability submission.`
 							: 'Epic Scheduler host dashboard UI is attached. Use this for link management and availability limits, not attendee submission.',
 					},
 				],

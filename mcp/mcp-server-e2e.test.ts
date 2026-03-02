@@ -277,6 +277,7 @@ test(
 			'open_schedule_host_ui',
 			'open_schedule_ui',
 			'submit_schedule_availability',
+			'update_schedule_host_settings',
 		])
 	},
 	{ timeout: defaultTimeoutMs },
@@ -346,6 +347,25 @@ test(
 			.structuredContent as Record<string, unknown> | undefined
 		expect(submitStructured?.ok).toBe(true)
 
+		const hostUpdateResult = await mcpClient.client.callTool({
+			name: 'update_schedule_host_settings',
+			arguments: {
+				shareToken,
+				title: 'Host-managed test schedule',
+				blockedSlots: [start.toISOString()],
+			},
+		})
+		const hostUpdateStructured = (hostUpdateResult as CallToolResult)
+			.structuredContent as Record<string, unknown> | undefined
+		expect(hostUpdateStructured?.ok).toBe(true)
+		expect(hostUpdateStructured?.title).toBe('Host-managed test schedule')
+		const hostUpdateBlockedSlots = Array.isArray(
+			hostUpdateStructured?.blockedSlots,
+		)
+			? hostUpdateStructured.blockedSlots
+			: []
+		expect(hostUpdateBlockedSlots).toContain(start.toISOString())
+
 		const snapshotResult = await mcpClient.client.callTool({
 			name: 'get_schedule_snapshot',
 			arguments: {
@@ -356,8 +376,16 @@ test(
 			.structuredContent as Record<string, unknown> | undefined
 		expect(snapshotStructured?.ok).toBe(true)
 		const snapshot = snapshotStructured?.snapshot as
-			| { attendees?: Array<{ name?: string }> }
+			| {
+					schedule?: { title?: string }
+					blockedSlots?: Array<string>
+					countsBySlot?: Record<string, number>
+					attendees?: Array<{ name?: string }>
+			  }
 			| undefined
+		expect(snapshot?.schedule?.title).toBe('Host-managed test schedule')
+		expect(snapshot?.blockedSlots ?? []).toContain(start.toISOString())
+		expect(snapshot?.countsBySlot?.[start.toISOString()] ?? 0).toBe(0)
 		const attendeeNames = (snapshot?.attendees ?? [])
 			.map((attendee) => attendee.name)
 			.filter((name): name is string => typeof name === 'string')

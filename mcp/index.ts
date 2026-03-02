@@ -17,13 +17,15 @@ const serverMetadata = {
 	instructions: `
 Quick start
 - Use 'create_schedule' to create a new scheduling link.
-- Use 'submit_schedule_availability' to save attendee selections.
+- Use 'submit_schedule_availability' to save attendee selections (attendee-side only).
+- Use 'update_schedule_host_settings' to edit host-managed schedule configuration (title and blocked slots).
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
-- Use 'open_schedule_ui' (optionally with shareToken/attendeeName) to open the MCP app widget for loading an existing schedule, selecting availability, and viewing overlap.
-- Use 'open_schedule_host_ui' (optionally with shareToken) to open the host dashboard MCP app for managing blocked slots and deciding on final times.
+- Use 'open_schedule_ui' (optionally with shareToken/attendeeName) to open the attendee MCP app widget for selecting availability and viewing overlap.
+- Use 'open_schedule_host_ui' (optionally with shareToken) to open the host MCP app widget for managing schedule settings and blocked slots.
 
 How to chain tools safely
-- First create a schedule, then submit attendee availability, then read the snapshot.
+- Attendee workflow: create_schedule -> submit_schedule_availability -> get_schedule_snapshot (or open_schedule_ui).
+- Host workflow: create_schedule/get_schedule_snapshot -> update_schedule_host_settings (or open_schedule_host_ui) -> get_schedule_snapshot.
 	`.trim(),
 } as const
 
