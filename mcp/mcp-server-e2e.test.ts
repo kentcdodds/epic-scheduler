@@ -544,6 +544,7 @@ test(
 		expect(hostResource).toBeDefined()
 		expect(hostResource?.text).toContain('Host dashboard')
 		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
+		expect(hostResource?.text).toContain('data-api-base-url="')
 		expect(hostResource?.text).toContain(
 			'Waiting for share token and host key input',
 		)

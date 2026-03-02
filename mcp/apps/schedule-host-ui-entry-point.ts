@@ -2,11 +2,21 @@ import { scheduleHostUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
 
 export { scheduleHostUiResourceUri }
 
+function escapeHtmlAttribute(value: string) {
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;')
+}
+
 export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
-	const stylesheetHref = new URL('/styles.css', baseUrl).toString()
+	const canonicalBaseUrl = new URL('/', baseUrl).toString()
+	const stylesheetHref = new URL('/styles.css', canonicalBaseUrl).toString()
 	const widgetScriptHref = new URL(
 		'/mcp-apps/schedule-host-widget.js',
-		baseUrl,
+		canonicalBaseUrl,
 	).toString()
 
 	return `
@@ -150,7 +160,11 @@ export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 		</style>
 	</head>
 	<body>
-		<main class="host-widget" data-schedule-host-widget>
+		<main
+			class="host-widget"
+			data-schedule-host-widget
+			data-api-base-url="${escapeHtmlAttribute(canonicalBaseUrl)}"
+		>
 			<section class="host-card">
 				<h1>Host dashboard</h1>
 				<p class="host-muted">

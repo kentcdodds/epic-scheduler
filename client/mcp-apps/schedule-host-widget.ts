@@ -13,6 +13,12 @@ const getElement = <T extends HTMLElement>(
 	selector: string,
 ): T => getWidgetElement<T>(root, selector, 'host widget')
 
+function getApiBaseUrl(rootElement: HTMLElement) {
+	const configuredBaseUrl = readNonEmptyString(rootElement.dataset.apiBaseUrl)
+	if (configuredBaseUrl) return new URL('/', configuredBaseUrl)
+	return new URL('/', window.location.href)
+}
+
 function setupScheduleHostWidget() {
 	const rootElement = document.querySelector('[data-schedule-host-widget]')
 	if (!(rootElement instanceof HTMLElement)) return
@@ -57,6 +63,7 @@ function setupScheduleHostWidget() {
 
 	let fullscreenManager: ReturnType<typeof createFullscreenManager> | null =
 		null
+	const apiBaseUrl = getApiBaseUrl(rootElement)
 
 	function setStatus(message: string, error = false) {
 		statusElement.textContent = message
@@ -76,7 +83,10 @@ function setupScheduleHostWidget() {
 			params.hostAccessToken?.trim() ?? hostAccessTokenInput.value.trim()
 		shareTokenInput.value = normalizedShareToken
 		shareTokenElement.textContent = normalizedShareToken
-		attendeeLink.href = `/s/${encodeURIComponent(normalizedShareToken)}`
+		attendeeLink.href = new URL(
+			`/s/${encodeURIComponent(normalizedShareToken)}`,
+			apiBaseUrl,
+		).toString()
 		if (!normalizedHostAccessToken) {
 			hostAccessTokenElement.textContent = 'Not provided'
 			hostIframe.removeAttribute('src')
@@ -85,7 +95,10 @@ function setupScheduleHostWidget() {
 		}
 		hostAccessTokenInput.value = normalizedHostAccessToken
 		hostAccessTokenElement.textContent = normalizedHostAccessToken
-		hostIframe.src = `/s/${encodeURIComponent(normalizedShareToken)}/${encodeURIComponent(normalizedHostAccessToken)}`
+		hostIframe.src = new URL(
+			`/s/${encodeURIComponent(normalizedShareToken)}/${encodeURIComponent(normalizedHostAccessToken)}`,
+			apiBaseUrl,
+		).toString()
 		setStatus('Host dashboard loaded.')
 		return true
 	}

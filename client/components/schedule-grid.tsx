@@ -334,10 +334,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													pointerleave: props.onCellHover
 														? () => props.onCellHover?.(null)
 														: undefined,
-													pointerup:
-														interactive && props.onCellPointerUp
-															? (event) => props.onCellPointerUp?.(slot, event)
-															: undefined,
+													pointerup: props.onCellPointerUp
+														? (event) => props.onCellPointerUp?.(slot, event)
+														: undefined,
 													click: props.onCellClick
 														? (event) => props.onCellClick?.(slot, event)
 														: undefined,
