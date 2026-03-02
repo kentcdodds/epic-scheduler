@@ -28,7 +28,7 @@ export class ScheduleRoom extends DurableObject<Env> {
 		const url = new URL(request.url)
 
 		if (
-			url.pathname === '/connect' &&
+			request.method === 'GET' &&
 			request.headers.get('Upgrade')?.toLowerCase() === 'websocket'
 		) {
 			const pair = new WebSocketPair()

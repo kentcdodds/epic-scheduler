@@ -9,17 +9,24 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
 
 	const hostDashboardUrl = new URL(page.url())
-	const shareToken = hostDashboardUrl.pathname.split('/').filter(Boolean)[1] ?? ''
+	const shareToken =
+		hostDashboardUrl.pathname.split('/').filter(Boolean)[1] ?? ''
 	expect(shareToken).not.toBe('')
 
 	await expect
 		.poll(
-			async () => (await page.getByText(/Realtime/).first().textContent()) ?? '',
+			async () =>
+				(await page
+					.getByText(/Realtime/)
+					.first()
+					.textContent()) ?? '',
 			{ timeout: 12_000 },
 		)
 		.toContain('Realtime connected')
 
-	const snapshotResponse = await page.request.get(`/api/schedules/${shareToken}`)
+	const snapshotResponse = await page.request.get(
+		`/api/schedules/${shareToken}`,
+	)
 	expect(snapshotResponse.ok()).toBe(true)
 	const snapshotPayload = (await snapshotResponse.json()) as {
 		ok?: boolean
@@ -75,7 +82,7 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	await tooltipSlotButton.scrollIntoViewIfNeeded()
 	await tooltipSlotButton.hover()
 
-	const tooltip = page.locator('aside[role="status"]').first()
+	const tooltip = page.locator('aside[data-host-hover-tooltip]').first()
 	await expect(tooltip).toBeVisible()
 	await expect(tooltip.locator('li', { hasText: 'Host' })).toBeVisible()
 	await expect(tooltip.locator('li', { hasText: 'Alex' })).toBeVisible()

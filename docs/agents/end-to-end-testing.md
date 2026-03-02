@@ -75,6 +75,9 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Creating a schedule from `/` now redirects to
   `/s/{shareToken}/{hostAccessToken}`; tests that validate attendee availability
   should navigate to `/s/{shareToken}` after extracting the share token.
+- Host dashboard tests should cover realtime status updates
+  (`Realtime connected`) and preview-grid tooltip behavior when attendee
+  availability changes.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions

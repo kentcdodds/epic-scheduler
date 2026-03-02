@@ -275,7 +275,7 @@ const appHandler = withCors({
 			}
 			const roomId = env.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = env.SCHEDULE_ROOM.get(roomId)
-			return room.fetch(new Request('https://schedule-room/connect', request))
+			return room.fetch(request)
 		}
 
 		// Sandboxed widget iframes have an opaque origin, so JS/CSS loads become CORS fetches.

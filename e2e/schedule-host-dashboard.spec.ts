@@ -19,15 +19,25 @@ test('host dashboard can block slots from attendee selection', async ({
 
 	const hostUnavailableGrid = page.locator('[data-schedule-grid-shell]').nth(1)
 	const firstHostSlot = hostUnavailableGrid.locator('button[data-slot]').first()
+	const secondHostSlot = hostUnavailableGrid.locator('button[data-slot]').nth(1)
 	await expect(firstHostSlot).toBeVisible()
+	await expect(secondHostSlot).toBeVisible()
 	const blockedSlotValue = await firstHostSlot.getAttribute('data-slot')
+	const secondBlockedSlotValue = await secondHostSlot.getAttribute('data-slot')
 	expect(blockedSlotValue).not.toBeNull()
+	expect(secondBlockedSlotValue).not.toBeNull()
 	if (!blockedSlotValue) {
 		throw new Error('Expected blocked slot data-slot value.')
 	}
+	if (!secondBlockedSlotValue) {
+		throw new Error('Expected second blocked slot data-slot value.')
+	}
 
-	await firstHostSlot.click()
-	await expect(page.getByText('1 blocked slot')).toBeVisible()
+	await firstHostSlot.hover()
+	await page.mouse.down()
+	await secondHostSlot.hover()
+	await page.mouse.up()
+	await expect(page.getByText('2 blocked slots')).toBeVisible()
 	await expect
 		.poll(
 			async () => {
@@ -39,9 +49,11 @@ test('host dashboard can block slots from attendee selection', async ({
 						blockedSlots?: Array<string>
 					}
 				}
-				if (!payload.ok || !payload.snapshot || !blockedSlotValue) return false
+				if (!payload.ok || !payload.snapshot) return false
+				const blocked = payload.snapshot.blockedSlots ?? []
 				return (
-					payload.snapshot.blockedSlots?.includes(blockedSlotValue) ?? false
+					blocked.includes(blockedSlotValue) &&
+					blocked.includes(secondBlockedSlotValue)
 				)
 			},
 			{ timeout: 12_000 },

@@ -40,6 +40,7 @@ type ScheduleGridProps = {
 	onMobileDayChange?: (dayKey: string) => void
 	onCellPointerDown?: (slot: string, event: PointerEvent) => void
 	onCellPointerEnter?: (slot: string, event: PointerEvent) => void
+	onCellPointerMove?: (slot: string, event: PointerEvent) => void
 	onCellPointerUp?: (slot: string, event: PointerEvent) => void
 	onCellClick?: (slot: string, event: MouseEvent) => void
 	onCellFocus?: (slot: string) => void
@@ -331,6 +332,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: props.onCellHover
 																? () => props.onCellHover?.(slot)
 																: undefined,
+													pointermove: props.onCellPointerMove
+														? (event) => props.onCellPointerMove?.(slot, event)
+														: undefined,
 													pointerleave: props.onCellHover
 														? () => props.onCellHover?.(null)
 														: undefined,

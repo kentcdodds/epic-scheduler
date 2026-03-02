@@ -12,6 +12,7 @@ import {
 } from '#client/styles/tokens.ts'
 
 type PreviewMode = 'all' | 'count'
+type ConnectionState = 'connecting' | 'live' | 'offline'
 
 function parseHostRouteParams(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
@@ -32,6 +33,11 @@ function parseHostRouteParams(pathname: string) {
 function getPathname() {
 	if (typeof window === 'undefined') return '/'
 	return window.location.pathname
+}
+
+function toWebSocketUrl(path: string) {
+	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+	return `${protocol}//${window.location.host}${path}`
 }
 
 function toSet(values: Array<string>) {
@@ -113,10 +119,21 @@ export function ScheduleHostRoute(handle: Handle) {
 	let excludedAttendeeIds = new Set<string>()
 	let previewMode: PreviewMode = 'all'
 	let activePreviewSlot: string | null = null
+	let previewTooltip: {
+		slot: string
+		clientX: number
+		clientY: number
+	} | null = null
 	let mobileDayKey: string | null = null
+	let hostPaintMode: 'add' | 'remove' | null = null
+	let hostDragging = false
+	let hostLastPointerSlot: string | null = null
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
+	let connectionState: ConnectionState = 'connecting'
+	let socket: WebSocket | null = null
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let changeVersion = 0
 	let statusMessage: string | null = null
 	let statusError = false
@@ -129,6 +146,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let snapshotRequestId = 0
 	const saveDebounceMs = 600
 	const refreshIntervalMs = 5000
+	const reconnectDelayMs = 1800
 
 	function setStatus(message: string | null, error = false) {
 		statusMessage = message
@@ -154,11 +172,46 @@ export function ScheduleHostRoute(handle: Handle) {
 		refreshTimer = null
 	}
 
+	function clearReconnectTimer() {
+		if (!reconnectTimer) return
+		clearTimeout(reconnectTimer)
+		reconnectTimer = null
+	}
+
+	function clearSocketResources() {
+		clearReconnectTimer()
+		const currentSocket = socket
+		socket = null
+		if (
+			currentSocket &&
+			(currentSocket.readyState === WebSocket.CONNECTING ||
+				currentSocket.readyState === WebSocket.OPEN)
+		) {
+			currentSocket.close()
+		}
+	}
+
 	function cleanupResources() {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
+		clearSocketResources()
 		clearRefreshTimer()
 		pendingSave = false
+	}
+
+	function setConnectionState(nextState: ConnectionState) {
+		connectionState = nextState
+		if (nextState === 'offline') {
+			if (!refreshTimer) {
+				refreshTimer = setInterval(() => {
+					if (hasLocalHostChanges()) return
+					void loadSnapshot()
+				}, refreshIntervalMs)
+			}
+		} else {
+			clearRefreshTimer()
+		}
+		handle.update()
 	}
 
 	function setClipboardStatus(nextMessage: string | null, error = false) {
@@ -298,6 +351,47 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 	}
 
+	function connectSocket() {
+		if (!shareToken || handle.signal.aborted) return
+		clearSocketResources()
+		setConnectionState('connecting')
+		try {
+			const ws = new WebSocket(toWebSocketUrl(`/ws/${shareToken}`))
+			socket = ws
+			ws.onopen = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('live')
+			}
+			ws.onmessage = (event) => {
+				if (socket !== ws || handle.signal.aborted) return
+				try {
+					const payload = JSON.parse(String(event.data)) as {
+						type?: string
+					} | null
+					if (payload?.type === 'schedule-updated' && !hasLocalHostChanges()) {
+						void loadSnapshot()
+					}
+				} catch {
+					return
+				}
+			}
+			ws.onerror = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('offline')
+			}
+			ws.onclose = () => {
+				if (socket !== ws || handle.signal.aborted) return
+				setConnectionState('offline')
+				reconnectTimer = setTimeout(() => {
+					if (socket !== ws) return
+					connectSocket()
+				}, reconnectDelayMs)
+			}
+		} catch {
+			setConnectionState('offline')
+		}
+	}
+
 	async function saveHostSettings() {
 		const requestShareToken = shareToken
 		const currentSnapshot = snapshot
@@ -387,15 +481,55 @@ export function ScheduleHostRoute(handle: Handle) {
 		handle.update()
 	}
 
-	function toggleBlockedSlot(slot: string) {
-		if (blockedSlots.has(slot)) {
-			blockedSlots.delete(slot)
-		} else {
+	function setBlockedSlotState(slot: string, shouldBeBlocked: boolean) {
+		const currentlyBlocked = blockedSlots.has(slot)
+		if (currentlyBlocked === shouldBeBlocked) return false
+		if (shouldBeBlocked) {
 			blockedSlots.add(slot)
+		} else {
+			blockedSlots.delete(slot)
 		}
 		changeVersion += 1
 		queueHostSettingsSave()
-		handle.update()
+		return true
+	}
+
+	function toggleBlockedSlot(slot: string) {
+		const changed = setBlockedSlotState(slot, !blockedSlots.has(slot))
+		if (changed) {
+			handle.update()
+		}
+	}
+
+	function handleHostUnavailablePointerUp() {
+		hostDragging = false
+		hostPaintMode = null
+		hostLastPointerSlot = null
+	}
+
+	function handleHostUnavailablePointerDown(slot: string) {
+		hostPaintMode = blockedSlots.has(slot) ? 'remove' : 'add'
+		hostDragging = true
+		hostLastPointerSlot = slot
+		const changed = setBlockedSlotState(slot, hostPaintMode === 'add')
+		if (typeof window !== 'undefined') {
+			window.addEventListener('pointerup', handleHostUnavailablePointerUp, {
+				once: true,
+			})
+		}
+		if (changed) {
+			handle.update()
+		}
+	}
+
+	function handleHostUnavailablePointerEnter(slot: string) {
+		if (!hostDragging || !hostPaintMode) return
+		if (hostLastPointerSlot === slot) return
+		hostLastPointerSlot = slot
+		const changed = setBlockedSlotState(slot, hostPaintMode === 'add')
+		if (changed) {
+			handle.update()
+		}
 	}
 
 	function toggleIncludedAttendee(attendeeId: string) {
@@ -412,6 +546,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (nextPathname === lastPathname) return
 		lastPathname = nextPathname
 		clearSaveDebounceTimer()
+		clearSocketResources()
 		clearRefreshTimer()
 		const routeParams = parseHostRouteParams(nextPathname)
 		shareToken = routeParams?.shareToken ?? ''
@@ -423,17 +558,19 @@ export function ScheduleHostRoute(handle: Handle) {
 		excludedAttendeeIds = new Set<string>()
 		previewMode = 'all'
 		activePreviewSlot = null
+		previewTooltip = null
 		mobileDayKey = null
+		hostPaintMode = null
+		hostDragging = false
+		hostLastPointerSlot = null
 		isLoading = true
 		isSaving = false
 		pendingSave = false
+		connectionState = 'offline'
 		setStatus(null, false)
 		await loadSnapshot()
 		if (shareToken && hostAccessToken) {
-			refreshTimer = setInterval(() => {
-				if (hasLocalHostChanges()) return
-				void loadSnapshot()
-			}, refreshIntervalMs)
+			connectSocket()
 		}
 	})
 
@@ -457,8 +594,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			(attendee) => !excludedAttendeeIds.has(attendee.id),
 		)
 		const includedAttendeeCount = includedAttendees.length
-		const attendeeAvailabilityById = new Map(
+		const includedAvailabilityById = new Map(
 			includedAttendees.map((attendee) => [
+				attendee.id,
+				new Set(currentSnapshot?.availabilityByAttendee[attendee.id] ?? []),
+			]),
+		)
+		const allAvailabilityById = new Map(
+			attendees.map((attendee) => [
 				attendee.id,
 				new Set(currentSnapshot?.availabilityByAttendee[attendee.id] ?? []),
 			]),
@@ -479,7 +622,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			const availableNames = includedAttendees
 				.filter((attendee) =>
-					attendeeAvailabilityById.get(attendee.id)?.has(slot),
+					includedAvailabilityById.get(attendee.id)?.has(slot),
 				)
 				.map((attendee) => attendee.name)
 			const count = availableNames.length
@@ -505,7 +648,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			.map((slot) => ({
 				slot,
 				count: includedAttendees.filter((attendee) =>
-					attendeeAvailabilityById.get(attendee.id)?.has(slot),
+					includedAvailabilityById.get(attendee.id)?.has(slot),
 				).length,
 			}))
 			.sort((left, right) => {
@@ -525,7 +668,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					availableSet: new Set(
 						includedAttendees
 							.filter((attendee) =>
-								attendeeAvailabilityById
+								includedAvailabilityById
 									.get(attendee.id)
 									?.has(activePreviewSlotValue),
 							)
@@ -533,6 +676,47 @@ export function ScheduleHostRoute(handle: Handle) {
 					),
 				}
 			: null
+		const hoveredPreviewSlot = previewTooltip?.slot ?? null
+		const hoveredPreviewSlotDetails =
+			hoveredPreviewSlot && currentSnapshot?.slots.includes(hoveredPreviewSlot)
+				? {
+						slot: hoveredPreviewSlot,
+						isBlocked: blockedSlots.has(hoveredPreviewSlot),
+						availableSet: new Set(
+							attendees
+								.filter((attendee) =>
+									allAvailabilityById.get(attendee.id)?.has(hoveredPreviewSlot),
+								)
+								.map((attendee) => attendee.id),
+						),
+					}
+				: null
+		const tooltipWidthPx = 300
+		const viewportWidth =
+			typeof window === 'undefined' ? 1440 : window.innerWidth
+		const viewportHeight =
+			typeof window === 'undefined' ? 900 : window.innerHeight
+		const tooltipLeft = previewTooltip
+			? Math.max(
+					12,
+					Math.min(
+						previewTooltip.clientX + 16,
+						viewportWidth - tooltipWidthPx - 12,
+					),
+				)
+			: 0
+		const tooltipTop = previewTooltip
+			? Math.max(
+					12,
+					Math.min(previewTooltip.clientY + 16, viewportHeight - 220),
+				)
+			: 0
+		const connectionLabel =
+			connectionState === 'live'
+				? 'Realtime connected'
+				: connectionState === 'connecting'
+					? 'Connecting realtime…'
+					: `Realtime unavailable; polling every ${Math.floor(refreshIntervalMs / 1000)}s`
 		const appOrigin =
 			typeof window === 'undefined' ? '' : window.location.origin
 		const attendeePath = `/s/${encodeURIComponent(shareToken)}`
@@ -567,9 +751,8 @@ export function ScheduleHostRoute(handle: Handle) {
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Manage schedule settings and choose the best meeting slot.
 					</p>
-					<p css={{ margin: 0, color: colors.text }}>
-						Save these links and your host key.
-					</p>
+					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
+					<p css={{ margin: 0, color: colors.text }}>Save these links.</p>
 					<div
 						css={{
 							display: 'grid',
@@ -676,57 +859,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										backgroundColor: colors.surface,
 										color: colors.text,
 										cursor: 'pointer',
-									}}
-								>
-									{renderCopyIcon()}
-								</button>
-							</div>
-						</div>
-
-						<div css={{ display: 'grid', gap: spacing.xs }}>
-							<p css={{ margin: 0, color: colors.textMuted }}>Host key</p>
-							<div
-								css={{
-									display: 'grid',
-									gap: spacing.xs,
-									gridTemplateColumns: 'minmax(0, 1fr) auto',
-									alignItems: 'center',
-								}}
-							>
-								<code
-									css={{
-										display: 'block',
-										padding: `${spacing.xs} ${spacing.sm}`,
-										borderRadius: radius.sm,
-										border: `1px solid ${colors.border}`,
-										backgroundColor: colors.background,
-										color: hostAccessToken ? colors.text : colors.textMuted,
-										overflowWrap: 'anywhere',
-									}}
-								>
-									{hostAccessToken || 'Unavailable in this browser session'}
-								</code>
-								<button
-									type="button"
-									aria-label="Copy host key"
-									on={{
-										click: () =>
-											void copyValueToClipboard('Host key', hostAccessToken),
-									}}
-									disabled={!hostAccessToken}
-									css={{
-										display: 'inline-flex',
-										alignItems: 'center',
-										justifyContent: 'center',
-										width: 34,
-										height: 34,
-										padding: 0,
-										borderRadius: radius.sm,
-										border: `1px solid ${colors.border}`,
-										backgroundColor: colors.surface,
-										color: colors.text,
-										cursor: hostAccessToken ? 'pointer' : 'not-allowed',
-										opacity: hostAccessToken ? 1 : 0.5,
 									}}
 								>
 									{renderCopyIcon()}
@@ -986,17 +1118,92 @@ export function ScheduleHostRoute(handle: Handle) {
 									},
 									onCellHover: (slot) => {
 										activePreviewSlot = slot
+										if (!slot) {
+											previewTooltip = null
+										}
+										handle.update()
+									},
+									onCellPointerMove: (slot, event) => {
+										if (event.pointerType !== 'mouse') return
+										activePreviewSlot = slot
+										previewTooltip = {
+											slot,
+											clientX: event.clientX,
+											clientY: event.clientY,
+										}
 										handle.update()
 									},
 									onCellFocus: (slot) => {
 										activePreviewSlot = slot
+										previewTooltip = null
 										handle.update()
 									},
 									onCellClick: (slot, _event) => {
 										activePreviewSlot = slot
+										previewTooltip = null
 										handle.update()
 									},
 								})}
+								{hoveredPreviewSlotDetails && previewTooltip ? (
+									<aside
+										role="note"
+										data-host-hover-tooltip
+										aria-live="polite"
+										css={{
+											position: 'fixed',
+											left: tooltipLeft,
+											top: tooltipTop,
+											zIndex: 40,
+											width: `min(${tooltipWidthPx}px, calc(100vw - 1.5rem))`,
+											display: 'grid',
+											gap: spacing.xs,
+											padding: spacing.sm,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.surface,
+											boxShadow: shadows.md,
+											pointerEvents: 'none',
+										}}
+									>
+										<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
+											{formatSlotLabel(hoveredPreviewSlotDetails.slot)}
+										</p>
+										{hoveredPreviewSlotDetails.isBlocked ? (
+											<p css={{ margin: 0, color: colors.error }}>
+												Host marked this slot unavailable.
+											</p>
+										) : null}
+										<ul
+											css={{
+												margin: 0,
+												paddingLeft: '1rem',
+												display: 'grid',
+												gap: spacing.xs,
+											}}
+										>
+											{attendees.map((attendee) => {
+												const canAttend =
+													!hoveredPreviewSlotDetails.isBlocked &&
+													hoveredPreviewSlotDetails.availableSet.has(
+														attendee.id,
+													)
+												return (
+													<li
+														key={`hover-slot-attendee-${attendee.id}`}
+														css={{
+															textDecoration: canAttend
+																? 'none'
+																: 'line-through',
+															color: canAttend ? colors.text : colors.textMuted,
+														}}
+													>
+														{attendee.name}
+													</li>
+												)
+											})}
+										</ul>
+									</aside>
+								) : null}
 								{activeSlotDetails ? (
 									<section
 										css={{
@@ -1083,7 +1290,17 @@ export function ScheduleHostRoute(handle: Handle) {
 										mobileDayKey = dayKey
 										handle.update()
 									},
-									onCellClick: (slot, _event) => {
+									onCellPointerDown: (slot, _event) => {
+										handleHostUnavailablePointerDown(slot)
+									},
+									onCellPointerEnter: (slot, _event) => {
+										handleHostUnavailablePointerEnter(slot)
+									},
+									onCellPointerUp: (_slot, _event) => {
+										handleHostUnavailablePointerUp()
+									},
+									onCellClick: (slot, event) => {
+										if (event.detail > 0) return
 										toggleBlockedSlot(slot)
 									},
 								})}
