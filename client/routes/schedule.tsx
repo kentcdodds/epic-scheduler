@@ -299,8 +299,8 @@ export function ScheduleRoute(handle: Handle) {
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (saveVersion === changeVersion) {
 				hasDirtyChanges = false
+				setStatus(null, false)
 			}
-			setStatus(null, false)
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatus('Network error while saving availability.', true)
