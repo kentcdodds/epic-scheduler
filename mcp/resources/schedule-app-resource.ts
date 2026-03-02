@@ -9,6 +9,22 @@ import {
 } from '#mcp/apps/schedule-ui-entry-point.ts'
 import { type MCP } from '#mcp/index.ts'
 
+function toHex(bytes: Uint8Array) {
+	return Array.from(bytes)
+		.map((value) => value.toString(16).padStart(2, '0'))
+		.join('')
+}
+
+async function getClaudeWidgetDomain(baseUrl: string | URL) {
+	const mcpEndpoint = new URL('/mcp', baseUrl).toString()
+	const digest = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(mcpEndpoint),
+	)
+	const hashPrefix = toHex(new Uint8Array(digest)).slice(0, 32)
+	return `${hashPrefix}.claudemcpcontent.com`
+}
+
 const scheduleAppResource = {
 	name: 'schedule_app_resource',
 	title: 'Schedule App Resource',
@@ -18,7 +34,8 @@ const scheduleAppResource = {
 
 export async function registerScheduleAppResource(agent: MCP) {
 	const baseUrl = agent.requireDomain()
-	const resourceDomain = new URL('/styles.css', baseUrl).origin
+	const assetOrigin = new URL('/styles.css', baseUrl).origin
+	const claudeWidgetDomain = await getClaudeWidgetDomain(baseUrl)
 
 	registerAppResource(
 		agent.server,
@@ -51,12 +68,12 @@ export async function registerScheduleAppResource(agent: MCP) {
 						_meta: {
 							ui: {
 								prefersBorder: false,
-								domain: resourceDomain,
+								domain: claudeWidgetDomain,
 								csp: {
-									resourceDomains: [resourceDomain],
+									resourceDomains: [assetOrigin],
 								},
 							},
-							'openai/widgetDomain': resourceDomain,
+							'openai/widgetDomain': assetOrigin,
 						},
 					},
 				],

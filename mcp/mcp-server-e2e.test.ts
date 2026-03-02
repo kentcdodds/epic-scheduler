@@ -6,6 +6,7 @@ import {
 	type ContentBlock,
 } from '@modelcontextprotocol/sdk/types.js'
 import getPort from 'get-port'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +17,10 @@ const migrationsDir = join(projectRoot, 'migrations')
 const bunBin = process.execPath
 const defaultTimeoutMs = 60_000
 const scheduleUiResourceUri = 'ui://schedule-app/entry-point.html'
+
+function getClaudeWidgetDomainFromMcpUrl(mcpUrl: string) {
+	return `${createHash('sha256').update(mcpUrl).digest('hex').slice(0, 32)}.claudemcpcontent.com`
+}
 
 function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
@@ -445,7 +450,10 @@ test(
 		expect(stylesResponse.ok).toBe(true)
 		expect(stylesResponse.headers.get('access-control-allow-origin')).toBe('*')
 
-		expect(scheduleResourceMeta?.ui?.domain).toBe(server.origin)
+		const expectedClaudeWidgetDomain = getClaudeWidgetDomainFromMcpUrl(
+			new URL('/mcp', server.origin).toString(),
+		)
+		expect(scheduleResourceMeta?.ui?.domain).toBe(expectedClaudeWidgetDomain)
 		expect(scheduleResourceMeta?.['openai/widgetDomain']).toBe(server.origin)
 		expect(scheduleResourceMeta?.ui?.csp?.resourceDomains).toContain(
 			server.origin,
