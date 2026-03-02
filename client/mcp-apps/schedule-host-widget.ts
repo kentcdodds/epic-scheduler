@@ -124,6 +124,10 @@ function setupScheduleHostWidget() {
 		fullscreenToggleButton.textContent = inFullscreen
 			? 'Exit fullscreen'
 			: 'Fullscreen'
+		fullscreenToggleButton.setAttribute(
+			'aria-label',
+			inFullscreen ? 'Exit fullscreen mode' : 'Request fullscreen mode',
+		)
 	}
 
 	async function maybeAutoRequestFullscreen() {

@@ -86,6 +86,7 @@ export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 				return Response.json({
 					ok: true,
 					shareToken: created.shareToken,
+					hostAccessToken: created.hostAccessToken,
 					schedulePath: `/s/${created.shareToken}`,
 					snapshot,
 				})

@@ -93,6 +93,10 @@ export function createShareToken() {
 	return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 }
 
+export function createHostAccessToken() {
+	return crypto.randomUUID().replace(/-/g, '')
+}
+
 export function normalizeName(name: string) {
 	return name.trim().replace(/\s+/g, ' ')
 }
@@ -289,6 +293,24 @@ export async function getScheduleByShareToken(
 	return toScheduleRecord(row)
 }
 
+export async function getScheduleHostAccessToken(
+	db: D1DatabaseLike,
+	shareToken: string,
+) {
+	const row = await db
+		.prepare(
+			`SELECT
+				host_access_token
+			FROM schedules
+			WHERE share_token = ?1
+			LIMIT 1`,
+		)
+		.bind(shareToken)
+		.first<{ host_access_token: string }>()
+	if (!row?.host_access_token) return null
+	return row.host_access_token
+}
+
 export async function createSchedule(
 	db: D1DatabaseLike,
 	input: ScheduleInsertInput,
@@ -313,6 +335,7 @@ export async function createSchedule(
 
 	const id = crypto.randomUUID()
 	const shareToken = createShareToken()
+	const hostAccessToken = createHostAccessToken()
 	const hostAttendeeId = crypto.randomUUID()
 	const createdAt = new Date().toISOString()
 	const nameNorm = normalizeNameForMatch(hostName)
@@ -323,16 +346,18 @@ export async function createSchedule(
 			`INSERT INTO schedules (
 				id,
 				share_token,
+				host_access_token,
 				title,
 				interval_minutes,
 				range_start_utc,
 				range_end_utc,
 				created_at
-			) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+			) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
 		)
 		.bind(
 			id,
 			shareToken,
+			hostAccessToken,
 			title,
 			intervalMinutes,
 			slots[0],
@@ -368,6 +393,7 @@ export async function createSchedule(
 	return {
 		scheduleId: id,
 		shareToken,
+		hostAccessToken,
 		hostAttendeeId,
 	}
 }

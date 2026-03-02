@@ -1,6 +1,7 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
+import { readHostAccessToken } from '#client/schedule-host-access.ts'
 import {
 	colors,
 	mq,
@@ -68,6 +69,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
+	let changeVersion = 0
 	let statusMessage: string | null = null
 	let statusError = false
 	let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -175,16 +177,25 @@ export function ScheduleHostRoute(handle: Handle) {
 			pendingSave = true
 			return
 		}
+		const hostAccessToken = readHostAccessToken(requestShareToken)?.trim()
+		if (!hostAccessToken) {
+			setStatus('Host access token missing.', true)
+			return
+		}
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
 		)
+		const saveVersion = changeVersion
 		isSaving = true
 		handle.update()
 		try {
 			const response = await fetch(`/api/schedules/${requestShareToken}/host`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Host-Token': hostAccessToken,
+				},
 				body: JSON.stringify({
 					title,
 					blockedSlots: sortedBlockedSlots,
@@ -204,10 +215,13 @@ export function ScheduleHostRoute(handle: Handle) {
 				setStatus(errorText, true)
 				return
 			}
+			const nextBlockedSlots = toSet(payload.snapshot.blockedSlots)
 			snapshot = payload.snapshot
-			titleDraft = payload.snapshot.schedule.title
-			blockedSlots = toSet(payload.snapshot.blockedSlots)
-			persistedBlockedSlots = toSet(payload.snapshot.blockedSlots)
+			persistedBlockedSlots = new Set(nextBlockedSlots)
+			if (saveVersion === changeVersion) {
+				titleDraft = payload.snapshot.schedule.title
+				blockedSlots = new Set(nextBlockedSlots)
+			}
 			setStatus('Host settings synced.')
 			handle.update()
 		} catch {
@@ -249,6 +263,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		} else {
 			blockedSlots.add(slot)
 		}
+		changeVersion += 1
 		queueHostSettingsSave()
 		handle.update()
 	}
@@ -449,7 +464,10 @@ export function ScheduleHostRoute(handle: Handle) {
 									value={titleDraft}
 									on={{
 										input: (event) => {
-											titleDraft = event.currentTarget.value
+											const nextTitle = event.currentTarget.value
+											if (nextTitle === titleDraft) return
+											titleDraft = nextTitle
+											changeVersion += 1
 											queueHostSettingsSave()
 											handle.update()
 										},
