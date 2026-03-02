@@ -75,6 +75,9 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Creating a schedule from `/` now redirects to
   `/s/{shareToken}/{hostAccessToken}`; tests that validate attendee availability
   should navigate to `/s/{shareToken}` after extracting the share token.
+- Host dashboard data loading now calls
+  `/api/schedules/{shareToken}/host-snapshot` and must include `X-Host-Token`;
+  add a negative-path check for invalid host keys when host-route auth changes.
 - Host dashboard tests should cover realtime status updates
   (`Realtime connected`) and preview-grid tooltip behavior when attendee
   availability changes.

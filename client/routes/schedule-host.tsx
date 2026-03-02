@@ -204,7 +204,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (nextState === 'offline') {
 			if (!refreshTimer) {
 				refreshTimer = setInterval(() => {
-					if (hasLocalHostChanges()) return
 					void loadSnapshot()
 				}, refreshIntervalMs)
 			}
@@ -307,12 +306,25 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	async function loadSnapshot() {
 		const requestShareToken = shareToken
-		if (!requestShareToken || handle.signal.aborted) return
+		const requestHostAccessToken = hostAccessToken
+		if (
+			!requestShareToken ||
+			!requestHostAccessToken ||
+			handle.signal.aborted
+		) {
+			return
+		}
 		const requestId = ++snapshotRequestId
 		try {
-			const response = await fetch(`/api/schedules/${requestShareToken}`, {
-				headers: { Accept: 'application/json' },
-			})
+			const response = await fetch(
+				`/api/schedules/${requestShareToken}/host-snapshot`,
+				{
+					headers: {
+						Accept: 'application/json',
+						'X-Host-Token': requestHostAccessToken,
+					},
+				},
+			)
 			const payload = (await response.json().catch(() => null)) as {
 				ok?: boolean
 				snapshot?: ScheduleSnapshot
@@ -329,7 +341,9 @@ export function ScheduleHostRoute(handle: Handle) {
 				const errorText =
 					typeof payload?.error === 'string'
 						? payload.error
-						: 'Unable to load host dashboard.'
+						: response.status === 401 || response.status === 403
+							? 'Invalid host dashboard link.'
+							: 'Unable to load host dashboard.'
 				setStatus(errorText, true)
 				isLoading = false
 				handle.update()
@@ -368,7 +382,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					const payload = JSON.parse(String(event.data)) as {
 						type?: string
 					} | null
-					if (payload?.type === 'schedule-updated' && !hasLocalHostChanges()) {
+					if (payload?.type === 'schedule-updated') {
 						void loadSnapshot()
 					}
 				} catch {
@@ -411,6 +425,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			left.localeCompare(right),
 		)
 		const saveVersion = changeVersion
+		let shouldRetryAfterFailure = false
 		isSaving = true
 		handle.update()
 		try {
@@ -432,6 +447,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			} | null
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				shouldRetryAfterFailure = response.status >= 500
 				const errorText =
 					typeof payload?.error === 'string'
 						? payload.error
@@ -451,12 +467,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			handle.update()
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			shouldRetryAfterFailure = true
 			setStatus('Network error while saving host settings.', true)
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isSaving = false
 				handle.update()
-				const shouldReschedule = pendingSave && hasLocalHostChanges()
+				const shouldReschedule =
+					hasLocalHostChanges() && (pendingSave || shouldRetryAfterFailure)
 				pendingSave = false
 				if (shouldReschedule) {
 					queueHostSettingsSave()
@@ -479,7 +497,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		saveDebounceTimer = setTimeout(() => {
 			void saveHostSettings()
 		}, saveDebounceMs)
-		handle.update()
 	}
 
 	function setBlockedSlotState(slot: string, shouldBeBlocked: boolean) {

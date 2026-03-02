@@ -263,6 +263,7 @@ export function ScheduleRoute(handle: Handle) {
 		selectedSlots = new Set(sanitizedSelection)
 
 		const saveVersion = changeVersion
+		let shouldRetryAfterFailure = false
 		isSaving = true
 		handle.update()
 
@@ -287,6 +288,7 @@ export function ScheduleRoute(handle: Handle) {
 
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			if (!response.ok || !payload?.ok || !payload?.snapshot) {
+				shouldRetryAfterFailure = response.status >= 500
 				const errorMessage =
 					typeof payload?.error === 'string'
 						? payload.error
@@ -303,12 +305,14 @@ export function ScheduleRoute(handle: Handle) {
 			}
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			shouldRetryAfterFailure = true
 			setStatus('Network error while saving availability.', true)
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isSaving = false
 				handle.update()
-				const shouldReschedule = pendingSave && hasDirtyChanges
+				const shouldReschedule =
+					hasDirtyChanges && (pendingSave || shouldRetryAfterFailure)
 				pendingSave = false
 				if (shouldReschedule) {
 					scheduleAutoSave()

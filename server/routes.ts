@@ -13,6 +13,7 @@ export const routes = route({
 	health: '/health',
 	scheduleCreate: post('/api/schedules'),
 	scheduleRead: '/api/schedules/:shareToken',
+	scheduleHostRead: '/api/schedules/:shareToken/host-snapshot',
 	scheduleSubmitAvailability: post('/api/schedules/:shareToken/availability'),
 	scheduleHostUpdate: post('/api/schedules/:shareToken/host'),
 })
