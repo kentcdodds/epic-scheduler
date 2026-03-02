@@ -6,6 +6,7 @@ import {
 	spacing,
 	typography,
 } from '#client/styles/tokens.ts'
+import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
 import { buildGridModel } from '#client/schedule-utils.ts'
 
 type SlotAvailability = {
@@ -54,26 +55,6 @@ function isMobileViewport() {
 	if (typeof window === 'undefined') return false
 	if (typeof window.matchMedia !== 'function') return false
 	return window.matchMedia(`(max-width: ${breakpoints.mobile})`).matches
-}
-
-function getHeatBackgroundColor(params: {
-	count: number
-	maxCount: number
-	isSelected: boolean
-}) {
-	if (params.isSelected) {
-		return 'color-mix(in srgb, var(--color-primary) 38%, var(--color-surface))'
-	}
-	if (params.count <= 0 || params.maxCount <= 0) {
-		return 'color-mix(in srgb, var(--color-surface) 95%, var(--color-background))'
-	}
-
-	const normalized = Math.max(
-		0,
-		Math.min(1, params.count / Math.max(1, params.maxCount)),
-	)
-	const primaryMix = Math.round(10 + normalized * 40)
-	return `color-mix(in srgb, var(--color-primary) ${primaryMix}%, var(--color-surface))`
 }
 
 export function renderScheduleGrid(props: ScheduleGridProps) {
@@ -347,7 +328,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											: ''
 									const isRangeAnchor = props.rangeAnchor === slot
 									const isActive = props.activeSlot === slot
-									const background = getHeatBackgroundColor({
+									const background = getScheduleCellBackgroundColor({
 										count: availability.count,
 										maxCount: props.maxAvailabilityCount,
 										isSelected,

@@ -1,15 +1,28 @@
+import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
+import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
+import {
+	createSlotAvailability,
+	getMaxAvailabilityCount,
+} from '#client/schedule-snapshot-utils.ts'
+import {
+	buildGridModel,
+	findSelectionForAttendee,
+	formatSlotForAttendeeTimeZone,
+} from '#client/schedule-utils.ts'
+import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
+
+const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
+	weekday: 'long',
+	month: 'long',
+	day: 'numeric',
+	hour: 'numeric',
+	minute: '2-digit',
+})
 
 function readTheme(source: Record<string, unknown> | undefined) {
 	const value = source?.theme
 	return value === 'dark' || value === 'light' ? value : undefined
-}
-
-function parseSlots(input: string) {
-	return input
-		.split('\n')
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0)
 }
 
 function isDisplayMode(
@@ -27,17 +40,53 @@ function readAvailableDisplayModes(
 	return source.availableDisplayModes.filter((mode) => isDisplayMode(mode))
 }
 
-function formatDateInput(date: Date) {
-	const year = date.getFullYear()
-	const month = String(date.getMonth() + 1).padStart(2, '0')
-	const day = String(date.getDate()).padStart(2, '0')
-	return `${year}-${month}-${day}`
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null
 }
 
-function addDays(date: Date, days: number) {
-	const next = new Date(date.getTime())
-	next.setDate(next.getDate() + days)
-	return next
+function readNonEmptyString(value: unknown) {
+	if (typeof value !== 'string') return null
+	const normalized = value.trim()
+	return normalized.length > 0 ? normalized : null
+}
+
+function findNestedStringByKey(params: {
+	source: unknown
+	key: string
+	depth?: number
+}): string | null {
+	const depth = params.depth ?? 0
+	if (depth > 4 || !isRecord(params.source)) return null
+
+	const directValue = readNonEmptyString(params.source[params.key])
+	if (directValue) {
+		return directValue
+	}
+
+	const nestedKeys = [
+		'arguments',
+		'structuredContent',
+		'toolInput',
+		'toolResult',
+		'result',
+		'params',
+		'payload',
+		'context',
+	]
+
+	for (const nestedKey of nestedKeys) {
+		const nestedValue = params.source[nestedKey]
+		const resolved = findNestedStringByKey({
+			source: nestedValue,
+			key: params.key,
+			depth: depth + 1,
+		})
+		if (resolved) {
+			return resolved
+		}
+	}
+
+	return null
 }
 
 function getBrowserTimeZone() {
@@ -45,64 +94,6 @@ function getBrowserTimeZone() {
 	if (typeof value !== 'string') return 'UTC'
 	const normalized = value.trim()
 	return normalized || 'UTC'
-}
-
-function buildSlotsForWeekdays(params: {
-	startDate: string
-	endDate: string
-	intervalMinutes: number
-}) {
-	if (
-		!Number.isFinite(params.intervalMinutes) ||
-		!Number.isInteger(params.intervalMinutes) ||
-		params.intervalMinutes <= 0
-	) {
-		return []
-	}
-
-	const startParts = params.startDate
-		.split('-')
-		.map((value) => Number.parseInt(value, 10))
-	const endParts = params.endDate
-		.split('-')
-		.map((value) => Number.parseInt(value, 10))
-	const [startYear = 0, startMonth = 0, startDay = 0] = startParts
-	const [endYear = 0, endMonth = 0, endDay = 0] = endParts
-
-	if (
-		!Number.isFinite(startYear) ||
-		!Number.isFinite(startMonth) ||
-		!Number.isFinite(startDay) ||
-		!Number.isFinite(endYear) ||
-		!Number.isFinite(endMonth) ||
-		!Number.isFinite(endDay)
-	) {
-		return []
-	}
-
-	const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0)
-	const end = addDays(new Date(endYear, endMonth - 1, endDay, 0, 0, 0, 0), 1)
-	const startMs = start.getTime()
-	const endMs = end.getTime()
-	if (endMs <= startMs) {
-		return []
-	}
-	const intervalMs = params.intervalMinutes * 60_000
-	const estimatedSlots = Math.ceil((endMs - startMs) / intervalMs)
-	if (estimatedSlots > 24 * 31 * 4) {
-		return []
-	}
-
-	const slots: Array<string> = []
-	for (let time = startMs; time < endMs; time += intervalMs) {
-		const date = new Date(time)
-		const weekday = date.getDay()
-		const hour = date.getHours()
-		if (weekday >= 1 && weekday <= 5 && hour >= 9 && hour < 17) {
-			slots.push(date.toISOString())
-		}
-	}
-	return slots
 }
 
 function getFormElement<T extends HTMLElement>(
@@ -116,70 +107,347 @@ function getFormElement<T extends HTMLElement>(
 	return element
 }
 
+function escapeHtml(value: string) {
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;')
+}
+
 function setupScheduleWidget() {
 	const rootElement = document.querySelector('[data-schedule-widget]')
 	if (!(rootElement instanceof HTMLElement)) return
 
 	const appRoot = document.documentElement
-	const outputElement = getFormElement<HTMLElement>(
+	const scheduleTitleElement = getFormElement<HTMLElement>(
 		rootElement,
-		'[data-output]',
+		'[data-schedule-title]',
 	)
-
-	const titleInput = getFormElement<HTMLInputElement>(
+	const shareTokenElement = getFormElement<HTMLElement>(
 		rootElement,
-		'input[name="title"]',
+		'[data-share-token]',
 	)
-	const hostNameInput = getFormElement<HTMLInputElement>(
+	const statusElement = getFormElement<HTMLElement>(
 		rootElement,
-		'input[name="hostName"]',
+		'[data-status]',
 	)
-	const intervalSelect = getFormElement<HTMLSelectElement>(
+	const gridHostElement = getFormElement<HTMLElement>(
 		rootElement,
-		'select[name="interval"]',
+		'[data-grid-host]',
 	)
-	const startDateInput = getFormElement<HTMLInputElement>(
+	const slotDetailsElement = getFormElement<HTMLElement>(
 		rootElement,
-		'input[name="startDate"]',
+		'[data-slot-details]',
 	)
-	const endDateInput = getFormElement<HTMLInputElement>(
+	const selectedCountElement = getFormElement<HTMLElement>(
 		rootElement,
-		'input[name="endDate"]',
+		'[data-selected-count]',
 	)
-	const createSlotsInput = getFormElement<HTMLTextAreaElement>(
+	const pendingCountElement = getFormElement<HTMLElement>(
 		rootElement,
-		'textarea[name="createSlots"]',
+		'[data-pending-count]',
 	)
-	const submitTokenInput = getFormElement<HTMLInputElement>(
+	const browserTimeZoneElement = getFormElement<HTMLElement>(
 		rootElement,
-		'input[name="submitToken"]',
+		'[data-browser-timezone]',
 	)
 	const attendeeNameInput = getFormElement<HTMLInputElement>(
 		rootElement,
 		'input[name="attendeeName"]',
 	)
-	const submitSlotsInput = getFormElement<HTMLTextAreaElement>(
-		rootElement,
-		'textarea[name="submitSlots"]',
-	)
-	const snapshotTokenInput = getFormElement<HTMLInputElement>(
-		rootElement,
-		'input[name="snapshotToken"]',
-	)
 
-	const now = new Date()
-	startDateInput.value = formatDateInput(now)
-	endDateInput.value = formatDateInput(addDays(now, 6))
+	browserTimeZoneElement.textContent = getBrowserTimeZone()
 
-	function writeOutput(value: unknown) {
-		outputElement.textContent =
-			typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+	let currentShareToken: string | null = null
+	let snapshot: ScheduleSnapshot | null = null
+	let selectedSlots = new Set<string>()
+	let persistedSelectedSlots = new Set<string>()
+	let activeSlot: string | null = null
+	const fetchSnapshotTimeoutMs = 10_000
+
+	function setStatus(message: string, error = false) {
+		statusElement.textContent = message
+		statusElement.setAttribute('data-status-tone', error ? 'error' : 'normal')
+	}
+
+	function getPersistedSelectionForName(name: string) {
+		if (!snapshot) return new Set<string>()
+		return new Set(
+			findSelectionForAttendee({
+				attendeeName: name,
+				attendees: snapshot.attendees,
+				availabilityByAttendee: snapshot.availabilityByAttendee,
+			}),
+		)
+	}
+
+	function updateSelectionSummary() {
+		const selectionDiff = getSelectionDiff({
+			currentSelection: selectedSlots,
+			persistedSelection: persistedSelectedSlots,
+		})
+		const pendingCount =
+			selectionDiff.pendingAdded.size + selectionDiff.pendingRemoved.size
+		selectedCountElement.textContent = String(selectedSlots.size)
+		pendingCountElement.textContent = String(pendingCount)
+	}
+
+	function updateActiveSlotStyles() {
+		for (const element of gridHostElement.querySelectorAll<HTMLButtonElement>(
+			'button[data-slot]',
+		)) {
+			const slot = element.dataset.slot
+			element.classList.toggle('is-active', slot === activeSlot)
+		}
+	}
+
+	function renderSlotDetails() {
+		if (!snapshot || !activeSlot) {
+			slotDetailsElement.hidden = true
+			slotDetailsElement.replaceChildren()
+			return
+		}
+
+		const activeSlotValue = activeSlot
+		const availableNames = snapshot.availableNamesBySlot[activeSlotValue] ?? []
+		const availableNameSet = new Set(availableNames)
+		const availableAttendees = snapshot.attendees.filter((entry) =>
+			availableNameSet.has(entry.name),
+		)
+		const unavailableAttendees = snapshot.attendees.filter(
+			(entry) => !availableNameSet.has(entry.name),
+		)
+		const selectionDiff = getSelectionDiff({
+			currentSelection: selectedSlots,
+			persistedSelection: persistedSelectedSlots,
+		})
+		const pendingStatus = selectionDiff.pendingAdded.has(activeSlotValue)
+			? 'Pending add to your availability.'
+			: selectionDiff.pendingRemoved.has(activeSlotValue)
+				? 'Pending removal from your availability.'
+				: ''
+
+		const availableList =
+			availableAttendees.length > 0
+				? `<ul>${availableAttendees
+						.map((entry) => {
+							const slotTime = formatSlotForAttendeeTimeZone(
+								activeSlotValue,
+								entry.timeZone,
+							)
+							return `<li><strong>${escapeHtml(entry.name)}</strong> - ${escapeHtml(
+								slotTime.localTime,
+							)} (${escapeHtml(slotTime.timeZoneLabel)})</li>`
+						})
+						.join('')}</ul>`
+				: '<p class="scheduler-muted">None</p>'
+		const unavailableList =
+			unavailableAttendees.length > 0
+				? `<ul>${unavailableAttendees
+						.map((entry) => {
+							const slotTime = formatSlotForAttendeeTimeZone(
+								activeSlotValue,
+								entry.timeZone,
+							)
+							return `<li><strong>${escapeHtml(entry.name)}</strong> - ${escapeHtml(
+								slotTime.localTime,
+							)} (${escapeHtml(slotTime.timeZoneLabel)})</li>`
+						})
+						.join('')}</ul>`
+				: '<p class="scheduler-muted">None</p>'
+		const formattedSlot = slotDateFormatter.format(new Date(activeSlotValue))
+
+		slotDetailsElement.hidden = false
+		slotDetailsElement.innerHTML = `
+			<h2>Slot details</h2>
+			<p class="scheduler-muted">${escapeHtml(formattedSlot)}</p>
+			<div class="scheduler-row">
+				<p><strong>Available (${availableAttendees.length})</strong></p>
+				${availableList}
+			</div>
+			<div class="scheduler-row">
+				<p><strong>Unavailable (${unavailableAttendees.length})</strong></p>
+				${unavailableList}
+			</div>
+			${pendingStatus ? `<p class="scheduler-muted">${escapeHtml(pendingStatus)}</p>` : ''}
+		`
+	}
+
+	function renderGrid() {
+		if (!snapshot) {
+			gridHostElement.innerHTML = `
+				<p class="scheduler-muted" style="padding: var(--spacing-md)">
+					No schedule loaded yet.
+				</p>
+			`
+			updateSelectionSummary()
+			return
+		}
+
+		const selectionDiff = getSelectionDiff({
+			currentSelection: selectedSlots,
+			persistedSelection: persistedSelectedSlots,
+		})
+		const slotAvailability = createSlotAvailability(snapshot)
+		const maxAvailabilityCount = getMaxAvailabilityCount(slotAvailability)
+		const grid = buildGridModel(snapshot.slots)
+		const { dayKeys, dayLabels, timeKeys, timeLabels, cellByDayAndTime } = grid
+		if (dayKeys.length === 0 || timeKeys.length === 0) {
+			gridHostElement.innerHTML = `
+				<p class="scheduler-muted" style="padding: var(--spacing-md)">
+					No time slots available for this schedule.
+				</p>
+			`
+			updateSelectionSummary()
+			return
+		}
+
+		const dayHeaders = dayKeys
+			.map(
+				(dayKey) =>
+					`<th scope="col">${escapeHtml(dayLabels[dayKey] ?? dayKey)}</th>`,
+			)
+			.join('')
+
+		const bodyRows = timeKeys
+			.map((timeKey) => {
+				const timeLabel = escapeHtml(timeLabels[timeKey] ?? timeKey)
+				const cells = dayKeys
+					.map((dayKey) => {
+						const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
+						if (!slot) {
+							return `<td class="scheduler-grid-empty"></td>`
+						}
+
+						const availability = slotAvailability[slot] ?? {
+							count: 0,
+							availableNames: [],
+						}
+						const isSelected = selectedSlots.has(slot)
+						const isPendingAdd = selectionDiff.pendingAdded.has(slot)
+						const isPendingRemove = selectionDiff.pendingRemoved.has(slot)
+						const pendingLabel = isPendingAdd
+							? 'pending add'
+							: isPendingRemove
+								? 'pending removal'
+								: ''
+						const background = getScheduleCellBackgroundColor({
+							count: availability.count,
+							maxCount: maxAvailabilityCount,
+							isSelected,
+						})
+						const slotLabel = slotDateFormatter.format(new Date(slot))
+						const attendeeLabel =
+							availability.count > 0
+								? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
+								: 'no attendees available'
+						const selectionLabel = isSelected
+							? 'selected for your availability'
+							: 'not selected for your availability'
+						const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${pendingLabel ? `, ${pendingLabel}` : ''}`
+						const title = `${slotLabel}\n${attendeeLabel}${pendingLabel ? `\n${pendingLabel}` : ''}`
+						const classNames = [
+							'scheduler-slot',
+							isSelected ? 'is-selected' : '',
+							activeSlot === slot ? 'is-active' : '',
+							isPendingAdd ? 'is-pending-add' : '',
+							isPendingRemove ? 'is-pending-remove' : '',
+						]
+							.filter((value) => value.length > 0)
+							.join(' ')
+						return `
+							<td>
+								<button
+									type="button"
+									class="${classNames}"
+									style="background: ${background}"
+									data-slot="${escapeHtml(slot)}"
+									aria-label="${escapeHtml(ariaLabel)}"
+									aria-pressed="${isSelected ? 'true' : 'false'}"
+									title="${escapeHtml(title)}"
+								>${availability.count > 0 ? String(availability.count) : ''}</button>
+							</td>
+						`
+					})
+					.join('')
+				return `<tr><th scope="row">${timeLabel}</th>${cells}</tr>`
+			})
+			.join('')
+
+		gridHostElement.innerHTML = `
+			<table>
+				<thead>
+					<tr>
+						<th scope="col">Time</th>
+						${dayHeaders}
+					</tr>
+				</thead>
+				<tbody>${bodyRows}</tbody>
+			</table>
+		`
+		updateSelectionSummary()
+	}
+
+	function resetSelectionForAttendee(preserveDirtySelection = false) {
+		const selectionDiff = preserveDirtySelection
+			? getSelectionDiff({
+					currentSelection: selectedSlots,
+					persistedSelection: persistedSelectedSlots,
+				})
+			: null
+		const hasDirtyChanges =
+			selectionDiff &&
+			(selectionDiff.pendingAdded.size > 0 ||
+				selectionDiff.pendingRemoved.size > 0)
+		persistedSelectedSlots = getPersistedSelectionForName(
+			attendeeNameInput.value,
+		)
+		if (!hasDirtyChanges) {
+			selectedSlots = new Set(persistedSelectedSlots)
+		}
+		if (activeSlot && snapshot?.slots.includes(activeSlot)) {
+			return
+		}
+		activeSlot = snapshot?.slots[0] ?? null
+	}
+
+	function applyShareToken(token: string) {
+		const normalizedShareToken = token.trim()
+		if (!normalizedShareToken) return false
+		if (normalizedShareToken === currentShareToken) return false
+
+		currentShareToken = normalizedShareToken
+		shareTokenElement.textContent = normalizedShareToken
+		snapshot = null
+		selectedSlots = new Set<string>()
+		persistedSelectedSlots = new Set<string>()
+		activeSlot = null
+		renderGrid()
+		renderSlotDetails()
+		updateSelectionSummary()
+		return true
+	}
+
+	function setSnapshot(nextSnapshot: ScheduleSnapshot) {
+		snapshot = nextSnapshot
+		currentShareToken = nextSnapshot.schedule.shareToken
+		scheduleTitleElement.textContent = 'Your availability'
+		shareTokenElement.textContent = nextSnapshot.schedule.shareToken
+		if (!attendeeNameInput.value.trim()) {
+			attendeeNameInput.value = nextSnapshot.attendees[0]?.name ?? ''
+		}
+		resetSelectionForAttendee()
+		setStatus('Select slots, then save availability.')
+		renderGrid()
+		renderSlotDetails()
 	}
 
 	const hostBridge = createWidgetHostBridge({
 		appInfo: {
 			name: 'schedule-widget',
-			version: '1.0.0',
+			version: '3.0.0',
 		},
 		onRenderData: (renderData) => {
 			const theme = readTheme(renderData)
@@ -188,6 +456,21 @@ function setupScheduleWidget() {
 			} else {
 				appRoot.removeAttribute('data-theme')
 			}
+			maybeApplyToolInput({
+				shareToken: findNestedStringByKey({
+					source: renderData,
+					key: 'shareToken',
+				}),
+				attendeeName:
+					findNestedStringByKey({
+						source: renderData,
+						key: 'attendeeName',
+					}) ??
+					findNestedStringByKey({
+						source: renderData,
+						key: 'name',
+					}),
+			})
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -219,117 +502,200 @@ function setupScheduleWidget() {
 		}
 	}
 
-	async function withOutput(
-		label: string,
-		fn: () => Promise<unknown>,
-		options: { hostMessage?: string } = {},
-	) {
-		writeOutput(`${label}...`)
-		try {
-			const result = await fn()
-			writeOutput(result)
-			if (options.hostMessage) {
-				void hostBridge.sendUserMessageWithFallback(options.hostMessage)
-			}
-		} catch (error) {
-			const message =
-				error instanceof Error ? error.message : 'Unexpected widget failure.'
-			writeOutput({ ok: false, error: message })
+	async function fetchSnapshot() {
+		const requestShareToken = currentShareToken?.trim() ?? ''
+		if (!requestShareToken) {
+			throw new Error(
+				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
+			)
 		}
-	}
-
-	async function createSchedule() {
-		const selectedSlots = parseSlots(createSlotsInput.value)
-		const response = await fetch('/api/schedules', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				title: titleInput.value,
-				hostName: hostNameInput.value,
-				intervalMinutes: Number.parseInt(intervalSelect.value, 10),
-				rangeStartUtc: new Date(
-					`${startDateInput.value}T00:00:00`,
-				).toISOString(),
-				rangeEndUtc: addDays(
-					new Date(`${endDateInput.value}T00:00:00`),
-					1,
-				).toISOString(),
-				hostTimeZone: getBrowserTimeZone(),
-				selectedSlots,
-			}),
-		})
-		const payload = await response.json().catch(() => null)
-		if (!response.ok) {
+		const controller = new AbortController()
+		const timeoutId = window.setTimeout(() => {
+			controller.abort()
+		}, fetchSnapshotTimeoutMs)
+		let response: Response
+		try {
+			response = await fetch(`/api/schedules/${requestShareToken}`, {
+				signal: controller.signal,
+			})
+		} catch (error) {
+			if (requestShareToken !== (currentShareToken?.trim() ?? '')) {
+				return null
+			}
+			if (error instanceof DOMException && error.name === 'AbortError') {
+				throw new Error('Loading schedule timed out. Please try again.')
+			}
+			throw error
+		} finally {
+			window.clearTimeout(timeoutId)
+		}
+		const payload = (await response.json().catch(() => null)) as {
+			ok?: boolean
+			snapshot?: ScheduleSnapshot
+			error?: string
+		} | null
+		if (requestShareToken !== (currentShareToken?.trim() ?? '')) {
+			return payload
+		}
+		if (!response.ok || !payload?.ok || !payload.snapshot) {
 			throw new Error(
 				typeof payload?.error === 'string'
 					? payload.error
 					: `Request failed (${response.status})`,
 			)
 		}
-		const shareToken =
-			typeof payload?.shareToken === 'string' ? payload.shareToken : ''
-		if (shareToken) {
-			submitTokenInput.value = shareToken
-			snapshotTokenInput.value = shareToken
-		}
+		setSnapshot(payload.snapshot)
 		return payload
 	}
 
 	async function submitAvailability() {
-		const token = submitTokenInput.value.trim()
+		const token = currentShareToken?.trim() ?? ''
 		if (!token) {
-			throw new Error('Share token is required.')
+			throw new Error(
+				'Share token was not provided. Re-open with open_schedule_ui and pass shareToken.',
+			)
 		}
-		const selectedSlots = parseSlots(submitSlotsInput.value)
+		const attendeeName = attendeeNameInput.value.trim()
+		if (!attendeeName) {
+			throw new Error('Attendee name is required.')
+		}
+
 		const response = await fetch(`/api/schedules/${token}/availability`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				name: attendeeNameInput.value,
+				name: attendeeName,
 				attendeeTimeZone: getBrowserTimeZone(),
-				selectedSlots,
+				selectedSlots: Array.from(selectedSlots).sort((left, right) =>
+					left.localeCompare(right),
+				),
 			}),
 		})
-		const payload = await response.json().catch(() => null)
-		if (!response.ok) {
+		const payload = (await response.json().catch(() => null)) as {
+			ok?: boolean
+			snapshot?: ScheduleSnapshot
+			error?: string
+		} | null
+		if (!response.ok || !payload?.ok) {
 			throw new Error(
 				typeof payload?.error === 'string'
 					? payload.error
 					: `Request failed (${response.status})`,
 			)
 		}
-		snapshotTokenInput.value = token
-		return payload
-	}
-
-	async function fetchSnapshot() {
-		const token = snapshotTokenInput.value.trim()
-		if (!token) {
-			throw new Error('Share token is required.')
-		}
-		const response = await fetch(`/api/schedules/${token}`)
-		const payload = await response.json().catch(() => null)
-		if (!response.ok) {
-			throw new Error(
-				typeof payload?.error === 'string'
-					? payload.error
-					: `Request failed (${response.status})`,
-			)
+		if (payload.snapshot) {
+			setSnapshot(payload.snapshot)
+		} else {
+			await fetchSnapshot()
 		}
 		return payload
 	}
 
-	rootElement
-		.querySelector('[data-action="fill-demo-slots"]')
-		?.addEventListener('click', () => {
-			const intervalMinutes = Number.parseInt(intervalSelect.value, 10)
-			const slots = buildSlotsForWeekdays({
-				startDate: startDateInput.value,
-				endDate: endDateInput.value,
-				intervalMinutes,
+	async function withOutput(
+		label: string,
+		fn: () => Promise<unknown>,
+		options: { hostMessage?: string; successMessage?: string } = {},
+	) {
+		setStatus(`${label}...`)
+		try {
+			const result = await fn()
+			setStatus(options.successMessage ?? `${label} complete.`)
+			if (options.hostMessage) {
+				void hostBridge.sendUserMessageWithFallback(options.hostMessage)
+			}
+			return result
+		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : 'Unexpected widget failure.'
+			setStatus(message, true)
+			return null
+		}
+	}
+
+	function maybeApplyToolInput(params: {
+		shareToken: string | null
+		attendeeName: string | null
+	}) {
+		if (params.attendeeName && !attendeeNameInput.value.trim()) {
+			attendeeNameInput.value = params.attendeeName
+		}
+		if (!params.shareToken) return
+
+		const changedShareToken = applyShareToken(params.shareToken)
+		if (changedShareToken || !snapshot) {
+			void withOutput('Loading schedule', fetchSnapshot, {
+				successMessage: 'Schedule loaded.',
 			})
-			createSlotsInput.value = slots.join('\n')
+		}
+	}
+
+	function handleToolInputMessage(message: unknown) {
+		if (!isRecord(message)) return
+		if (
+			message.method !== 'ui/notifications/tool-input' &&
+			message.method !== 'ui/notifications/tool-input-partial'
+		) {
+			return
+		}
+		const params = isRecord(message.params) ? message.params : undefined
+		const toolArguments = params?.arguments
+		maybeApplyToolInput({
+			shareToken:
+				findNestedStringByKey({ source: toolArguments, key: 'shareToken' }) ??
+				findNestedStringByKey({ source: params, key: 'shareToken' }),
+			attendeeName:
+				findNestedStringByKey({ source: toolArguments, key: 'attendeeName' }) ??
+				findNestedStringByKey({ source: toolArguments, key: 'name' }) ??
+				findNestedStringByKey({ source: params, key: 'attendeeName' }) ??
+				findNestedStringByKey({ source: params, key: 'name' }),
 		})
+	}
+
+	attendeeNameInput.addEventListener('input', () => {
+		if (!snapshot) return
+		resetSelectionForAttendee(true)
+		renderGrid()
+		renderSlotDetails()
+		setStatus('Loaded saved availability for this attendee.')
+	})
+
+	gridHostElement.addEventListener('click', (event) => {
+		const target = event.target
+		if (!(target instanceof Element)) return
+		const slotButton = target.closest<HTMLButtonElement>('button[data-slot]')
+		if (!slotButton || !snapshot) return
+
+		const slot = slotButton.dataset.slot
+		if (!slot) return
+		activeSlot = slot
+		if (!attendeeNameInput.value.trim()) {
+			setStatus('Enter your name before editing availability.', true)
+			updateActiveSlotStyles()
+			renderSlotDetails()
+			return
+		}
+
+		if (selectedSlots.has(slot)) {
+			selectedSlots.delete(slot)
+		} else {
+			selectedSlots.add(slot)
+		}
+		setStatus('Local changes pending. Save availability to sync.')
+		renderGrid()
+		renderSlotDetails()
+	})
+
+	gridHostElement.addEventListener('focusin', (event) => {
+		const target = event.target
+		if (!(target instanceof Element)) return
+		const slotButton = target.closest<HTMLButtonElement>('button[data-slot]')
+		if (!slotButton) return
+		const slot = slotButton.dataset.slot
+		if (!slot) return
+		activeSlot = slot
+		updateActiveSlotStyles()
+		renderSlotDetails()
+	})
 
 	rootElement
 		.querySelector('[data-action="request-fullscreen"]')
@@ -338,25 +704,12 @@ function setupScheduleWidget() {
 		})
 
 	rootElement
-		.querySelector('[data-action="create"]')
-		?.addEventListener('click', () => {
-			void withOutput('Creating schedule', createSchedule, {
-				hostMessage: 'Created an Epic Scheduler schedule via MCP app UI.',
-			})
-		})
-
-	rootElement
 		.querySelector('[data-action="submit"]')
 		?.addEventListener('click', () => {
-			void withOutput('Submitting availability', submitAvailability, {
-				hostMessage: 'Submitted attendee availability via MCP app UI.',
+			void withOutput('Saving availability', submitAvailability, {
+				successMessage: 'Availability saved.',
+				hostMessage: 'Saved attendee availability from MCP app schedule grid.',
 			})
-		})
-
-	rootElement
-		.querySelector('[data-action="fetch"]')
-		?.addEventListener('click', () => {
-			void withOutput('Loading snapshot', fetchSnapshot)
 		})
 
 	const trustedHostOrigin = (() => {
@@ -371,12 +724,22 @@ function setupScheduleWidget() {
 	window.addEventListener('message', (event) => {
 		if (event.source !== window.parent) return
 		if (trustedHostOrigin && event.origin !== trustedHostOrigin) return
+		handleToolInputMessage(event.data)
 		hostBridge.handleHostMessage(event.data)
 	})
 
 	void hostBridge.initialize()
 	hostBridge.requestRenderData()
-	writeOutput('Ready.')
+	updateSelectionSummary()
+	setStatus('Waiting for share token input.')
+	const widgetUrl = new URL(window.location.href)
+	maybeApplyToolInput({
+		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
+		attendeeName: readNonEmptyString(
+			widgetUrl.searchParams.get('attendeeName') ??
+				widgetUrl.searchParams.get('name'),
+		),
+	})
 }
 
 if (document.readyState === 'loading') {

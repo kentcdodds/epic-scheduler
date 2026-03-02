@@ -1,13 +1,21 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import { findSelectionForAttendee } from '#client/schedule-utils.ts'
+import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
+import {
+	createSlotAvailability,
+	getMaxAvailabilityCount,
+} from '#client/schedule-snapshot-utils.ts'
+import {
+	findSelectionForAttendee,
+	formatSlotForAttendeeTimeZone,
+} from '#client/schedule-utils.ts'
 import {
 	detectTapRangeMode,
 	getTapRangeStartMessage,
 	isTapRangeStartMessage,
 	resolveTapRangeModeFromPointer,
 } from '#client/tap-range-mode.ts'
-import { normalizeName } from '#shared/schedule-store.ts'
+import { type ScheduleSnapshot, normalizeName } from '#shared/schedule-store.ts'
 import {
 	colors,
 	mq,
@@ -16,27 +24,6 @@ import {
 	spacing,
 	typography,
 } from '#client/styles/tokens.ts'
-
-type Snapshot = {
-	schedule: {
-		shareToken: string
-		title: string
-		intervalMinutes: 15 | 30 | 60
-		rangeStartUtc: string
-		rangeEndUtc: string
-		createdAt: string
-	}
-	slots: Array<string>
-	attendees: Array<{
-		id: string
-		name: string
-		isHost: boolean
-		timeZone: string | null
-	}>
-	availabilityByAttendee: Record<string, Array<string>>
-	countsBySlot: Record<string, number>
-	availableNamesBySlot: Record<string, Array<string>>
-}
 
 type ConnectionState = 'connecting' | 'live' | 'offline'
 
@@ -54,93 +41,16 @@ function getBrowserTimeZone() {
 	return normalized || 'UTC'
 }
 
-const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
-
-function formatSlotForAttendeeTimeZone(slot: string, timeZone: string | null) {
-	if (!timeZone) {
-		return {
-			localTime: 'Local time unknown',
-			timeZoneLabel: 'timezone unknown',
-		}
-	}
-	const slotDate = new Date(slot)
-	if (Number.isNaN(slotDate.getTime())) {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
-	try {
-		let formatter = attendeeLocalTimeFormatters.get(timeZone)
-		if (!formatter) {
-			formatter = new Intl.DateTimeFormat(undefined, {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-				hour: 'numeric',
-				minute: '2-digit',
-				timeZone,
-			})
-			attendeeLocalTimeFormatters.set(timeZone, formatter)
-		}
-		return {
-			localTime: formatter.format(slotDate),
-			timeZoneLabel: timeZone,
-		}
-	} catch {
-		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
-	}
-}
-
-function createSlotAvailability(snapshot: Snapshot | null) {
-	if (!snapshot) {
-		return {} as Record<
-			string,
-			{ count: number; availableNames: Array<string> }
-		>
-	}
-	return Object.fromEntries(
-		snapshot.slots.map((slot) => [
-			slot,
-			{
-				count: snapshot.countsBySlot[slot] ?? 0,
-				availableNames: snapshot.availableNamesBySlot[slot] ?? [],
-			},
-		]),
-	)
-}
-
 function toWebSocketUrl(path: string) {
 	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 	return `${protocol}//${window.location.host}${path}`
-}
-
-function getSelectionDiff(params: {
-	currentSelection: ReadonlySet<string>
-	persistedSelection: ReadonlySet<string>
-}) {
-	const pendingAdded = new Set<string>()
-	const pendingRemoved = new Set<string>()
-
-	for (const slot of params.currentSelection) {
-		if (!params.persistedSelection.has(slot)) {
-			pendingAdded.add(slot)
-		}
-	}
-	for (const slot of params.persistedSelection) {
-		if (!params.currentSelection.has(slot)) {
-			pendingRemoved.add(slot)
-		}
-	}
-
-	return {
-		pendingAdded,
-		pendingRemoved,
-	}
 }
 
 export function ScheduleRoute(handle: Handle) {
 	const browserTimeZone = getBrowserTimeZone()
 	let shareToken = ''
 	let attendeeName = ''
-	let snapshot: Snapshot | null = null
+	let snapshot: ScheduleSnapshot | null = null
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
@@ -241,7 +151,7 @@ export function ScheduleRoute(handle: Handle) {
 			})
 			const payload = (await response.json().catch(() => null)) as {
 				ok?: boolean
-				snapshot?: Snapshot
+				snapshot?: ScheduleSnapshot
 				error?: string
 			} | null
 			if (requestShareToken !== shareToken) return
@@ -313,7 +223,7 @@ export function ScheduleRoute(handle: Handle) {
 			)
 			const payload = (await response.json().catch(() => null)) as {
 				ok?: boolean
-				snapshot?: Snapshot
+				snapshot?: ScheduleSnapshot
 				error?: string
 			} | null
 
@@ -527,10 +437,7 @@ export function ScheduleRoute(handle: Handle) {
 	return () => {
 		const currentSnapshot = snapshot
 		const slotAvailability = createSlotAvailability(currentSnapshot)
-		const maxAvailabilityCount = Math.max(
-			1,
-			...Object.values(slotAvailability).map((value) => value.count),
-		)
+		const maxAvailabilityCount = getMaxAvailabilityCount(slotAvailability)
 		const selectedCount = selectedSlots.size
 		const pendingDiff = getSelectionDiff({
 			currentSelection: selectedSlots,

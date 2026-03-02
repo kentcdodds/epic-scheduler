@@ -19,7 +19,7 @@ Quick start
 - Use 'create_schedule' to create a new scheduling link.
 - Use 'submit_schedule_availability' to save attendee selections.
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
-- Use 'open_schedule_ui' to open the MCP app widget for schedule data entry and display.
+- Use 'open_schedule_ui' (optionally with shareToken/attendeeName) to open the MCP app widget for loading an existing schedule, selecting availability, and viewing overlap.
 
 How to chain tools safely
 - First create a schedule, then submit attendee availability, then read the snapshot.

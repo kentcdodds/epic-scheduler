@@ -43,6 +43,11 @@ Create a dedicated module under `mcp/apps/`:
 
 Keep file names lower-kebab-case and prefer one entry point per app.
 
+When your domain has a clear "create" step (for example creating a share link),
+prefer keeping creation in a dedicated MCP tool and keep the app UI focused on
+post-create workflows (for example loading a token, editing state, and viewing
+results).
+
 ### 2) Register the app resource
 
 In `mcp/resources/<your-resource>.ts`:
@@ -127,6 +132,9 @@ Prefer app token names so widgets stay visually consistent with the host app:
 - `--radius-*`
 - `--shadow-*`
 - shared typography tokens (`--font-*`)
+- When a widget mirrors an existing first-party page, share schedule/domain
+  helpers (for example selection diff, slot availability, and heatmap color
+  helpers) instead of re-implementing logic in both places.
 
 When app and widget are served from the same origin, prefer referencing the
 canonical stylesheet directly (for example `/styles.css`) instead of copying
