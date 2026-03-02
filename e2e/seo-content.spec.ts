@@ -62,7 +62,7 @@ test('blog index and post pages render marketing content', async ({ page }) => {
 	await expect(page.getByText('The one-link prompt pattern')).toBeVisible()
 	await expect(
 		page.getByRole('img', {
-			name: 'Epic Scheduler MCP app widget showing create submit and snapshot actions',
+			name: 'Epic Scheduler attendee MCP app widget with share token and attendee name prefilled',
 		}),
 	).toBeVisible()
 })

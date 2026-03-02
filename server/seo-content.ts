@@ -89,52 +89,58 @@ const blogPosts: Array<BlogPost> = [
 				<li><code>submit_schedule_availability</code></li>
 				<li><code>get_schedule_snapshot</code></li>
 				<li><code>open_schedule_ui</code> (MCP app widget)</li>
+				<li><code>open_schedule_host_ui</code> (host MCP app widget)</li>
 			</ul>
 			<p>
 				In other words: create a link, submit attendee slots, inspect overlap,
 				repeat.
 			</p>
-			<h2>Add Epic Scheduler in ChatGPT</h2>
+			<h2>Validate tools in MCP Jam Inspector</h2>
 			<p>
-				OpenAI's "Connect from ChatGPT" flow currently follows this pattern:
+				Before connecting in ChatGPT or Claude, run a quick MCP Jam Inspector
+				pass so you can confirm your server wiring and tool contracts.
 			</p>
 			<ol>
-				<li>Enable Developer mode in Apps &amp; Connectors settings.</li>
-				<li>Create a connector/app entry.</li>
-				<li>Set connector URL to <code>https://your-domain/mcp</code>.</li>
-				<li>Enable the connector in a conversation.</li>
+				<li>
+					Start inspector and connect to <code>https://your-domain/mcp</code>.
+				</li>
+				<li>Confirm all scheduler tools are listed.</li>
+				<li>Run <code>create_schedule</code> once and copy the share token.</li>
+				<li>Use the same token in attendee and host app checks.</li>
 			</ol>
 			<div class="seo-inline-demo">
 				<img
 					src="/blog/chatgpt-claude-mcp/openai-connect-from-chatgpt-docs.png"
-					alt="OpenAI documentation page for connecting an MCP server from ChatGPT"
+					alt="MCP Jam Inspector showing Epic Scheduler tools from a connected MCP server"
 					loading="lazy"
 					style="width: 100%; height: auto; border-radius: 0.5rem"
 				/>
 				<p class="seo-meta">
-					Reference: OpenAI "Connect from ChatGPT" connector setup docs.
+					MCP Jam Inspector with Epic Scheduler tools connected and ready.
 				</p>
 			</div>
-			<h2>Add Epic Scheduler in Claude</h2>
+			<h2>Validate host app routing and input propagation</h2>
 			<p>
-				Claude supports third-party remote MCP servers as custom connectors. The
-				basic flow is:
+				Use <code>open_schedule_host_ui</code> with a share token and verify the
+				host app receives that token and loads the embedded dashboard route.
 			</p>
 			<ol>
-				<li>Go to Connectors settings (or Admin Connectors for org owners).</li>
-				<li>Add a custom connector with your <code>/mcp</code> URL.</li>
-				<li>Authenticate if needed.</li>
-				<li>Enable that connector per chat.</li>
+				<li>
+					Call <code>open_schedule_host_ui</code> with <code>shareToken</code>.
+				</li>
+				<li>Confirm the host widget shows the same token.</li>
+				<li>Confirm the iframe loads <code>/s/{shareToken}/host</code>.</li>
+				<li>Toggle a blocked slot to validate host-side controls.</li>
 			</ol>
 			<div class="seo-inline-demo">
 				<img
 					src="/blog/chatgpt-claude-mcp/claude-remote-mcp-docs.png"
-					alt="Claude documentation page for adding remote MCP connectors"
+					alt="Epic Scheduler host MCP app with share token propagation and loaded host dashboard"
 					loading="lazy"
 					style="width: 100%; height: auto; border-radius: 0.5rem"
 				/>
 				<p class="seo-meta">
-					Reference: Claude remote MCP custom connector setup docs.
+					Host MCP app loaded from <code>open_schedule_host_ui</code>.
 				</p>
 			</div>
 			<h2>The one-link prompt pattern</h2>
@@ -167,12 +173,13 @@ const blogPosts: Array<BlogPost> = [
 			<div class="seo-inline-demo">
 				<img
 					src="/blog/chatgpt-claude-mcp/epic-scheduler-mcp-widget-page.png"
-					alt="Epic Scheduler MCP app widget showing create submit and snapshot actions"
+					alt="Epic Scheduler attendee MCP app widget with share token and attendee name prefilled"
 					loading="lazy"
 					style="width: 100%; height: auto; border-radius: 0.5rem"
 				/>
 				<p class="seo-meta">
-					MCP app widget flow for interactive scheduling actions.
+					Attendee MCP app opened from <code>open_schedule_ui</code> with tool
+					inputs already applied.
 				</p>
 			</div>
 			<h2>Why teams love this workflow</h2>
