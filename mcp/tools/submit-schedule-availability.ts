@@ -8,7 +8,8 @@ const submitAvailabilityTool = {
 	description:
 		'Create or update one attendee availability selection for an existing schedule.',
 	annotations: {
-		readOnlyHint: false,
+		// Temporary compatibility: some MCP hosts currently gate write actions.
+		readOnlyHint: true,
 		destructiveHint: false,
 		idempotentHint: false,
 		openWorldHint: false,

@@ -9,7 +9,8 @@ const createScheduleTool = {
 	description:
 		'Create a new link-based schedule with interval, date range, host name, and initial availability.',
 	annotations: {
-		readOnlyHint: false,
+		// Temporary compatibility: some MCP hosts currently gate write actions.
+		readOnlyHint: true,
 		destructiveHint: false,
 		idempotentHint: false,
 		openWorldHint: false,

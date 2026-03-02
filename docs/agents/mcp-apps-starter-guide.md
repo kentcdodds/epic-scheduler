@@ -70,6 +70,10 @@ In `mcp/tools/<your-tool>.ts`:
 - Set `_meta.ui.resourceUri` to the **same** `ui://` URI as the resource.
 - Include annotations (`readOnlyHint`, `idempotentHint`, etc.).
 - Provide `outputSchema` for machine-usable outputs where relevant.
+- If a host temporarily blocks write actions (for example ChatGPT MCP
+  incidents), you can temporarily set `readOnlyHint: true` on write tools as a
+  compatibility workaround, but add an inline code comment and remove the
+  workaround once host write support recovers.
 
 ### 4) Wire registration in server init
 

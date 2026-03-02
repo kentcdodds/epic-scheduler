@@ -275,6 +275,13 @@ test(
 			'open_schedule_ui',
 			'submit_schedule_availability',
 		])
+		const readOnlyHintsByToolName = Object.fromEntries(
+			result.tools.map((tool) => [tool.name, tool.annotations?.readOnlyHint]),
+		)
+		expect(readOnlyHintsByToolName.create_schedule).toBe(true)
+		expect(readOnlyHintsByToolName.submit_schedule_availability).toBe(true)
+		expect(readOnlyHintsByToolName.get_schedule_snapshot).toBe(true)
+		expect(readOnlyHintsByToolName.open_schedule_ui).toBe(true)
 	},
 	{ timeout: defaultTimeoutMs },
 )
