@@ -608,9 +608,10 @@ export async function getScheduleSnapshot(
 		rangeEndUtc: schedule.rangeEndUtc,
 		intervalMinutes: schedule.intervalMinutes,
 	})
+	const slotSet = new Set(slots)
 	const blockedSlotsSet = new Set(
 		(await getBlockedSlotsForScheduleId(db, schedule.id)).filter((slot) =>
-			slots.includes(slot),
+			slotSet.has(slot),
 		),
 	)
 	const blockedSlots = Array.from(blockedSlotsSet).sort((left, right) =>

@@ -1,6 +1,7 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
+	getScheduleHostAccessToken,
 	getScheduleSnapshot,
 	updateScheduleHostSettings,
 } from '#shared/schedule-store.ts'
@@ -34,6 +35,9 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 			description: updateScheduleHostSettingsTool.description,
 			inputSchema: {
 				shareToken: z.string(),
+				hostAccessToken: z
+					.string()
+					.describe('Host access token required for host settings updates.'),
 				title: z
 					.string()
 					.optional()
@@ -58,10 +62,12 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 		},
 		async ({
 			shareToken,
+			hostAccessToken,
 			title,
 			blockedSlots,
 		}: {
 			shareToken: string
+			hostAccessToken: string
 			title?: string
 			blockedSlots?: Array<string>
 		}) => {
@@ -78,6 +84,31 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 					'Provide at least one host setting to update: title or blockedSlots.'
 				return {
 					content: [{ type: 'text', text: message }],
+					isError: true,
+				}
+			}
+
+			const normalizedHostToken = hostAccessToken.trim()
+			if (!normalizedHostToken) {
+				return {
+					content: [{ type: 'text', text: 'Missing host access token.' }],
+					isError: true,
+				}
+			}
+
+			const expectedHostToken = await getScheduleHostAccessToken(
+				agent.getAppDb(),
+				shareToken,
+			)
+			if (!expectedHostToken) {
+				return {
+					content: [{ type: 'text', text: 'Schedule not found.' }],
+					isError: true,
+				}
+			}
+			if (expectedHostToken !== normalizedHostToken) {
+				return {
+					content: [{ type: 'text', text: 'Invalid host access token.' }],
 					isError: true,
 				}
 			}

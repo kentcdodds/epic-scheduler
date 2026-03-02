@@ -333,7 +333,12 @@ test(
 			typeof createStructured?.shareToken === 'string'
 				? createStructured.shareToken
 				: ''
+		const hostAccessToken =
+			typeof createStructured?.hostAccessToken === 'string'
+				? createStructured.hostAccessToken
+				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
+		expect(hostAccessToken.length).toBeGreaterThan(4)
 
 		const submitResult = await mcpClient.client.callTool({
 			name: 'submit_schedule_availability',
@@ -351,6 +356,7 @@ test(
 			name: 'update_schedule_host_settings',
 			arguments: {
 				shareToken,
+				hostAccessToken,
 				title: 'Host-managed test schedule',
 				blockedSlots: [start.toISOString()],
 			},
