@@ -361,7 +361,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isSaving = false
 				handle.update()
-				const shouldReschedule = pendingSave || hasLocalHostChanges()
+				const shouldReschedule = pendingSave && hasLocalHostChanges()
 				pendingSave = false
 				if (shouldReschedule) {
 					queueHostSettingsSave()
