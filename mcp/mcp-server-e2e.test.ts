@@ -6,14 +6,13 @@ import {
 	type ContentBlock,
 } from '@modelcontextprotocol/sdk/types.js'
 import getPort from 'get-port'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { scheduleHostUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
-const migrationsDir = join(projectRoot, 'migrations')
 const bunBin = process.execPath
 const defaultTimeoutMs = 60_000
 const scheduleUiResourceUri = 'ui://schedule-app/entry-point.html'
@@ -22,12 +21,19 @@ function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function runWrangler(args: Array<string>) {
+async function runBunCommand(
+	args: Array<string>,
+	env?: Record<string, string>,
+) {
 	const proc = Bun.spawn({
-		cmd: [bunBin, 'x', 'wrangler', ...args],
+		cmd: [bunBin, ...args],
 		cwd: projectRoot,
 		stdout: 'pipe',
 		stderr: 'pipe',
+		env: {
+			...process.env,
+			...env,
+		},
 	})
 	const stdoutPromise = proc.stdout
 		? new Response(proc.stdout).text()
@@ -39,7 +45,7 @@ async function runWrangler(args: Array<string>) {
 	const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise])
 	if (exitCode !== 0) {
 		throw new Error(
-			`wrangler ${args.join(' ')} failed (${exitCode}). ${stderr || stdout}`,
+			`bun ${args.join(' ')} failed (${exitCode}). ${stderr || stdout}`,
 		)
 	}
 	return { stdout, stderr }
@@ -47,8 +53,9 @@ async function runWrangler(args: Array<string>) {
 
 async function createTestDatabase() {
 	const persistDir = await mkdtemp(join(tmpdir(), 'epic-scheduler-mcp-e2e-'))
-
-	await applyMigrations(persistDir)
+	await runBunCommand(['run', 'migrate:local', '--persist-to', persistDir], {
+		CLOUDFLARE_ENV: 'test',
+	})
 
 	return {
 		persistDir,
@@ -56,36 +63,6 @@ async function createTestDatabase() {
 			await rm(persistDir, { recursive: true, force: true })
 		},
 	}
-}
-
-async function applyMigrations(persistDir: string) {
-	const migrationFiles = await listMigrationFiles()
-	if (migrationFiles.length === 0) {
-		throw new Error('No migration files found in migrations directory.')
-	}
-
-	for (const migrationFile of migrationFiles) {
-		await runWrangler([
-			'd1',
-			'execute',
-			'APP_DB',
-			'--local',
-			'--env',
-			'test',
-			'--persist-to',
-			persistDir,
-			'--file',
-			join('migrations', migrationFile),
-		])
-	}
-}
-
-async function listMigrationFiles() {
-	const entries = await readdir(migrationsDir, { withFileTypes: true })
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right))
 }
 
 function captureOutput(stream: ReadableStream<Uint8Array> | null) {
@@ -544,6 +521,7 @@ test(
 			name: 'open_schedule_host_ui',
 			arguments: {
 				shareToken: 'demo-host-token',
+				hostAccessToken: 'demo-host-key',
 			},
 		})
 		const structuredResult = (result as CallToolResult).structuredContent as
@@ -552,6 +530,7 @@ test(
 		expect(structuredResult?.widget).toBe('schedule_host')
 		expect(structuredResult?.resourceUri).toBe(scheduleHostUiResourceUri)
 		expect(structuredResult?.shareToken).toBe('demo-host-token')
+		expect(structuredResult?.hostAccessToken).toBe('demo-host-key')
 
 		const resourceResult = await mcpClient.client.readResource({
 			uri: scheduleHostUiResourceUri,
@@ -565,7 +544,9 @@ test(
 		expect(hostResource).toBeDefined()
 		expect(hostResource?.text).toContain('Host dashboard')
 		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
-		expect(hostResource?.text).toContain('Waiting for share token input')
+		expect(hostResource?.text).toContain(
+			'Waiting for share token and host key input',
+		)
 	},
 	{ timeout: defaultTimeoutMs },
 )

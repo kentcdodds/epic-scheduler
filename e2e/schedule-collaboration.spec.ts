@@ -11,7 +11,7 @@ test('attendee update appears in host schedule view', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
 	const hostDashboardUrl = new URL(page.url())
 	const shareToken =
 		hostDashboardUrl.pathname.split('/').filter(Boolean)[1] ?? ''

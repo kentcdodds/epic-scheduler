@@ -1,8 +1,4 @@
-ALTER TABLE schedules ADD COLUMN host_access_token TEXT;
+ALTER TABLE schedules ADD COLUMN host_access_token_hash TEXT;
 
-UPDATE schedules
-SET host_access_token = lower(hex(randomblob(16)))
-WHERE host_access_token IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_schedules_host_access_token
-	ON schedules(host_access_token);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_schedules_host_access_token_hash
+	ON schedules(host_access_token_hash);

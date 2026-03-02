@@ -72,9 +72,9 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Use real input values and a happy-path payload.
 - Use fake participant names (for example `Alex`, `Jordan`) and generated share
   tokens from test-created schedules.
-- Creating a schedule from `/` now redirects to `/s/{shareToken}/host`; tests
-  that validate attendee availability should navigate to `/s/{shareToken}` after
-  extracting the token.
+- Creating a schedule from `/` now redirects to
+  `/s/{shareToken}/{hostAccessToken}`; tests that validate attendee availability
+  should navigate to `/s/{shareToken}` after extracting the share token.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions

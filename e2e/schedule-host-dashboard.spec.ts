@@ -6,7 +6,7 @@ test('host dashboard can block slots from attendee selection', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
 	const scheduleUrl = new URL(page.url())
 	const shareToken = scheduleUrl.pathname.split('/').filter(Boolean)[1] ?? ''
 	expect(shareToken).not.toBe('')

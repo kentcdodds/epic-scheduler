@@ -90,8 +90,6 @@ type BlockedSlotRow = {
 }
 
 type ScheduleHostAccessTokenRow = {
-	id: string
-	host_access_token: string | null
 	host_access_token_hash: string | null
 }
 
@@ -326,8 +324,6 @@ export async function verifyScheduleHostAccessToken(
 	const row = await db
 		.prepare(
 			`SELECT
-				id,
-				host_access_token,
 				host_access_token_hash
 			FROM schedules
 			WHERE share_token = ?1
@@ -338,26 +334,8 @@ export async function verifyScheduleHostAccessToken(
 	if (!row) return 'not-found'
 
 	const providedTokenHash = await hashHostAccessToken(normalizedHostAccessToken)
-	if (row.host_access_token_hash) {
-		return row.host_access_token_hash === providedTokenHash
-			? 'valid'
-			: 'invalid'
-	}
-
-	if (!row.host_access_token) return 'invalid'
-	if (row.host_access_token !== normalizedHostAccessToken) return 'invalid'
-
-	await db
-		.prepare(
-			`UPDATE schedules
-			SET host_access_token_hash = ?2,
-				host_access_token = NULL
-			WHERE id = ?1`,
-		)
-		.bind(row.id, providedTokenHash)
-		.run()
-
-	return 'valid'
+	if (!row.host_access_token_hash) return 'invalid'
+	return row.host_access_token_hash === providedTokenHash ? 'valid' : 'invalid'
 }
 
 export async function createSchedule(

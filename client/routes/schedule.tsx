@@ -600,13 +600,8 @@ export function ScheduleRoute(handle: Handle) {
 						Share token: <code>{shareToken}</code>
 					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
-					<p css={{ margin: 0 }}>
-						<a
-							href={`/s/${shareToken}/host`}
-							css={{ color: colors.primaryText }}
-						>
-							Open host dashboard
-						</a>
+					<p css={{ margin: 0, color: colors.textMuted }}>
+						Need host controls? Ask the organizer for their host dashboard link.
 					</p>
 				</header>
 

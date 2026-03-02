@@ -1,7 +1,6 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
-import { readHostAccessToken } from '#client/schedule-host-access.ts'
 import {
 	colors,
 	mq,
@@ -13,12 +12,20 @@ import {
 
 type PreviewMode = 'all' | 'count'
 
-function parseHostShareToken(pathname: string) {
+function parseHostRouteParams(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
-	if (segments.length < 3) return ''
-	if (segments[0] !== 's') return ''
-	if (segments[2] !== 'host') return ''
-	return segments[1] ?? ''
+	if (segments.length !== 3) return null
+	if (segments[0] !== 's') return null
+	let shareToken = ''
+	let hostAccessToken = ''
+	try {
+		shareToken = decodeURIComponent(segments[1] ?? '').trim()
+		hostAccessToken = decodeURIComponent(segments[2] ?? '').trim()
+	} catch {
+		return null
+	}
+	if (!shareToken || !hostAccessToken) return null
+	return { shareToken, hostAccessToken }
 }
 
 function getPathname() {
@@ -46,6 +53,16 @@ function formatSlotLabel(slot: string) {
 		hour: 'numeric',
 		minute: '2-digit',
 	}).format(new Date(slot))
+}
+
+function toDayKey(slot: string | null) {
+	if (!slot) return null
+	const date = new Date(slot)
+	if (Number.isNaN(date.getTime())) return null
+	const year = date.getFullYear()
+	const month = String(date.getMonth() + 1).padStart(2, '0')
+	const day = String(date.getDate()).padStart(2, '0')
+	return `${year}-${month}-${day}`
 }
 
 function buildEmptyAvailability(slots: Array<string>) {
@@ -97,6 +114,7 @@ function copyTextWithFallback(text: string) {
 
 export function ScheduleHostRoute(handle: Handle) {
 	let shareToken = ''
+	let hostAccessToken = ''
 	let snapshot: ScheduleSnapshot | null = null
 	let titleDraft = ''
 	let blockedSlots = new Set<string>()
@@ -104,6 +122,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let excludedAttendeeIds = new Set<string>()
 	let previewMode: PreviewMode = 'all'
 	let activePreviewSlot: string | null = null
+	let mobileDayKey: string | null = null
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -206,17 +225,32 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function applySnapshot(nextSnapshot: ScheduleSnapshot) {
-		const keepLocalChanges = hasLocalHostChanges()
+		const keepLocalTitle =
+			!!snapshot && titleDraft.trim() !== snapshot.schedule.title.trim()
+		const keepLocalBlocked =
+			!!snapshot && !areSetsEqual(blockedSlots, persistedBlockedSlots)
 		const nextBlockedSlots = toSet(nextSnapshot.blockedSlots)
 		snapshot = nextSnapshot
-		if (!keepLocalChanges) {
+		persistedBlockedSlots = new Set(nextBlockedSlots)
+		if (!keepLocalTitle) {
 			titleDraft = nextSnapshot.schedule.title
+		}
+		if (!keepLocalBlocked) {
 			blockedSlots = new Set(nextBlockedSlots)
-			persistedBlockedSlots = new Set(nextBlockedSlots)
 		}
 		const validAttendeeIds = new Set(
 			nextSnapshot.attendees.map((entry) => entry.id),
 		)
+		const nextDayKeys = Array.from(
+			new Set(
+				nextSnapshot.slots
+					.map((slot) => toDayKey(slot))
+					.filter((value): value is string => value !== null),
+			),
+		)
+		if (!mobileDayKey || !nextDayKeys.includes(mobileDayKey)) {
+			mobileDayKey = nextDayKeys[0] ?? null
+		}
 		excludedAttendeeIds = new Set(
 			Array.from(excludedAttendeeIds).filter((id) => validAttendeeIds.has(id)),
 		)
@@ -267,8 +301,8 @@ export function ScheduleHostRoute(handle: Handle) {
 			pendingSave = true
 			return
 		}
-		const hostAccessToken = readHostAccessToken(requestShareToken)?.trim()
-		if (!hostAccessToken) {
+		const requestHostAccessToken = hostAccessToken
+		if (!requestHostAccessToken) {
 			setStatus('Host access token missing.', true)
 			return
 		}
@@ -284,7 +318,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-Host-Token': hostAccessToken,
+					'X-Host-Token': requestHostAccessToken,
 				},
 				body: JSON.stringify({
 					title,
@@ -374,7 +408,9 @@ export function ScheduleHostRoute(handle: Handle) {
 		lastPathname = nextPathname
 		clearSaveDebounceTimer()
 		clearRefreshTimer()
-		shareToken = parseHostShareToken(nextPathname)
+		const routeParams = parseHostRouteParams(nextPathname)
+		shareToken = routeParams?.shareToken ?? ''
+		hostAccessToken = routeParams?.hostAccessToken ?? ''
 		snapshot = null
 		titleDraft = ''
 		blockedSlots = new Set<string>()
@@ -382,12 +418,13 @@ export function ScheduleHostRoute(handle: Handle) {
 		excludedAttendeeIds = new Set<string>()
 		previewMode = 'all'
 		activePreviewSlot = null
+		mobileDayKey = null
 		isLoading = true
 		isSaving = false
 		pendingSave = false
 		setStatus(null, false)
 		await loadSnapshot()
-		if (shareToken) {
+		if (shareToken && hostAccessToken) {
 			refreshTimer = setInterval(() => {
 				if (hasLocalHostChanges()) return
 				void loadSnapshot()
@@ -396,7 +433,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	})
 
 	return () => {
-		if (!shareToken) {
+		if (!shareToken || !hostAccessToken) {
 			return (
 				<section css={{ display: 'grid', gap: spacing.md }}>
 					<h2 css={{ margin: 0, color: colors.text }}>
@@ -493,14 +530,10 @@ export function ScheduleHostRoute(handle: Handle) {
 			: null
 		const appOrigin =
 			typeof window === 'undefined' ? '' : window.location.origin
-		const attendeePath = `/s/${shareToken}`
-		const hostPath = `${attendeePath}/host`
+		const attendeePath = `/s/${encodeURIComponent(shareToken)}`
+		const hostPath = `${attendeePath}/${encodeURIComponent(hostAccessToken)}`
 		const attendeeUrl = appOrigin ? `${appOrigin}${attendeePath}` : attendeePath
 		const hostUrl = appOrigin ? `${appOrigin}${hostPath}` : hostPath
-		const hostAccessToken = readHostAccessToken(shareToken)?.trim() ?? ''
-		const createdFromHome =
-			typeof window !== 'undefined' &&
-			new URLSearchParams(window.location.search).get('created') === '1'
 
 		return (
 			<section css={{ display: 'grid', gap: spacing.lg }}>
@@ -529,11 +562,9 @@ export function ScheduleHostRoute(handle: Handle) {
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Manage schedule settings and choose the best meeting slot.
 					</p>
-					{createdFromHome ? (
-						<p css={{ margin: 0, color: colors.text }}>
-							Schedule created. Save these links and your host key.
-						</p>
-					) : null}
+					<p css={{ margin: 0, color: colors.text }}>
+						Save these links and your host key.
+					</p>
 					<div
 						css={{
 							display: 'grid',
@@ -565,7 +596,7 @@ export function ScheduleHostRoute(handle: Handle) {
 										border: `1px solid ${colors.border}`,
 										backgroundColor: colors.background,
 										color: colors.text,
-										overflowX: 'auto',
+										overflowWrap: 'anywhere',
 									}}
 								>
 									{attendeeUrl}
@@ -616,7 +647,7 @@ export function ScheduleHostRoute(handle: Handle) {
 										border: `1px solid ${colors.border}`,
 										backgroundColor: colors.background,
 										color: colors.text,
-										overflowX: 'auto',
+										overflowWrap: 'anywhere',
 									}}
 								>
 									{hostUrl}
@@ -665,7 +696,7 @@ export function ScheduleHostRoute(handle: Handle) {
 										border: `1px solid ${colors.border}`,
 										backgroundColor: colors.background,
 										color: hostAccessToken ? colors.text : colors.textMuted,
-										overflowX: 'auto',
+										overflowWrap: 'anywhere',
 									}}
 								>
 									{hostAccessToken || 'Unavailable in this browser session'}
@@ -942,7 +973,12 @@ export function ScheduleHostRoute(handle: Handle) {
 									maxAvailabilityCount: previewMaxCount,
 									activeSlot: activePreviewSlot,
 									rangeAnchor: null,
+									mobileDayKey,
 									pending: false,
+									onMobileDayChange: (dayKey) => {
+										mobileDayKey = dayKey
+										handle.update()
+									},
 									onCellHover: (slot) => {
 										activePreviewSlot = slot
 										handle.update()
@@ -1036,7 +1072,12 @@ export function ScheduleHostRoute(handle: Handle) {
 									maxAvailabilityCount: 1,
 									activeSlot: null,
 									rangeAnchor: null,
+									mobileDayKey,
 									pending: hasPendingLocalChanges,
+									onMobileDayChange: (dayKey) => {
+										mobileDayKey = dayKey
+										handle.update()
+									},
 									onCellClick: (slot, _event) => {
 										toggleBlockedSlot(slot)
 									},

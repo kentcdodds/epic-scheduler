@@ -10,6 +10,7 @@ const scheduleSocketPathPrefix = '/ws/'
 const mcpWriteToolNames = new Set([
 	'create_schedule',
 	'submit_schedule_availability',
+	'update_schedule_host_settings',
 ])
 const openAiSandboxOriginSuffix = '.web-sandbox.oaiusercontent.com'
 

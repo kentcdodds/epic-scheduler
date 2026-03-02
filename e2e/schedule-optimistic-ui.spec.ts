@@ -4,7 +4,7 @@ test('schedule pending sync uses simplified opacity cue', async ({ page }) => {
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
 	const shareToken =
 		new URL(page.url()).pathname.split('/').filter(Boolean)[1] ?? ''
 	expect(shareToken).not.toBe('')

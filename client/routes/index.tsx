@@ -4,6 +4,6 @@ import { ScheduleHostRoute } from './schedule-host.tsx'
 
 export const clientRoutes = {
 	'/': <HomeRoute />,
+	'/s/:shareToken/:hostAccessToken': <ScheduleHostRoute />,
 	'/s/:shareToken': <ScheduleRoute />,
-	'/s/:shareToken/host': <ScheduleHostRoute />,
 }

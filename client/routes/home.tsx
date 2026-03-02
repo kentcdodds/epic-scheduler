@@ -20,7 +20,6 @@ import {
 	spacing,
 	typography,
 } from '#client/styles/tokens.ts'
-import { writeHostAccessToken } from '#client/schedule-host-access.ts'
 
 type RequestStatus = 'idle' | 'saving' | 'error'
 
@@ -200,7 +199,8 @@ export function HomeRoute(handle: Handle) {
 			if (
 				!response.ok ||
 				!payload?.ok ||
-				typeof payload.shareToken !== 'string'
+				typeof payload.shareToken !== 'string' ||
+				typeof payload.hostAccessToken !== 'string'
 			) {
 				const errorMessage =
 					typeof payload?.error === 'string'
@@ -209,13 +209,12 @@ export function HomeRoute(handle: Handle) {
 				setMessage('error', errorMessage)
 				return
 			}
-			if (typeof payload.hostAccessToken === 'string') {
-				const normalizedHostToken = payload.hostAccessToken.trim()
-				if (normalizedHostToken) {
-					writeHostAccessToken(payload.shareToken, normalizedHostToken)
-				}
+			const normalizedHostToken = payload.hostAccessToken.trim()
+			if (!normalizedHostToken) {
+				setMessage('error', 'Unable to create schedule.')
+				return
 			}
-			const redirectTo = `/s/${payload.shareToken}/host?created=1`
+			const redirectTo = `/s/${encodeURIComponent(payload.shareToken)}/${encodeURIComponent(normalizedHostToken)}`
 			navigate(redirectTo)
 		} catch {
 			setMessage('error', 'Network error while creating schedule.')

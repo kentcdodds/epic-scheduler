@@ -31,11 +31,18 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 					.describe(
 						'Optional existing share token to load into the host dashboard widget.',
 					),
+				hostAccessToken: z
+					.string()
+					.optional()
+					.describe(
+						'Optional host key paired with shareToken for opening the host dashboard route.',
+					),
 			},
 			outputSchema: {
 				widget: z.literal('schedule_host'),
 				resourceUri: z.literal(scheduleHostUiResourceUri),
 				shareToken: z.string().optional(),
+				hostAccessToken: z.string().optional(),
 			},
 			annotations: openScheduleHostUiTool.annotations,
 			_meta: {
@@ -44,14 +51,23 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 				},
 			},
 		},
-		async ({ shareToken }: { shareToken?: string }) => {
+		async ({
+			shareToken,
+			hostAccessToken,
+		}: {
+			shareToken?: string
+			hostAccessToken?: string
+		}) => {
 			const normalizedShareToken = shareToken?.trim() || undefined
+			const normalizedHostAccessToken = hostAccessToken?.trim() || undefined
 			return {
 				content: [
 					{
 						type: 'text',
 						text: normalizedShareToken
-							? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}. Use this for schedule configuration, not attendee availability submission.`
+							? normalizedHostAccessToken
+								? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken} with host key preloaded. Use this for schedule configuration, not attendee availability submission.`
+								: `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}. Provide a host key to load the host dashboard route.`
 							: 'Epic Scheduler host dashboard UI is attached. Use this for link management and availability limits, not attendee submission.',
 					},
 				],
@@ -59,6 +75,7 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 					widget: 'schedule_host',
 					resourceUri: scheduleHostUiResourceUri,
 					shareToken: normalizedShareToken,
+					hostAccessToken: normalizedHostAccessToken,
 				},
 			}
 		},

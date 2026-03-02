@@ -26,6 +26,14 @@ function setupScheduleHostWidget() {
 		rootElement,
 		'input[name="shareToken"]',
 	)
+	const hostAccessTokenElement = getElement<HTMLElement>(
+		rootElement,
+		'[data-host-access-token]',
+	)
+	const hostAccessTokenInput = getElement<HTMLInputElement>(
+		rootElement,
+		'input[name="hostAccessToken"]',
+	)
 	const statusElement = getElement<HTMLElement>(rootElement, '[data-status]')
 	const hostIframe = getElement<HTMLIFrameElement>(
 		rootElement,
@@ -55,16 +63,29 @@ function setupScheduleHostWidget() {
 		statusElement.setAttribute('data-status-tone', error ? 'error' : 'normal')
 	}
 
-	function setShareToken(token: string) {
-		const normalized = token.trim()
-		if (!normalized) {
+	function setHostDashboardTarget(params: {
+		shareToken: string
+		hostAccessToken?: string | null
+	}) {
+		const normalizedShareToken = params.shareToken.trim()
+		if (!normalizedShareToken) {
 			setStatus('Share token is required.', true)
 			return false
 		}
-		shareTokenInput.value = normalized
-		shareTokenElement.textContent = normalized
-		hostIframe.src = `/s/${encodeURIComponent(normalized)}/host`
-		attendeeLink.href = `/s/${encodeURIComponent(normalized)}`
+		const normalizedHostAccessToken =
+			params.hostAccessToken?.trim() ?? hostAccessTokenInput.value.trim()
+		shareTokenInput.value = normalizedShareToken
+		shareTokenElement.textContent = normalizedShareToken
+		attendeeLink.href = `/s/${encodeURIComponent(normalizedShareToken)}`
+		if (!normalizedHostAccessToken) {
+			hostAccessTokenElement.textContent = 'Not provided'
+			hostIframe.removeAttribute('src')
+			setStatus('Host key is required to load the host dashboard.', true)
+			return false
+		}
+		hostAccessTokenInput.value = normalizedHostAccessToken
+		hostAccessTokenElement.textContent = normalizedHostAccessToken
+		hostIframe.src = `/s/${encodeURIComponent(normalizedShareToken)}/${encodeURIComponent(normalizedHostAccessToken)}`
 		setStatus('Host dashboard loaded.')
 		return true
 	}
@@ -83,9 +104,7 @@ function setupScheduleHostWidget() {
 			}
 			fullscreenManager?.updateFullscreenButton()
 			const params = extractScheduleToolInput(renderData)
-			if (params.shareToken) {
-				setShareToken(params.shareToken)
-			}
+			maybeApplyToolInput(params)
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -112,9 +131,15 @@ function setupScheduleHostWidget() {
 		return fullscreenManager.toggleFullscreenMode()
 	}
 
-	function maybeApplyToolInput(shareToken: string | null) {
-		if (!shareToken) return
-		setShareToken(shareToken)
+	function maybeApplyToolInput(params: {
+		shareToken: string | null
+		hostAccessToken?: string | null
+	}) {
+		if (!params.shareToken) return
+		void setHostDashboardTarget({
+			shareToken: params.shareToken,
+			hostAccessToken: params.hostAccessToken ?? hostAccessTokenInput.value,
+		})
 	}
 
 	function handleToolInputMessage(message: unknown) {
@@ -126,18 +151,31 @@ function setupScheduleHostWidget() {
 		) {
 			return
 		}
-		maybeApplyToolInput(extractScheduleToolInput(message).shareToken)
+		maybeApplyToolInput(extractScheduleToolInput(message))
 	}
 
 	loadHostButton.addEventListener('click', () => {
 		const token = shareTokenInput.value.trim()
-		if (!setShareToken(token)) return
+		const hostToken = hostAccessTokenInput.value.trim()
+		if (
+			!setHostDashboardTarget({
+				shareToken: token,
+				hostAccessToken: hostToken,
+			})
+		) {
+			return
+		}
 		void hostBridge.sendUserMessageWithFallback(
 			`Loaded Epic Scheduler host dashboard for share token ${token}.`,
 		)
 	})
 
 	shareTokenInput.addEventListener('keydown', (event) => {
+		if (event.key !== 'Enter') return
+		event.preventDefault()
+		loadHostButton.click()
+	})
+	hostAccessTokenInput.addEventListener('keydown', (event) => {
 		if (event.key !== 'Enter') return
 		event.preventDefault()
 		loadHostButton.click()
@@ -179,17 +217,20 @@ function setupScheduleHostWidget() {
 	})
 	hostBridge.requestRenderData()
 	fullscreenManager?.updateFullscreenButton()
-	setStatus('Waiting for share token input.')
+	setStatus('Waiting for share token and host key input.')
 	const openAiBridge = (
 		window as Window & {
 			openai?: unknown
 		}
 	).openai
-	maybeApplyToolInput(extractScheduleToolInput(openAiBridge).shareToken)
+	maybeApplyToolInput(extractScheduleToolInput(openAiBridge))
 	const widgetUrl = new URL(window.location.href)
-	maybeApplyToolInput(
-		readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
-	)
+	maybeApplyToolInput({
+		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
+		hostAccessToken:
+			readNonEmptyString(widgetUrl.searchParams.get('hostAccessToken')) ??
+			readNonEmptyString(widgetUrl.searchParams.get('hostKey')),
+	})
 }
 
 if (document.readyState === 'loading') {

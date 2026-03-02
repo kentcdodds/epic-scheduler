@@ -41,14 +41,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
 		expect(createResponse.ok()).toBe(true)
 		const createPayload = (await createResponse.json()) as {
 			shareToken?: string
+			hostAccessToken?: string
 		}
 		const shareToken = createPayload.shareToken ?? ''
+		const hostAccessToken = createPayload.hostAccessToken ?? ''
 		expect(shareToken).not.toBe('')
+		expect(hostAccessToken).not.toBe('')
 
 		const routes = [
 			...staticRoutes,
 			`/s/${shareToken}`,
-			`/s/${shareToken}/host`,
+			`/s/${shareToken}/${hostAccessToken}`,
 		]
 
 		for (const route of routes) {

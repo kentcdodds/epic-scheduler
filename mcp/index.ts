@@ -21,11 +21,11 @@ Quick start
 - Use 'update_schedule_host_settings' to edit host-managed schedule configuration (title and blocked slots) with the host access token.
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
 - Use 'open_schedule_ui' (optionally with shareToken/attendeeName) to open the attendee MCP app widget for selecting availability and viewing overlap.
-- Use 'open_schedule_host_ui' (optionally with shareToken) to open the host MCP app widget for managing schedule settings and blocked slots.
+- Use 'open_schedule_host_ui' (optionally with shareToken/hostAccessToken) to open the host MCP app widget for managing schedule settings and blocked slots.
 
 How to chain tools safely
 - Attendee workflow: create_schedule -> submit_schedule_availability -> get_schedule_snapshot (or open_schedule_ui).
-- Host workflow: create_schedule (read hostAccessToken) -> update_schedule_host_settings (shareToken + hostAccessToken) -> get_schedule_snapshot (or open_schedule_host_ui).
+- Host workflow: create_schedule (read hostAccessToken) -> update_schedule_host_settings (shareToken + hostAccessToken) -> get_schedule_snapshot (or open_schedule_host_ui with shareToken + hostAccessToken).
 	`.trim(),
 } as const
 
