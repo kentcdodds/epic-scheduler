@@ -74,6 +74,8 @@ export function ScheduleRoute(handle: Handle) {
 	let lastPointerSlot: string | null = null
 	let lastPathname = ''
 	let initialNameLoaded = false
+	let snapshotLoadInFlight = false
+	let snapshotReloadQueued = false
 	const autoSaveDelayMs = 650
 
 	function setStatusMessage(message: string | null, error = false) {
@@ -143,48 +145,62 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	async function loadSnapshot() {
-		const requestShareToken = shareToken
-		if (!requestShareToken) return
+		if (snapshotLoadInFlight) {
+			snapshotReloadQueued = true
+			return
+		}
+		snapshotLoadInFlight = true
 		try {
-			const response = await fetch(`/api/schedules/${requestShareToken}`, {
-				headers: { Accept: 'application/json' },
-			})
-			const payload = (await response.json().catch(() => null)) as {
-				ok?: boolean
-				snapshot?: ScheduleSnapshot
-				error?: string
-			} | null
-			if (requestShareToken !== shareToken) return
-			if (!response.ok || !payload?.ok || !payload.snapshot) {
-				const errorText =
-					typeof payload?.error === 'string'
-						? payload.error
-						: 'Unable to load schedule.'
-				setStatusMessage(errorText, true)
-				isLoading = false
-				handle.update()
-				return
-			}
+			do {
+				snapshotReloadQueued = false
+				const requestShareToken = shareToken
+				if (!requestShareToken || handle.signal.aborted) break
+				try {
+					const response = await fetch(`/api/schedules/${requestShareToken}`, {
+						headers: { Accept: 'application/json' },
+					})
+					const payload = (await response.json().catch(() => null)) as {
+						ok?: boolean
+						snapshot?: ScheduleSnapshot
+						error?: string
+					} | null
+					if (requestShareToken !== shareToken || handle.signal.aborted)
+						continue
+					if (!response.ok || !payload?.ok || !payload.snapshot) {
+						const errorText =
+							typeof payload?.error === 'string'
+								? payload.error
+								: 'Unable to load schedule.'
+						setStatusMessage(errorText, true)
+						isLoading = false
+						handle.update()
+						continue
+					}
 
-			snapshot = payload.snapshot
-			isLoading = false
+					snapshot = payload.snapshot
+					isLoading = false
 
-			if (!initialNameLoaded) {
-				const initialName = getQueryName()
-				if (initialName) attendeeName = initialName
-				initialNameLoaded = true
-			}
+					if (!initialNameLoaded) {
+						const initialName = getQueryName()
+						if (initialName) attendeeName = initialName
+						initialNameLoaded = true
+					}
 
-			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
-			if (!hasDirtyChanges) {
-				selectedSlots = new Set(persistedSelectedSlots)
-			}
+					persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
+					if (!hasDirtyChanges) {
+						selectedSlots = new Set(persistedSelectedSlots)
+					}
 
-			handle.update()
-		} catch {
-			if (requestShareToken !== shareToken) return
-			isLoading = false
-			setStatusMessage('Unable to load schedule.', true)
+					handle.update()
+				} catch {
+					if (requestShareToken !== shareToken || handle.signal.aborted)
+						continue
+					isLoading = false
+					setStatusMessage('Unable to load schedule.', true)
+				}
+			} while (snapshotReloadQueued && !handle.signal.aborted)
+		} finally {
+			snapshotLoadInFlight = false
 		}
 	}
 

@@ -473,7 +473,7 @@ function setupScheduleWidget() {
 			response = await fetch(
 				new URL(`/api/schedules/${requestShareToken}`, apiBaseUrl),
 				{
-				signal: controller.signal,
+					signal: controller.signal,
 				},
 			)
 		} catch (error) {

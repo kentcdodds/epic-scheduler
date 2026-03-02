@@ -171,7 +171,10 @@ const appHandler = withCors({
 		const origin = request.headers.get('Origin')
 		if (!origin) return null
 		const requestOrigin = new URL(request.url).origin
-		if (origin !== requestOrigin && !isAllowedCrossOriginRequest(origin, request)) {
+		if (
+			origin !== requestOrigin &&
+			!isAllowedCrossOriginRequest(origin, request)
+		) {
 			return null
 		}
 		return {

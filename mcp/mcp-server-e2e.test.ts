@@ -467,8 +467,9 @@ test(
 			apiPreflightResponse.headers.get('access-control-allow-origin'),
 		).toBe(sandboxOrigin)
 
-		const apiBaseUrlMatch =
-			scheduleResource?.text.match(/data-api-base-url="([^"]+)"/)
+		const apiBaseUrlMatch = scheduleResource?.text.match(
+			/data-api-base-url="([^"]+)"/,
+		)
 		const widgetDomain = apiBaseUrlMatch?.[1]
 			? new URL(apiBaseUrlMatch[1]).origin
 			: undefined
