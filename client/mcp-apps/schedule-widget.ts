@@ -10,6 +10,7 @@ import {
 	formatSlotForAttendeeTimeZone,
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
+import { extractScheduleToolInput } from './schedule-widget-tool-input.js'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
 
 const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -48,45 +49,6 @@ function readNonEmptyString(value: unknown) {
 	if (typeof value !== 'string') return null
 	const normalized = value.trim()
 	return normalized.length > 0 ? normalized : null
-}
-
-function findNestedStringByKey(params: {
-	source: unknown
-	key: string
-	depth?: number
-}): string | null {
-	const depth = params.depth ?? 0
-	if (depth > 4 || !isRecord(params.source)) return null
-
-	const directValue = readNonEmptyString(params.source[params.key])
-	if (directValue) {
-		return directValue
-	}
-
-	const nestedKeys = [
-		'arguments',
-		'structuredContent',
-		'toolInput',
-		'toolResult',
-		'result',
-		'params',
-		'payload',
-		'context',
-	]
-
-	for (const nestedKey of nestedKeys) {
-		const nestedValue = params.source[nestedKey]
-		const resolved = findNestedStringByKey({
-			source: nestedValue,
-			key: params.key,
-			depth: depth + 1,
-		})
-		if (resolved) {
-			return resolved
-		}
-	}
-
-	return null
 }
 
 function getBrowserTimeZone() {
@@ -456,21 +418,7 @@ function setupScheduleWidget() {
 			} else {
 				appRoot.removeAttribute('data-theme')
 			}
-			maybeApplyToolInput({
-				shareToken: findNestedStringByKey({
-					source: renderData,
-					key: 'shareToken',
-				}),
-				attendeeName:
-					findNestedStringByKey({
-						source: renderData,
-						key: 'attendeeName',
-					}) ??
-					findNestedStringByKey({
-						source: renderData,
-						key: 'name',
-					}),
-			})
+			maybeApplyToolInput(extractScheduleToolInput(renderData))
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -633,22 +581,12 @@ function setupScheduleWidget() {
 		if (!isRecord(message)) return
 		if (
 			message.method !== 'ui/notifications/tool-input' &&
-			message.method !== 'ui/notifications/tool-input-partial'
+			message.method !== 'ui/notifications/tool-input-partial' &&
+			message.method !== 'ui/notifications/tool-result'
 		) {
 			return
 		}
-		const params = isRecord(message.params) ? message.params : undefined
-		const toolArguments = params?.arguments
-		maybeApplyToolInput({
-			shareToken:
-				findNestedStringByKey({ source: toolArguments, key: 'shareToken' }) ??
-				findNestedStringByKey({ source: params, key: 'shareToken' }),
-			attendeeName:
-				findNestedStringByKey({ source: toolArguments, key: 'attendeeName' }) ??
-				findNestedStringByKey({ source: toolArguments, key: 'name' }) ??
-				findNestedStringByKey({ source: params, key: 'attendeeName' }) ??
-				findNestedStringByKey({ source: params, key: 'name' }),
-		})
+		maybeApplyToolInput(extractScheduleToolInput(message))
 	}
 
 	attendeeNameInput.addEventListener('input', () => {
@@ -732,6 +670,12 @@ function setupScheduleWidget() {
 	hostBridge.requestRenderData()
 	updateSelectionSummary()
 	setStatus('Waiting for share token input.')
+	const openAiBridge = (
+		window as Window & {
+			openai?: unknown
+		}
+	).openai
+	maybeApplyToolInput(extractScheduleToolInput(openAiBridge))
 	const widgetUrl = new URL(window.location.href)
 	maybeApplyToolInput({
 		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
