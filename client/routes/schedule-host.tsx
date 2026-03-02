@@ -57,6 +57,44 @@ function buildEmptyAvailability(slots: Array<string>) {
 	)
 }
 
+function renderCopyIcon() {
+	return (
+		<svg
+			aria-hidden
+			viewBox="0 0 24 24"
+			width="14"
+			height="14"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+			<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+		</svg>
+	)
+}
+
+function copyTextWithFallback(text: string) {
+	if (typeof document === 'undefined') return false
+	const textarea = document.createElement('textarea')
+	textarea.value = text
+	textarea.setAttribute('readonly', 'true')
+	textarea.style.position = 'absolute'
+	textarea.style.left = '-9999px'
+	document.body.appendChild(textarea)
+	textarea.select()
+	let copied = false
+	try {
+		copied = document.execCommand('copy')
+	} catch {
+		copied = false
+	}
+	document.body.removeChild(textarea)
+	return copied
+}
+
 export function ScheduleHostRoute(handle: Handle) {
 	let shareToken = ''
 	let snapshot: ScheduleSnapshot | null = null
@@ -72,7 +110,10 @@ export function ScheduleHostRoute(handle: Handle) {
 	let changeVersion = 0
 	let statusMessage: string | null = null
 	let statusError = false
+	let clipboardMessage: string | null = null
+	let clipboardError = false
 	let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
+	let clipboardMessageTimer: ReturnType<typeof setTimeout> | null = null
 	let refreshTimer: ReturnType<typeof setInterval> | null = null
 	let lastPathname = ''
 	const saveDebounceMs = 600
@@ -90,6 +131,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		saveDebounceTimer = null
 	}
 
+	function clearClipboardMessageTimer() {
+		if (!clipboardMessageTimer) return
+		clearTimeout(clipboardMessageTimer)
+		clipboardMessageTimer = null
+	}
+
 	function clearRefreshTimer() {
 		if (!refreshTimer) return
 		clearInterval(refreshTimer)
@@ -98,8 +145,51 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function cleanupResources() {
 		clearSaveDebounceTimer()
+		clearClipboardMessageTimer()
 		clearRefreshTimer()
 		pendingSave = false
+	}
+
+	function setClipboardStatus(nextMessage: string | null, error = false) {
+		clipboardMessage = nextMessage
+		clipboardError = error
+		clearClipboardMessageTimer()
+		if (nextMessage) {
+			clipboardMessageTimer = setTimeout(() => {
+				clipboardMessage = null
+				clipboardError = false
+				handle.update()
+			}, 2200)
+		}
+		handle.update()
+	}
+
+	async function copyValueToClipboard(label: string, value: string) {
+		const normalized = value.trim()
+		if (!normalized) {
+			setClipboardStatus(`Unable to copy ${label.toLowerCase()}.`, true)
+			return
+		}
+		try {
+			if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(normalized)
+				setClipboardStatus(`${label} copied.`)
+				return
+			}
+			const copied = copyTextWithFallback(normalized)
+			if (copied) {
+				setClipboardStatus(`${label} copied.`)
+				return
+			}
+			setClipboardStatus(`Unable to copy ${label.toLowerCase()}.`, true)
+		} catch {
+			const copied = copyTextWithFallback(normalized)
+			if (copied) {
+				setClipboardStatus(`${label} copied.`)
+				return
+			}
+			setClipboardStatus(`Unable to copy ${label.toLowerCase()}.`, true)
+		}
 	}
 
 	if (handle.signal.aborted) {
@@ -401,6 +491,16 @@ export function ScheduleHostRoute(handle: Handle) {
 					),
 				}
 			: null
+		const appOrigin =
+			typeof window === 'undefined' ? '' : window.location.origin
+		const attendeePath = `/s/${shareToken}`
+		const hostPath = `${attendeePath}/host`
+		const attendeeUrl = appOrigin ? `${appOrigin}${attendeePath}` : attendeePath
+		const hostUrl = appOrigin ? `${appOrigin}${hostPath}` : hostPath
+		const hostAccessToken = readHostAccessToken(shareToken)?.trim() ?? ''
+		const createdFromHome =
+			typeof window !== 'undefined' &&
+			new URLSearchParams(window.location.search).get('created') === '1'
 
 		return (
 			<section css={{ display: 'grid', gap: spacing.lg }}>
@@ -429,12 +529,187 @@ export function ScheduleHostRoute(handle: Handle) {
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Manage schedule settings and choose the best meeting slot.
 					</p>
-					<p css={{ margin: 0, color: colors.textMuted }}>
-						Attendee link: <code>/s/{shareToken}</code>
-					</p>
-					<p css={{ margin: 0, color: colors.textMuted }}>
-						Host link: <code>/s/{shareToken}/host</code>
-					</p>
+					{createdFromHome ? (
+						<p css={{ margin: 0, color: colors.text }}>
+							Schedule created. Save these links and your host key.
+						</p>
+					) : null}
+					<div
+						css={{
+							display: 'grid',
+							gap: spacing.sm,
+							padding: spacing.md,
+							borderRadius: radius.md,
+							backgroundColor:
+								'color-mix(in srgb, var(--color-surface) 72%, transparent)',
+							border: `1px solid ${colors.border}`,
+						}}
+					>
+						<div css={{ display: 'grid', gap: spacing.xs }}>
+							<p css={{ margin: 0, color: colors.textMuted }}>
+								Attendee submission link
+							</p>
+							<div
+								css={{
+									display: 'grid',
+									gap: spacing.xs,
+									gridTemplateColumns: 'minmax(0, 1fr) auto',
+									alignItems: 'center',
+								}}
+							>
+								<code
+									css={{
+										display: 'block',
+										padding: `${spacing.xs} ${spacing.sm}`,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.background,
+										color: colors.text,
+										overflowX: 'auto',
+									}}
+								>
+									{attendeeUrl}
+								</code>
+								<button
+									type="button"
+									aria-label="Copy attendee submission link"
+									on={{
+										click: () =>
+											void copyValueToClipboard('Attendee link', attendeeUrl),
+									}}
+									css={{
+										display: 'inline-flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										width: 34,
+										height: 34,
+										padding: 0,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.surface,
+										color: colors.text,
+										cursor: 'pointer',
+									}}
+								>
+									{renderCopyIcon()}
+								</button>
+							</div>
+						</div>
+
+						<div css={{ display: 'grid', gap: spacing.xs }}>
+							<p css={{ margin: 0, color: colors.textMuted }}>
+								Host dashboard link
+							</p>
+							<div
+								css={{
+									display: 'grid',
+									gap: spacing.xs,
+									gridTemplateColumns: 'minmax(0, 1fr) auto',
+									alignItems: 'center',
+								}}
+							>
+								<code
+									css={{
+										display: 'block',
+										padding: `${spacing.xs} ${spacing.sm}`,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.background,
+										color: colors.text,
+										overflowX: 'auto',
+									}}
+								>
+									{hostUrl}
+								</code>
+								<button
+									type="button"
+									aria-label="Copy host dashboard link"
+									on={{
+										click: () =>
+											void copyValueToClipboard('Host link', hostUrl),
+									}}
+									css={{
+										display: 'inline-flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										width: 34,
+										height: 34,
+										padding: 0,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.surface,
+										color: colors.text,
+										cursor: 'pointer',
+									}}
+								>
+									{renderCopyIcon()}
+								</button>
+							</div>
+						</div>
+
+						<div css={{ display: 'grid', gap: spacing.xs }}>
+							<p css={{ margin: 0, color: colors.textMuted }}>Host key</p>
+							<div
+								css={{
+									display: 'grid',
+									gap: spacing.xs,
+									gridTemplateColumns: 'minmax(0, 1fr) auto',
+									alignItems: 'center',
+								}}
+							>
+								<code
+									css={{
+										display: 'block',
+										padding: `${spacing.xs} ${spacing.sm}`,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.background,
+										color: hostAccessToken ? colors.text : colors.textMuted,
+										overflowX: 'auto',
+									}}
+								>
+									{hostAccessToken || 'Unavailable in this browser session'}
+								</code>
+								<button
+									type="button"
+									aria-label="Copy host key"
+									on={{
+										click: () =>
+											void copyValueToClipboard('Host key', hostAccessToken),
+									}}
+									disabled={!hostAccessToken}
+									css={{
+										display: 'inline-flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										width: 34,
+										height: 34,
+										padding: 0,
+										borderRadius: radius.sm,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.surface,
+										color: colors.text,
+										cursor: hostAccessToken ? 'pointer' : 'not-allowed',
+										opacity: hostAccessToken ? 1 : 0.5,
+									}}
+								>
+									{renderCopyIcon()}
+								</button>
+							</div>
+						</div>
+					</div>
+					{clipboardMessage ? (
+						<p
+							role={clipboardError ? 'alert' : undefined}
+							aria-live="polite"
+							css={{
+								margin: 0,
+								color: clipboardError ? colors.error : colors.textMuted,
+							}}
+						>
+							{clipboardMessage}
+						</p>
+					) : null}
 				</header>
 
 				<section

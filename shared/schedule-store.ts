@@ -89,12 +89,28 @@ type BlockedSlotRow = {
 	slot_start_utc: string
 }
 
+type ScheduleHostAccessTokenRow = {
+	id: string
+	host_access_token: string | null
+	host_access_token_hash: string | null
+}
+
 export function createShareToken() {
 	return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 }
 
 export function createHostAccessToken() {
 	return crypto.randomUUID().replace(/-/g, '')
+}
+
+export async function hashHostAccessToken(hostAccessToken: string) {
+	const digest = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(hostAccessToken),
+	)
+	return Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(16).padStart(2, '0'),
+	).join('')
 }
 
 export function normalizeName(name: string) {
@@ -300,22 +316,48 @@ export async function getScheduleByShareToken(
 	return toScheduleRecord(row)
 }
 
-export async function getScheduleHostAccessToken(
+export async function verifyScheduleHostAccessToken(
 	db: D1DatabaseLike,
 	shareToken: string,
+	providedHostAccessToken: string,
 ) {
+	const normalizedHostAccessToken = providedHostAccessToken.trim()
+	if (!normalizedHostAccessToken) return 'invalid'
 	const row = await db
 		.prepare(
 			`SELECT
-				host_access_token
+				id,
+				host_access_token,
+				host_access_token_hash
 			FROM schedules
 			WHERE share_token = ?1
 			LIMIT 1`,
 		)
 		.bind(shareToken)
-		.first<{ host_access_token: string }>()
-	if (!row?.host_access_token) return null
-	return row.host_access_token
+		.first<ScheduleHostAccessTokenRow>()
+	if (!row) return 'not-found'
+
+	const providedTokenHash = await hashHostAccessToken(normalizedHostAccessToken)
+	if (row.host_access_token_hash) {
+		return row.host_access_token_hash === providedTokenHash
+			? 'valid'
+			: 'invalid'
+	}
+
+	if (!row.host_access_token) return 'invalid'
+	if (row.host_access_token !== normalizedHostAccessToken) return 'invalid'
+
+	await db
+		.prepare(
+			`UPDATE schedules
+			SET host_access_token_hash = ?2,
+				host_access_token = NULL
+			WHERE id = ?1`,
+		)
+		.bind(row.id, providedTokenHash)
+		.run()
+
+	return 'valid'
 }
 
 export async function createSchedule(
@@ -343,6 +385,7 @@ export async function createSchedule(
 	const id = crypto.randomUUID()
 	const shareToken = createShareToken()
 	const hostAccessToken = createHostAccessToken()
+	const hostAccessTokenHash = await hashHostAccessToken(hostAccessToken)
 	const hostAttendeeId = crypto.randomUUID()
 	const createdAt = new Date().toISOString()
 	const nameNorm = normalizeNameForMatch(hostName)
@@ -353,7 +396,7 @@ export async function createSchedule(
 			`INSERT INTO schedules (
 				id,
 				share_token,
-				host_access_token,
+				host_access_token_hash,
 				title,
 				interval_minutes,
 				range_start_utc,
@@ -364,7 +407,7 @@ export async function createSchedule(
 		.bind(
 			id,
 			shareToken,
-			hostAccessToken,
+			hostAccessTokenHash,
 			title,
 			intervalMinutes,
 			slots[0],

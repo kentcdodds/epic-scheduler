@@ -11,7 +11,14 @@ test('attendee update appears in host schedule view', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	const hostDashboardUrl = new URL(page.url())
+	const shareToken =
+		hostDashboardUrl.pathname.split('/').filter(Boolean)[1] ?? ''
+	expect(shareToken).not.toBe('')
+	const attendeeUrl = `${hostDashboardUrl.origin}/s/${shareToken}`
+	await page.goto(`${attendeeUrl}?name=Host`)
+	await expect(page).toHaveURL(new RegExp(`/s/${shareToken}`))
 	const hostChosenSlot = page
 		.locator('[data-schedule-grid-shell] table:visible')
 		.first()
@@ -25,15 +32,11 @@ test('attendee update appears in host schedule view', async ({
 	const slotPrefix = slotPrefixMatch?.[1] ?? ''
 	expect(slotPrefix.length).toBeGreaterThan(0)
 
-	const hostUrl = page.url()
-	const shareToken =
-		new URL(hostUrl).pathname.split('/').filter(Boolean)[1] ?? ''
-	expect(shareToken).not.toBe('')
 	const attendeeContext = await browser.newContext()
 	const attendeePage = await attendeeContext.newPage()
 
 	try {
-		await attendeePage.goto(`${hostUrl}?name=Alex`)
+		await attendeePage.goto(`${attendeeUrl}?name=Alex`)
 		await attendeePage.getByLabel('Your name').fill('Alex')
 
 		const candidateSlot = attendeePage

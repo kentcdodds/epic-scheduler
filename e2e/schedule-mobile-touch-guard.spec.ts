@@ -13,7 +13,11 @@ test('mobile touch pointerdown does not paint-select while scrolling', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	const shareToken =
+		new URL(page.url()).pathname.split('/').filter(Boolean)[1] ?? ''
+	expect(shareToken).not.toBe('')
+	await page.goto(`/s/${shareToken}?name=Host`)
 
 	const selectedCountLabel = page.getByText(/selected slot/)
 	await expect

@@ -215,9 +215,7 @@ export function HomeRoute(handle: Handle) {
 					writeHostAccessToken(payload.shareToken, normalizedHostToken)
 				}
 			}
-			const redirectTo = `/s/${payload.shareToken}?name=${encodeURIComponent(
-				normalizedHostName,
-			)}`
+			const redirectTo = `/s/${payload.shareToken}/host?created=1`
 			navigate(redirectTo)
 		} catch {
 			setMessage('error', 'Network error while creating schedule.')

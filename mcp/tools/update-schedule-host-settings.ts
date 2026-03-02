@@ -1,9 +1,9 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
-	getScheduleHostAccessToken,
 	getScheduleSnapshot,
 	updateScheduleHostSettings,
+	verifyScheduleHostAccessToken,
 } from '#shared/schedule-store.ts'
 import { type MCP } from '#mcp/index.ts'
 import { summarizeShareToken } from './summarize-share-token.ts'
@@ -89,17 +89,18 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 				}
 			}
 
-			const expectedHostToken = await getScheduleHostAccessToken(
+			const hostAccessVerification = await verifyScheduleHostAccessToken(
 				appDb,
 				shareToken,
+				normalizedHostAccessToken,
 			)
-			if (!expectedHostToken) {
+			if (hostAccessVerification === 'not-found') {
 				return {
 					content: [{ type: 'text', text: 'Schedule not found.' }],
 					isError: true,
 				}
 			}
-			if (normalizedHostAccessToken !== expectedHostToken) {
+			if (hostAccessVerification !== 'valid') {
 				return {
 					content: [{ type: 'text', text: 'Invalid host access token.' }],
 					isError: true,

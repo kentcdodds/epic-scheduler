@@ -1,8 +1,8 @@
 import { type BuildAction } from 'remix/fetch-router'
 import {
-	getScheduleHostAccessToken,
 	getScheduleSnapshot,
 	updateScheduleHostSettings,
+	verifyScheduleHostAccessToken,
 } from '#shared/schedule-store.ts'
 import { type AppEnv } from '#types/env-schema.ts'
 import { type routes } from '#server/routes.ts'
@@ -58,17 +58,18 @@ export function createScheduleHostUpdateHandler(
 					{ status: 401 },
 				)
 			}
-			const expectedHostToken = await getScheduleHostAccessToken(
+			const hostAccessVerification = await verifyScheduleHostAccessToken(
 				appEnv.APP_DB,
 				shareToken,
+				providedHostToken,
 			)
-			if (!expectedHostToken) {
+			if (hostAccessVerification === 'not-found') {
 				return Response.json(
 					{ ok: false, error: 'Schedule not found.' },
 					{ status: 404 },
 				)
 			}
-			if (providedHostToken !== expectedHostToken) {
+			if (hostAccessVerification !== 'valid') {
 				return Response.json(
 					{ ok: false, error: 'Invalid host access token.' },
 					{ status: 403 },

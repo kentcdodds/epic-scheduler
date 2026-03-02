@@ -4,7 +4,11 @@ test('schedule pending sync uses simplified opacity cue', async ({ page }) => {
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/host/i)
+	const shareToken =
+		new URL(page.url()).pathname.split('/').filter(Boolean)[1] ?? ''
+	expect(shareToken).not.toBe('')
+	await page.goto(`/s/${shareToken}?name=Host`)
 
 	const gridShell = page.locator('[data-schedule-grid-shell]')
 	await expect(gridShell).toBeVisible()
