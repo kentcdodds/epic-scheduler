@@ -12,6 +12,11 @@ test('home page renders scheduler creation flow', async ({ page }) => {
 	await expect(
 		page.getByRole('button', { name: 'Create share link' }),
 	).toBeVisible()
+	await expect(page.getByLabel('Schedule title')).toHaveValue('')
+	await expect(page.getByLabel('Your name')).toHaveAttribute(
+		'placeholder',
+		'Your name',
+	)
 })
 
 test('create schedule link navigates to host dashboard', async ({ page }) => {

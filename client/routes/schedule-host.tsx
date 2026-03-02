@@ -1,6 +1,9 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import { toDayKey } from '#client/schedule-utils.ts'
+import {
+	getRectangularSlotSelection,
+	toDayKey,
+} from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import {
 	colors,
@@ -125,9 +128,10 @@ export function ScheduleHostRoute(handle: Handle) {
 		clientY: number
 	} | null = null
 	let mobileDayKey: string | null = null
-	let hostPaintMode: 'add' | 'remove' | null = null
-	let hostDragging = false
-	let hostLastPointerSlot: string | null = null
+	let hostSelectionMode: 'add' | 'remove' | null = null
+	let hostSelectionStartSlot: string | null = null
+	let hostSelectionEndSlot: string | null = null
+	let hostSelectionSlots = new Set<string>()
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -178,6 +182,70 @@ export function ScheduleHostRoute(handle: Handle) {
 		reconnectTimer = null
 	}
 
+	function clearHostSelection() {
+		hostSelectionMode = null
+		hostSelectionStartSlot = null
+		hostSelectionEndSlot = null
+		hostSelectionSlots = new Set<string>()
+	}
+
+	function detachHostSelectionListeners() {
+		if (typeof window === 'undefined') return
+		window.removeEventListener('pointerup', handleHostGlobalPointerUp)
+		window.removeEventListener('keydown', handleHostGlobalKeyDown)
+	}
+
+	function attachHostSelectionListeners() {
+		if (typeof window === 'undefined') return
+		detachHostSelectionListeners()
+		window.addEventListener('pointerup', handleHostGlobalPointerUp)
+		window.addEventListener('keydown', handleHostGlobalKeyDown)
+	}
+
+	function getHostSelectionSlots(startSlot: string, endSlot: string) {
+		if (!snapshot) return new Set<string>()
+		return new Set(
+			getRectangularSlotSelection({
+				slots: snapshot.slots,
+				startSlot,
+				endSlot,
+			}),
+		)
+	}
+
+	function applyPendingHostSelection() {
+		if (!hostSelectionMode || hostSelectionSlots.size === 0) return false
+		const shouldBeBlocked = hostSelectionMode === 'add'
+		let changed = false
+		for (const slot of hostSelectionSlots) {
+			const didChange = setBlockedSlotState(slot, shouldBeBlocked)
+			changed = changed || didChange
+		}
+		return changed
+	}
+
+	function finishHostSelection(cancelled = false) {
+		if (!hostSelectionMode) return
+		detachHostSelectionListeners()
+		const changed = cancelled ? false : applyPendingHostSelection()
+		clearHostSelection()
+		if (changed) {
+			handle.update()
+			return
+		}
+		handle.update()
+	}
+
+	function handleHostGlobalPointerUp() {
+		finishHostSelection(false)
+	}
+
+	function handleHostGlobalKeyDown(event: KeyboardEvent) {
+		if (event.key !== 'Escape' || !hostSelectionMode) return
+		event.preventDefault()
+		finishHostSelection(true)
+	}
+
 	function clearSocketResources() {
 		clearReconnectTimer()
 		const currentSocket = socket
@@ -194,6 +262,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	function cleanupResources() {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
+		detachHostSelectionListeners()
+		clearHostSelection()
 		clearSocketResources()
 		clearRefreshTimer()
 		pendingSave = false
@@ -520,34 +590,24 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handleHostUnavailablePointerUp() {
-		hostDragging = false
-		hostPaintMode = null
-		hostLastPointerSlot = null
+		finishHostSelection(false)
 	}
 
 	function handleHostUnavailablePointerDown(slot: string) {
-		hostPaintMode = blockedSlots.has(slot) ? 'remove' : 'add'
-		hostDragging = true
-		hostLastPointerSlot = slot
-		const changed = setBlockedSlotState(slot, hostPaintMode === 'add')
-		if (typeof window !== 'undefined') {
-			window.addEventListener('pointerup', handleHostUnavailablePointerUp, {
-				once: true,
-			})
-		}
-		if (changed) {
-			handle.update()
-		}
+		hostSelectionMode = blockedSlots.has(slot) ? 'remove' : 'add'
+		hostSelectionStartSlot = slot
+		hostSelectionEndSlot = slot
+		hostSelectionSlots = getHostSelectionSlots(slot, slot)
+		attachHostSelectionListeners()
+		handle.update()
 	}
 
 	function handleHostUnavailablePointerEnter(slot: string) {
-		if (!hostDragging || !hostPaintMode) return
-		if (hostLastPointerSlot === slot) return
-		hostLastPointerSlot = slot
-		const changed = setBlockedSlotState(slot, hostPaintMode === 'add')
-		if (changed) {
-			handle.update()
-		}
+		if (!hostSelectionMode || !hostSelectionStartSlot) return
+		if (hostSelectionEndSlot === slot) return
+		hostSelectionEndSlot = slot
+		hostSelectionSlots = getHostSelectionSlots(hostSelectionStartSlot, slot)
+		handle.update()
 	}
 
 	function toggleIncludedAttendee(attendeeId: string) {
@@ -578,9 +638,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		activePreviewSlot = null
 		previewTooltip = null
 		mobileDayKey = null
-		hostPaintMode = null
-		hostDragging = false
-		hostLastPointerSlot = null
+		clearHostSelection()
+		detachHostSelectionListeners()
 		isLoading = true
 		isSaving = false
 		pendingSave = false
@@ -1122,6 +1181,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									selectedSlotLabel: 'selected in host preview',
 									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
+									hideDisabledOnlyRowsAndColumns: true,
 									highlightedSlots: allAvailableSlots,
 									highlightedSlotLabel: 'all selected attendees can attend',
 									slotAvailability: previewAvailability,
@@ -1289,11 +1349,14 @@ export function ScheduleHostRoute(handle: Handle) {
 									Host unavailable slots
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Click slots to mark them completely unavailable for everyone.
+									Click and drag to select a range, then release to apply. Press
+									Escape to cancel an in-progress selection.
 								</p>
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
+									selectionSlots: hostSelectionSlots,
+									selectionSlotLabel: 'included in pending drag selection',
 									selectedSlotLabel: 'marked unavailable by host',
 									unselectedSlotLabel: 'available for scheduling',
 									selectedBackground:
@@ -1326,6 +1389,13 @@ export function ScheduleHostRoute(handle: Handle) {
 									{blockedSlots.size} blocked slot
 									{blockedSlots.size === 1 ? '' : 's'}
 								</p>
+								{hostSelectionMode ? (
+									<p css={{ margin: 0, color: colors.textMuted }}>
+										Selecting {hostSelectionSlots.size} slot
+										{hostSelectionSlots.size === 1 ? '' : 's'} — release to
+										apply or press Escape to cancel.
+									</p>
+								) : null}
 							</section>
 
 							<section

@@ -25,8 +25,11 @@ type ScheduleGridProps = {
 	slots: Array<string>
 	selectedSlots: ReadonlySet<string>
 	disabledSlots?: ReadonlySet<string>
+	hideDisabledOnlyRowsAndColumns?: boolean
 	highlightedSlots?: ReadonlySet<string>
 	highlightedSlotLabel?: string
+	selectionSlots?: ReadonlySet<string>
+	selectionSlotLabel?: string
 	selectedSlotLabel?: string
 	unselectedSlotLabel?: string
 	selectedBackground?: string
@@ -84,7 +87,34 @@ function getCellBackground(params: {
 
 export function renderScheduleGrid(props: ScheduleGridProps) {
 	const grid = buildGridModel(props.slots)
-	const { dayKeys, dayLabels, timeKeys, timeLabels, cellByDayAndTime } = grid
+	const {
+		dayKeys: allDayKeys,
+		dayLabels,
+		timeKeys: allTimeKeys,
+		timeLabels,
+		cellByDayAndTime,
+	} = grid
+	const collapseDisabledAxes =
+		!!props.hideDisabledOnlyRowsAndColumns &&
+		(props.disabledSlots?.size ?? 0) > 0
+	const dayKeys = collapseDisabledAxes
+		? allDayKeys.filter((dayKey) =>
+				allTimeKeys.some((timeKey) => {
+					const slot = cellByDayAndTime[dayKey]?.[timeKey]
+					if (!slot) return false
+					return !(props.disabledSlots?.has(slot) ?? false)
+				}),
+			)
+		: allDayKeys
+	const timeKeys = collapseDisabledAxes
+		? allTimeKeys.filter((timeKey) =>
+				dayKeys.some((dayKey) => {
+					const slot = cellByDayAndTime[dayKey]?.[timeKey]
+					if (!slot) return false
+					return !(props.disabledSlots?.has(slot) ?? false)
+				}),
+			)
+		: allTimeKeys
 	const activeDayKey = toDayKey(props.activeSlot)
 	const defaultMobileDayKey =
 		activeDayKey && dayKeys.includes(activeDayKey)
@@ -231,6 +261,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const isDisabled = props.disabledSlots?.has(slot) ?? false
 									const isHighlighted =
 										props.highlightedSlots?.has(slot) ?? false
+									const isPendingSelection =
+										props.selectionSlots?.has(slot) ?? false
 									const isRangeAnchor = props.rangeAnchor === slot
 									const isActive = props.activeSlot === slot
 									const background = getCellBackground({
@@ -243,7 +275,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									})
 									const slotDate = new Date(slot)
 									const slotLabel = slotDateFormatter.format(slotDate)
-									const selectionLabel = toSelectionLabel({
+									const availabilitySelectionLabel = toSelectionLabel({
 										selected: isSelected,
 										selectedSlotLabel: props.selectedSlotLabel,
 										unselectedSlotLabel: props.unselectedSlotLabel,
@@ -256,10 +288,16 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										isHighlighted && props.highlightedSlotLabel
 											? `, ${props.highlightedSlotLabel}`
 											: ''
+									const pendingSelectionLabel =
+										isPendingSelection && props.selectionSlotLabel
+											? `, ${props.selectionSlotLabel}`
+											: isPendingSelection
+												? ', included in pending selection'
+												: ''
 									const disabledLabel = isDisabled
 										? ', unavailable for scheduling'
 										: ''
-									const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${highlightedLabel}${disabledLabel}`
+									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${highlightedLabel}${pendingSelectionLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
 
 									return (
@@ -299,10 +337,17 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: 'pointer',
 													fontSize: typography.fontSize.xs,
 													fontWeight: typography.fontWeight.medium,
+													boxShadow: isPendingSelection
+														? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
+														: undefined,
 													outline:
-														isRangeAnchor || isActive
+														isRangeAnchor || isActive || isPendingSelection
 															? `2px solid ${colors.primary}`
 															: 'none',
+													outlineStyle:
+														isPendingSelection && !(isRangeAnchor || isActive)
+															? 'dashed'
+															: 'solid',
 													outlineOffset: '-2px',
 													opacity: isDisabled ? 0.58 : 1,
 													'&:focus-visible': {

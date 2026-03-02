@@ -48,7 +48,7 @@ function getBrowserTimeZone() {
 export function HomeRoute(handle: Handle) {
 	const today = new Date()
 	const browserTimeZone = getBrowserTimeZone()
-	let title = 'Scheduling poll'
+	let title = ''
 	let hostName = ''
 	let intervalMinutes = 30
 	let startDateInput = formatDateInputValue(today)
@@ -453,7 +453,7 @@ export function HomeRoute(handle: Handle) {
 								type="text"
 								name="hostName"
 								value={hostName}
-								placeholder="Kent"
+								placeholder="Your name"
 								on={{
 									input: (event) => {
 										hostName = event.currentTarget.value

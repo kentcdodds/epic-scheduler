@@ -8,6 +8,7 @@ import {
 import {
 	findSelectionForAttendee,
 	formatSlotForAttendeeTimeZone,
+	getRectangularSlotSelection,
 } from '#client/schedule-utils.ts'
 import {
 	detectTapRangeMode,
@@ -72,9 +73,10 @@ export function ScheduleRoute(handle: Handle) {
 	let changeVersion = 0
 	let pendingSave = false
 	let snapshotRequestId = 0
-	let paintMode: 'add' | 'remove' | null = null
-	let dragging = false
-	let lastPointerSlot: string | null = null
+	let pointerSelectionMode: 'add' | 'remove' | null = null
+	let pointerSelectionStartSlot: string | null = null
+	let pointerSelectionEndSlot: string | null = null
+	let pointerSelectionSlots = new Set<string>()
 	let lastPathname = ''
 	let initialNameLoaded = false
 	const autoSaveDelayMs = 650
@@ -150,10 +152,79 @@ export function ScheduleRoute(handle: Handle) {
 		offlinePollInFlight = false
 	}
 
+	function clearPointerSelection() {
+		pointerSelectionMode = null
+		pointerSelectionStartSlot = null
+		pointerSelectionEndSlot = null
+		pointerSelectionSlots = new Set<string>()
+	}
+
+	function detachPointerSelectionListeners() {
+		if (typeof window === 'undefined') return
+		window.removeEventListener('pointerup', handleGlobalPointerUp)
+		window.removeEventListener('keydown', handleGlobalKeyDown)
+	}
+
+	function attachPointerSelectionListeners() {
+		if (typeof window === 'undefined') return
+		detachPointerSelectionListeners()
+		window.addEventListener('pointerup', handleGlobalPointerUp)
+		window.addEventListener('keydown', handleGlobalKeyDown)
+	}
+
+	function getPointerSelectionSlots(startSlot: string, endSlot: string) {
+		if (!snapshot) return new Set<string>()
+		const blockedSlots = getBlockedSlots()
+		return new Set(
+			getRectangularSlotSelection({
+				slots: snapshot.slots,
+				startSlot,
+				endSlot,
+			}).filter((slot) => !blockedSlots.has(slot)),
+		)
+	}
+
+	function applyPendingPointerSelection() {
+		if (!pointerSelectionMode || pointerSelectionSlots.size === 0) return false
+		const shouldSelect = pointerSelectionMode === 'add'
+		let changed = false
+		for (const slot of pointerSelectionSlots) {
+			const wasSelected = selectedSlots.has(slot)
+			if (wasSelected === shouldSelect) continue
+			setSlotSelection(slot, shouldSelect)
+			changed = true
+		}
+		return changed
+	}
+
+	function finishPointerSelection(cancelled = false) {
+		if (!pointerSelectionMode) return
+		detachPointerSelectionListeners()
+		const changed = cancelled ? false : applyPendingPointerSelection()
+		clearPointerSelection()
+		if (changed) {
+			markDirty()
+			return
+		}
+		handle.update()
+	}
+
+	function handleGlobalPointerUp() {
+		finishPointerSelection(false)
+	}
+
+	function handleGlobalKeyDown(event: KeyboardEvent) {
+		if (event.key !== 'Escape' || !pointerSelectionMode) return
+		event.preventDefault()
+		finishPointerSelection(true)
+	}
+
 	function cleanupResources() {
 		clearSocketResources()
 		clearOfflinePollTimer()
 		clearSaveDebounceTimer()
+		detachPointerSelectionListeners()
+		clearPointerSelection()
 		pendingSave = false
 	}
 
@@ -403,27 +474,35 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		if (useTapRangeMode) return
 		if (!ensureSlotIsEditable(slot)) return
-		paintMode = selectedSlots.has(slot) ? 'remove' : 'add'
-		dragging = true
-		lastPointerSlot = slot
-		setSlotSelection(slot, paintMode === 'add')
-		markDirty()
+		pointerSelectionMode = selectedSlots.has(slot) ? 'remove' : 'add'
+		pointerSelectionStartSlot = slot
+		pointerSelectionEndSlot = slot
+		pointerSelectionSlots = getPointerSelectionSlots(slot, slot)
+		activeSlot = slot
+		attachPointerSelectionListeners()
+		handle.update()
 	}
 
 	function handleCellPointerEnter(slot: string) {
-		if (!dragging || !paintMode || useTapRangeMode) return
-		if (lastPointerSlot === slot) return
-		const blockedSlots = getBlockedSlots()
-		if (blockedSlots.has(slot)) return
-		lastPointerSlot = slot
-		setSlotSelection(slot, paintMode === 'add')
-		markDirty()
+		if (
+			useTapRangeMode ||
+			!pointerSelectionMode ||
+			!pointerSelectionStartSlot
+		) {
+			return
+		}
+		if (pointerSelectionEndSlot === slot) return
+		pointerSelectionEndSlot = slot
+		pointerSelectionSlots = getPointerSelectionSlots(
+			pointerSelectionStartSlot,
+			slot,
+		)
+		activeSlot = slot
+		handle.update()
 	}
 
 	function handleCellPointerUp() {
-		dragging = false
-		paintMode = null
-		lastPointerSlot = null
+		finishPointerSelection(false)
 	}
 
 	function handleCellClick(slot: string) {
@@ -505,9 +584,8 @@ export function ScheduleRoute(handle: Handle) {
 		changeVersion = 0
 		pendingSave = false
 		isSaving = false
-		paintMode = null
-		dragging = false
-		lastPointerSlot = null
+		clearPointerSelection()
+		detachPointerSelectionListeners()
 		connectionState = 'offline'
 		isLoading = true
 		initialNameLoaded = false
@@ -690,6 +768,9 @@ export function ScheduleRoute(handle: Handle) {
 							slots: currentSnapshot.slots,
 							selectedSlots,
 							disabledSlots: blockedSlots,
+							hideDisabledOnlyRowsAndColumns: true,
+							selectionSlots: pointerSelectionSlots,
+							selectionSlotLabel: 'included in pending drag selection',
 							mobileDayKey,
 							slotAvailability,
 							maxAvailabilityCount,
@@ -813,6 +894,13 @@ export function ScheduleRoute(handle: Handle) {
 					{!normalizedAttendeeName ? (
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							Add your name before selecting availability.
+						</p>
+					) : null}
+					{pointerSelectionMode ? (
+						<p css={{ margin: 0, color: colors.textMuted }}>
+							Selecting {pointerSelectionSlots.size} slot
+							{pointerSelectionSlots.size === 1 ? '' : 's'} — release to apply
+							or press Escape to cancel.
 						</p>
 					) : null}
 					{statusMessage ? (

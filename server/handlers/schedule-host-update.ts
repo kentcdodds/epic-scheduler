@@ -146,15 +146,19 @@ export function createScheduleHostUpdateHandler(
 
 			const roomId = appEnv.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = appEnv.SCHEDULE_ROOM.get(roomId)
-			void room.fetch('https://schedule-room/broadcast', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					type: 'schedule-updated',
-					shareToken,
-					updatedAt: new Date().toISOString(),
-				}),
-			})
+			try {
+				await room.fetch('https://schedule-room/broadcast', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						type: 'schedule-updated',
+						shareToken,
+						updatedAt: new Date().toISOString(),
+					}),
+				})
+			} catch (broadcastError) {
+				console.error('schedule host update broadcast failed:', broadcastError)
+			}
 
 			return Response.json({ ok: true, snapshot })
 		},

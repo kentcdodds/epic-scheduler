@@ -23,8 +23,12 @@ on the Epic Web E2E workshop and our existing setup.
   until touch interaction auto-enables tap-based range selection mode.
 - Tap-range selection mode behavior on mobile, including both adding and
   removing ranges when users tap an already selected slot as the range start.
+- Desktop drag selection behavior where dragging creates a pending range that
+  applies on pointer release and can be canceled with Escape.
 - Attendee slot-detail metadata such as displayed attendee timezone and
   attendee-local time for the selected slot.
+- Collapsed attendee/preview axes when an entire row or column is host-blocked,
+  while host unavailable-slots grid still renders the full matrix.
 - Integration across the worker, client router, and API endpoints.
 - Regressions that are expensive to catch in unit tests.
 
