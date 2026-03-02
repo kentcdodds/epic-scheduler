@@ -24,8 +24,6 @@ const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
 type ScheduleGridProps = {
 	slots: Array<string>
 	selectedSlots: ReadonlySet<string>
-	pendingAddedSlots?: ReadonlySet<string>
-	pendingRemovedSlots?: ReadonlySet<string>
 	disabledSlots?: ReadonlySet<string>
 	highlightedSlots?: ReadonlySet<string>
 	highlightedSlotLabel?: string
@@ -239,18 +237,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										availableNames: [],
 									}
 									const isSelected = props.selectedSlots.has(slot)
-									const isPendingAdd =
-										props.pendingAddedSlots?.has(slot) ?? false
-									const isPendingRemove =
-										props.pendingRemovedSlots?.has(slot) ?? false
 									const isDisabled = props.disabledSlots?.has(slot) ?? false
 									const isHighlighted =
 										props.highlightedSlots?.has(slot) ?? false
-									const pendingStateLabel = isPendingAdd
-										? 'pending add'
-										: isPendingRemove
-											? 'pending removal'
-											: ''
 									const isRangeAnchor = props.rangeAnchor === slot
 									const isActive = props.activeSlot === slot
 									const background = getCellBackground({
@@ -279,7 +268,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const disabledLabel = isDisabled
 										? ', unavailable for scheduling'
 										: ''
-									const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${pendingStateLabel ? `, ${pendingStateLabel}` : ''}${highlightedLabel}${disabledLabel}`
+									const ariaLabel = `${slotLabel}, ${selectionLabel}, ${attendeeLabel}${highlightedLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
 
 									return (
@@ -299,7 +288,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													props.readOnly || isDisabled ? undefined : isSelected
 												}
 												aria-disabled={isDisabled ? 'true' : undefined}
-												title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}${pendingStateLabel ? `\n${pendingStateLabel}` : ''}`}
+												title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}`}
 												css={{
 													display: 'grid',
 													placeItems: 'center',
@@ -311,9 +300,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													background,
 													backgroundImage: isDisabled
 														? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-text) 11%, transparent) 0 5px, transparent 5px 10px)'
-														: isPendingRemove
-															? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-error) 20%, transparent) 0 6px, transparent 6px 12px)'
-															: undefined,
+														: undefined,
 													color: colors.text,
 													cursor:
 														props.readOnly || isDisabled
@@ -321,9 +308,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: 'pointer',
 													fontSize: typography.fontSize.xs,
 													fontWeight: typography.fontWeight.medium,
-													boxShadow: isPendingAdd
-														? `inset 0 0 0 2px ${colors.primary}`
-														: undefined,
 													outline:
 														isRangeAnchor || isActive
 															? `2px solid ${colors.primary}`
@@ -373,32 +357,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														: undefined,
 												}}
 											>
-												{isPendingAdd || isPendingRemove ? (
-													<span
-														aria-hidden
-														css={{
-															position: 'absolute',
-															top: '0.2rem',
-															right: '0.2rem',
-															display: 'inline-flex',
-															minWidth: '0.9rem',
-															height: '0.9rem',
-															paddingInline: '0.2rem',
-															alignItems: 'center',
-															justifyContent: 'center',
-															borderRadius: radius.full,
-															backgroundColor: isPendingAdd
-																? colors.primary
-																: colors.error,
-															color: colors.onPrimary,
-															fontSize: '0.6rem',
-															fontWeight: typography.fontWeight.bold,
-															lineHeight: 1,
-														}}
-													>
-														{isPendingAdd ? '+' : '−'}
-													</span>
-												) : null}
 												<span css={{ position: 'relative', zIndex: 1 }}>
 													{availability.count > 0 ? availability.count : ''}
 												</span>
