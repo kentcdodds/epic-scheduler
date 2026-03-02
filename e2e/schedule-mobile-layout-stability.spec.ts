@@ -9,7 +9,7 @@ test('mobile selection keeps schedule grid vertically stable', async ({
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 
-	const grid = page.locator('table').nth(1)
+	const grid = page.locator('[data-schedule-grid-shell] table:visible')
 	await expect(grid).toBeVisible()
 	const selectedSlotLocator = grid.locator('button[aria-pressed="true"]')
 	const nextDayButton = page.getByRole('button', { name: 'Show next day' })

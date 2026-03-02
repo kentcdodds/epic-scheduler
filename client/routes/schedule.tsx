@@ -66,17 +66,17 @@ export function ScheduleRoute(handle: Handle) {
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let offlinePollTimer: ReturnType<typeof setInterval> | null = null
+	let offlinePollInFlight = false
 	let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
 	let hasDirtyChanges = false
 	let changeVersion = 0
 	let pendingSave = false
+	let snapshotRequestId = 0
 	let paintMode: 'add' | 'remove' | null = null
 	let dragging = false
 	let lastPointerSlot: string | null = null
 	let lastPathname = ''
 	let initialNameLoaded = false
-	let snapshotLoadInFlight = false
-	let snapshotReloadQueued = false
 	const autoSaveDelayMs = 650
 	const reconnectDelayMs = 1200
 	const offlinePollIntervalMs = 4000
@@ -147,6 +147,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (!offlinePollTimer) return
 		clearInterval(offlinePollTimer)
 		offlinePollTimer = null
+		offlinePollInFlight = false
 	}
 
 	function cleanupResources() {
@@ -167,7 +168,11 @@ export function ScheduleRoute(handle: Handle) {
 		if (nextState === 'offline') {
 			if (!offlinePollTimer) {
 				offlinePollTimer = setInterval(() => {
-					void loadSnapshot()
+					if (offlinePollInFlight) return
+					offlinePollInFlight = true
+					void loadSnapshot().finally(() => {
+						offlinePollInFlight = false
+					})
 				}, offlinePollIntervalMs)
 			}
 		} else {
@@ -177,64 +182,63 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	async function loadSnapshot() {
-		if (snapshotLoadInFlight) {
-			snapshotReloadQueued = true
-			return
-		}
-		snapshotLoadInFlight = true
+		const requestShareToken = shareToken
+		if (!requestShareToken) return
+		const requestId = ++snapshotRequestId
 		try {
-			do {
-				snapshotReloadQueued = false
-				const requestShareToken = shareToken
-				if (!requestShareToken || handle.signal.aborted) break
-				try {
-					const response = await fetch(`/api/schedules/${requestShareToken}`, {
-						headers: { Accept: 'application/json' },
-					})
-					const payload = (await response.json().catch(() => null)) as {
-						ok?: boolean
-						snapshot?: ScheduleSnapshot
-						error?: string
-					} | null
-					if (requestShareToken !== shareToken || handle.signal.aborted)
-						continue
-					if (!response.ok || !payload?.ok || !payload.snapshot) {
-						const errorText =
-							typeof payload?.error === 'string'
-								? payload.error
-								: 'Unable to load schedule.'
-						setStatus(errorText, true)
-						isLoading = false
-						handle.update()
-						continue
-					}
+			const response = await fetch(`/api/schedules/${requestShareToken}`, {
+				headers: { Accept: 'application/json' },
+			})
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				snapshot?: ScheduleSnapshot
+				error?: string
+			} | null
+			if (
+				requestShareToken !== shareToken ||
+				handle.signal.aborted ||
+				requestId !== snapshotRequestId
+			) {
+				return
+			}
+			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				const errorText =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to load schedule.'
+				setStatus(errorText, true)
+				isLoading = false
+				handle.update()
+				return
+			}
 
-					snapshot = payload.snapshot
-					isLoading = false
+			snapshot = payload.snapshot
+			isLoading = false
 
-					if (!initialNameLoaded) {
-						const initialName = getQueryName()
-						if (initialName) attendeeName = initialName
-						initialNameLoaded = true
-					}
+			if (!initialNameLoaded) {
+				const initialName = getQueryName()
+				if (initialName) attendeeName = initialName
+				initialNameLoaded = true
+			}
 
-					persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
-					if (!hasDirtyChanges) {
-						selectedSlots = new Set(persistedSelectedSlots)
-					} else {
-						normalizeLocalSelectionAgainstBlockedSlots()
-					}
+			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
+			if (!hasDirtyChanges) {
+				selectedSlots = new Set(persistedSelectedSlots)
+			} else {
+				normalizeLocalSelectionAgainstBlockedSlots()
+			}
 
-					handle.update()
-				} catch {
-					if (requestShareToken !== shareToken || handle.signal.aborted)
-						continue
-					isLoading = false
-					setStatus('Unable to load schedule.', true)
-				}
-			} while (snapshotReloadQueued && !handle.signal.aborted)
-		} finally {
-			snapshotLoadInFlight = false
+			handle.update()
+		} catch {
+			if (
+				requestShareToken !== shareToken ||
+				handle.signal.aborted ||
+				requestId !== snapshotRequestId
+			) {
+				return
+			}
+			isLoading = false
+			setStatus('Unable to load schedule.', true)
 		}
 	}
 

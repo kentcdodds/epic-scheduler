@@ -13,7 +13,7 @@ test('attendee update appears in host schedule view', async ({
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 	const hostChosenSlot = page
-		.locator('table')
+		.locator('[data-schedule-grid-shell] table:visible')
 		.first()
 		.locator('button[aria-pressed="true"]')
 		.first()
@@ -37,7 +37,7 @@ test('attendee update appears in host schedule view', async ({
 		await attendeePage.getByLabel('Your name').fill('Alex')
 
 		const candidateSlot = attendeePage
-			.locator('table')
+			.locator('[data-schedule-grid-shell] table:visible')
 			.first()
 			.getByRole('button', {
 				name: new RegExp(`^${escapeRegex(slotPrefix)}`),
@@ -67,7 +67,7 @@ test('attendee update appears in host schedule view', async ({
 			.toBe(2)
 		await page.reload()
 		const hostUpdatedSlot = page
-			.locator('table')
+			.locator('[data-schedule-grid-shell] table:visible')
 			.first()
 			.getByRole('button', {
 				name: new RegExp(`^${escapeRegex(slotPrefix)}`),

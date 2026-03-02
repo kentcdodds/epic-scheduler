@@ -210,7 +210,14 @@ async function insertAvailabilityRows(params: {
 					attendee_id,
 					slot_start_utc,
 					updated_at
-				) VALUES (?1, ?2, ?3, ?4)`,
+				)
+				SELECT ?1, ?2, ?3, ?4
+				WHERE NOT EXISTS (
+					SELECT 1
+					FROM schedule_blocked_slots
+					WHERE schedule_id = ?1
+						AND slot_start_utc = ?3
+				)`,
 			)
 			.bind(params.scheduleId, params.attendeeId, slot, now),
 	)

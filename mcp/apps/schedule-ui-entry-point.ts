@@ -1,5 +1,6 @@
-export const scheduleUiResourceUri =
-	'ui://schedule-app/entry-point.html' as const
+import { scheduleUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
+
+export { scheduleUiResourceUri }
 
 function escapeHtmlAttribute(value: string) {
 	return value
@@ -152,6 +153,10 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 			.scheduler-tertiary-button:focus-visible {
 				opacity: 1;
 			}
+			.scheduler-tertiary-button:focus-visible {
+				outline: 2px solid var(--color-primary);
+				outline-offset: 2px;
+			}
 			.scheduler-status {
 				font-size: var(--font-size-sm);
 				color: var(--color-text-muted);
@@ -300,7 +305,8 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 				<h1 data-schedule-title>Your availability</h1>
 				<p class="scheduler-muted">
 					This attendee UI uses the share token provided to open_schedule_ui. Use
-					open_schedule_host_ui for host-side link management.
+					open_schedule_host_ui for host link management, slot blocking, and
+					attendee response handling.
 				</p>
 				<p class="scheduler-muted">
 					Share token: <code data-share-token>Not provided</code>

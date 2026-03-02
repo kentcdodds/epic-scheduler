@@ -215,10 +215,11 @@ export function ScheduleHostRoute(handle: Handle) {
 				setStatus(errorText, true)
 				return
 			}
+			const hadQueuedLocalChanges = pendingSave
 			const nextBlockedSlots = toSet(payload.snapshot.blockedSlots)
 			snapshot = payload.snapshot
 			persistedBlockedSlots = new Set(nextBlockedSlots)
-			if (saveVersion === changeVersion) {
+			if (!hadQueuedLocalChanges && saveVersion === changeVersion) {
 				titleDraft = payload.snapshot.schedule.title
 				blockedSlots = new Set(nextBlockedSlots)
 			}
@@ -231,7 +232,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isSaving = false
 				handle.update()
-				const shouldReschedule = pendingSave && hasLocalHostChanges()
+				const shouldReschedule = pendingSave || hasLocalHostChanges()
 				pendingSave = false
 				if (shouldReschedule) {
 					queueHostSettingsSave()

@@ -29,7 +29,7 @@ function toOptionalString(value: unknown) {
 function toOptionalStringArray(value: unknown) {
 	if (value === undefined) return undefined
 	if (!Array.isArray(value)) return undefined
-	return value.filter((item): item is string => typeof item === 'string')
+	return value as Array<string>
 }
 
 function isHostUpdateValidationError(message: string) {
@@ -100,7 +100,8 @@ export function createScheduleHostUpdateHandler(
 			}
 			if (
 				body.blockedSlots !== undefined &&
-				!Array.isArray(body.blockedSlots)
+				(!Array.isArray(body.blockedSlots) ||
+					body.blockedSlots.some((slot) => typeof slot !== 'string'))
 			) {
 				return Response.json(
 					{ ok: false, error: 'blockedSlots must be an array of strings.' },

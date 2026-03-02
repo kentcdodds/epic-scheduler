@@ -18,6 +18,7 @@ export const colors = {
 	border: 'var(--color-border)',
 	error: 'var(--color-error)',
 	errorHover: 'var(--color-error-hover)',
+	success: 'var(--color-success)',
 } as const
 
 // Typography tokens

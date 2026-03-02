@@ -82,7 +82,7 @@ function getCellBackground(params: {
 		return params.selectedBackground
 	}
 	if (params.isHighlighted) {
-		return 'color-mix(in srgb, #22c55e 46%, var(--color-surface))'
+		return `color-mix(in srgb, ${colors.success} 46%, var(--color-surface))`
 	}
 	return getScheduleCellBackgroundColor({
 		count: params.count,
@@ -332,9 +332,12 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 																	props.onCellPointerDown?.(slot, event)
 															: undefined,
 													pointerenter:
-														interactive && props.onCellPointerEnter
-															? (event) =>
+														interactive &&
+														(props.onCellPointerEnter || props.onCellHover)
+															? (event) => {
 																	props.onCellPointerEnter?.(slot, event)
+																	props.onCellHover?.(slot)
+																}
 															: props.onCellHover
 																? () => props.onCellHover?.(slot)
 																: undefined,

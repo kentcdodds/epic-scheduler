@@ -139,9 +139,16 @@ function setupScheduleHostWidget() {
 			availableModes.length === 0 || availableModes.includes('fullscreen')
 		const displayMode = readDisplayMode(hostContext)
 		if (!supportsFullscreen || displayMode === 'fullscreen') return
-		const grantedMode = await hostBridge.requestDisplayMode('fullscreen')
-		if (grantedMode === 'fullscreen') {
-			updateFullscreenButton()
+		try {
+			const grantedMode = await hostBridge.requestDisplayMode('fullscreen')
+			if (grantedMode === 'fullscreen') {
+				updateFullscreenButton()
+			}
+		} catch (error) {
+			hasRequestedAutoFullscreen = false
+			console.warn('schedule host widget auto-fullscreen request failed', {
+				errorName: error instanceof Error ? error.name : 'UnknownError',
+			})
 		}
 	}
 

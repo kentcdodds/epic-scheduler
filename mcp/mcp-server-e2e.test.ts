@@ -10,13 +10,13 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { scheduleHostUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const migrationsDir = join(projectRoot, 'migrations')
 const bunBin = process.execPath
 const defaultTimeoutMs = 60_000
 const scheduleUiResourceUri = 'ui://schedule-app/entry-point.html'
-const scheduleHostUiResourceUri = 'ui://schedule-host-app/entry-point.html'
 
 function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms))

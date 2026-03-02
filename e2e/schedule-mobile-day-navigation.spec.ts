@@ -9,7 +9,7 @@ test('mobile schedule grid shows one day with prev/next navigation', async ({
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
 
-	const table = page.locator('table').nth(1)
+	const table = page.locator('[data-schedule-grid-shell] table:visible')
 	await expect(table).toBeVisible()
 	await expect(table.locator('thead tr th')).toHaveCount(2)
 

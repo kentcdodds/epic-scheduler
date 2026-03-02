@@ -1,5 +1,6 @@
-export const scheduleHostUiResourceUri =
-	'ui://schedule-host-app/entry-point.html' as const
+import { scheduleHostUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
+
+export { scheduleHostUiResourceUri }
 
 export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 	const stylesheetHref = new URL('/styles.css', baseUrl).toString()
