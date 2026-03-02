@@ -396,6 +396,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		const requestShareToken = shareToken
 		const currentSnapshot = snapshot
 		if (!requestShareToken || !currentSnapshot) return
+		if (handle.signal.aborted) return
 		if (isSaving) {
 			pendingSave = true
 			return
