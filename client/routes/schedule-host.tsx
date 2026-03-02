@@ -657,6 +657,9 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: new Set<string>(),
+									readOnly: true,
+									selectedSlotLabel: 'selected in host preview',
+									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
 									highlightedSlots: allAvailableSlots,
 									highlightedSlotLabel: 'all selected attendees can attend',

@@ -112,12 +112,9 @@ function setupScheduleHostWidget() {
 		return fullscreenManager.toggleFullscreenMode()
 	}
 
-	function maybeApplyToolInput(params: {
-		shareToken: string | null
-		attendeeName: string | null
-	}) {
-		if (!params.shareToken) return
-		setShareToken(params.shareToken)
+	function maybeApplyToolInput(shareToken: string | null) {
+		if (!shareToken) return
+		setShareToken(shareToken)
 	}
 
 	function handleToolInputMessage(message: unknown) {
@@ -129,7 +126,7 @@ function setupScheduleHostWidget() {
 		) {
 			return
 		}
-		maybeApplyToolInput(extractScheduleToolInput(message))
+		maybeApplyToolInput(extractScheduleToolInput(message).shareToken)
 	}
 
 	loadHostButton.addEventListener('click', () => {
@@ -188,15 +185,11 @@ function setupScheduleHostWidget() {
 			openai?: unknown
 		}
 	).openai
-	maybeApplyToolInput(extractScheduleToolInput(openAiBridge))
+	maybeApplyToolInput(extractScheduleToolInput(openAiBridge).shareToken)
 	const widgetUrl = new URL(window.location.href)
-	maybeApplyToolInput({
-		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
-		attendeeName: readNonEmptyString(
-			widgetUrl.searchParams.get('attendeeName') ??
-				widgetUrl.searchParams.get('name'),
-		),
-	})
+	maybeApplyToolInput(
+		readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
+	)
 }
 
 if (document.readyState === 'loading') {

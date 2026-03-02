@@ -608,10 +608,10 @@ export async function getScheduleSnapshot(
 		rangeEndUtc: schedule.rangeEndUtc,
 		intervalMinutes: schedule.intervalMinutes,
 	})
-	const slotSet = new Set(slots)
+	const validSlots = new Set(slots)
 	const blockedSlotsSet = new Set(
 		(await getBlockedSlotsForScheduleId(db, schedule.id)).filter((slot) =>
-			slotSet.has(slot),
+			validSlots.has(slot),
 		),
 	)
 	const blockedSlots = Array.from(blockedSlotsSet).sort((left, right) =>
@@ -665,7 +665,6 @@ export async function getScheduleSnapshot(
 		string,
 		Array<string>
 	> = Object.fromEntries(slots.map((slot) => [slot, []]))
-	const validSlots = new Set(slots)
 
 	for (const row of availabilityRows.results) {
 		if (!validSlots.has(row.slot_start_utc)) continue

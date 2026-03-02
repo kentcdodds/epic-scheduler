@@ -73,11 +73,38 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 		}) => {
 			const requestSummary = {
 				shareToken: summarizeShareToken(shareToken),
+				hasHostAccessToken: hostAccessToken.trim().length > 0,
 				hasTitleUpdate: typeof title === 'string',
 				hasBlockedSlotsUpdate: Array.isArray(blockedSlots),
 				blockedSlotsCount: blockedSlots?.length ?? 0,
 			}
 			console.info('update_schedule_host_settings tool invoked', requestSummary)
+			const appDb = agent.getAppDb()
+			const normalizedHostAccessToken = hostAccessToken.trim()
+
+			if (!normalizedHostAccessToken) {
+				return {
+					content: [{ type: 'text', text: 'Host access token is required.' }],
+					isError: true,
+				}
+			}
+
+			const expectedHostToken = await getScheduleHostAccessToken(
+				appDb,
+				shareToken,
+			)
+			if (!expectedHostToken) {
+				return {
+					content: [{ type: 'text', text: 'Schedule not found.' }],
+					isError: true,
+				}
+			}
+			if (normalizedHostAccessToken !== expectedHostToken) {
+				return {
+					content: [{ type: 'text', text: 'Invalid host access token.' }],
+					isError: true,
+				}
+			}
 
 			if (title === undefined && blockedSlots === undefined) {
 				const message =
@@ -88,39 +115,14 @@ export async function registerUpdateScheduleHostSettingsTool(agent: MCP) {
 				}
 			}
 
-			const normalizedHostToken = hostAccessToken.trim()
-			if (!normalizedHostToken) {
-				return {
-					content: [{ type: 'text', text: 'Missing host access token.' }],
-					isError: true,
-				}
-			}
-
-			const expectedHostToken = await getScheduleHostAccessToken(
-				agent.getAppDb(),
-				shareToken,
-			)
-			if (!expectedHostToken) {
-				return {
-					content: [{ type: 'text', text: 'Schedule not found.' }],
-					isError: true,
-				}
-			}
-			if (expectedHostToken !== normalizedHostToken) {
-				return {
-					content: [{ type: 'text', text: 'Invalid host access token.' }],
-					isError: true,
-				}
-			}
-
 			try {
-				await updateScheduleHostSettings(agent.getAppDb(), {
+				await updateScheduleHostSettings(appDb, {
 					shareToken,
 					title,
 					blockedSlots,
 				})
 
-				const snapshot = await getScheduleSnapshot(agent.getAppDb(), shareToken)
+				const snapshot = await getScheduleSnapshot(appDb, shareToken)
 				if (!snapshot) {
 					return {
 						content: [{ type: 'text', text: 'Schedule not found.' }],

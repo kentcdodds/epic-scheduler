@@ -338,7 +338,7 @@ test(
 				? createStructured.hostAccessToken
 				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
-		expect(hostAccessToken.length).toBeGreaterThan(4)
+		expect(hostAccessToken.length).toBeGreaterThan(8)
 
 		const submitResult = await mcpClient.client.callTool({
 			name: 'submit_schedule_availability',

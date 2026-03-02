@@ -6,7 +6,11 @@ function getHostAccessTokenStorageKey(shareToken: string) {
 
 export function readHostAccessToken(shareToken: string) {
 	if (typeof window === 'undefined') return null
-	return window.localStorage.getItem(getHostAccessTokenStorageKey(shareToken))
+	try {
+		return window.localStorage.getItem(getHostAccessTokenStorageKey(shareToken))
+	} catch {
+		return null
+	}
 }
 
 export function writeHostAccessToken(
@@ -14,8 +18,12 @@ export function writeHostAccessToken(
 	hostAccessToken: string,
 ) {
 	if (typeof window === 'undefined') return
-	window.localStorage.setItem(
-		getHostAccessTokenStorageKey(shareToken),
-		hostAccessToken,
-	)
+	try {
+		window.localStorage.setItem(
+			getHostAccessTokenStorageKey(shareToken),
+			hostAccessToken,
+		)
+	} catch {
+		// no-op: storage unavailable in this environment
+	}
 }

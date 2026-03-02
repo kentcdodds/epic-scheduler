@@ -348,10 +348,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														interactive && props.onCellPointerUp
 															? (event) => props.onCellPointerUp?.(slot, event)
 															: undefined,
-													click:
-														interactive && props.onCellClick
-															? (event) => props.onCellClick?.(slot, event)
-															: undefined,
+													click: props.onCellClick
+														? (event) => props.onCellClick?.(slot, event)
+														: undefined,
 													focus: props.onCellFocus
 														? () => props.onCellFocus?.(slot)
 														: undefined,
