@@ -468,10 +468,10 @@ test(
 		).toBe(sandboxOrigin)
 
 		const apiBaseUrlMatch =
-			scheduleResource?.text.match(/data-api-base-url="([^"]+)"/) ?? null
+			scheduleResource?.text.match(/data-api-base-url="([^"]+)"/)
 		const widgetDomain = apiBaseUrlMatch?.[1]
 			? new URL(apiBaseUrlMatch[1]).origin
-			: null
+			: undefined
 		expect(widgetDomain).toBeDefined()
 		expect(scheduleResourceMeta?.ui?.domain).toBe(widgetDomain)
 		expect(scheduleResourceMeta?.['openai/widgetDomain']).toBe(widgetDomain)
