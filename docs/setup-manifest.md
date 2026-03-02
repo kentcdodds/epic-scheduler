@@ -41,7 +41,8 @@ Use Cloudflare's built-in rate limiting rules instead of custom Worker logic.
 Local development uses `.env`, which Wrangler loads automatically:
 
 - `APP_BASE_URL` (optional; defaults to request origin, example
-  `https://app.example.com`)
+  `https://app.example.com`). Also used as the canonical MCP widget/API domain
+  so sandbox-hosted widget requests target your real app domain.
 - `APP_COMMIT_SHA` (optional; set automatically by deploy workflows for
   version-aware `/health` checks)
 

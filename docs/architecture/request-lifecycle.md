@@ -48,9 +48,11 @@ Full page navigations still occur for:
 
 `worker/index.ts` wraps the handler with `withCors`:
 
-- CORS headers are only added when `Origin` exactly matches the request origin.
+- CORS headers are added when `Origin` exactly matches the request origin.
+- `Origin: null` is allowed for `/api/*` requests (opaque sandbox iframes).
+- `https://*.web-sandbox.oaiusercontent.com` is allowed for `/api/*` requests.
 - Allowed methods are `GET, POST, OPTIONS`.
 - Allowed headers include `content-type` and `authorization`.
 
 This keeps cross-origin behavior narrow while still allowing same-origin browser
-and API requests.
+and API requests plus sandboxed MCP app API calls.

@@ -11,6 +11,7 @@ const mcpWriteToolNames = new Set([
 	'create_schedule',
 	'submit_schedule_availability',
 ])
+const openAiSandboxOriginSuffix = '.web-sandbox.oaiusercontent.com'
 
 type McpRpcSummarySource =
 	| 'none'
@@ -51,6 +52,35 @@ function decodeBase64Utf8(value: string) {
 		return new TextDecoder().decode(bytes)
 	} catch {
 		return null
+	}
+}
+
+function resolveCanonicalBaseUrl(request: Request, env: Env) {
+	const configuredBaseUrl = env.APP_BASE_URL?.trim()
+	if (configuredBaseUrl) {
+		try {
+			return new URL('/', configuredBaseUrl).toString()
+		} catch {
+			// Fall back to request origin if the configured URL is malformed.
+		}
+	}
+	return new URL('/', request.url).toString()
+}
+
+function isAllowedCrossOriginRequest(origin: string, request: Request) {
+	if (origin === 'null') return true
+
+	const url = new URL(request.url)
+	if (!url.pathname.startsWith('/api/')) return false
+
+	try {
+		const parsedOrigin = new URL(origin)
+		return (
+			parsedOrigin.protocol === 'https:' &&
+			parsedOrigin.hostname.endsWith(openAiSandboxOriginSuffix)
+		)
+	} catch {
+		return false
 	}
 }
 
@@ -141,7 +171,9 @@ const appHandler = withCors({
 		const origin = request.headers.get('Origin')
 		if (!origin) return null
 		const requestOrigin = new URL(request.url).origin
-		if (origin !== requestOrigin) return null
+		if (origin !== requestOrigin && !isAllowedCrossOriginRequest(origin, request)) {
+			return null
+		}
 		return {
 			'Access-Control-Allow-Origin': origin,
 			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -183,7 +215,7 @@ const appHandler = withCors({
 					props?: { baseUrl: string }
 				}
 			).props = {
-				baseUrl: url.origin,
+				baseUrl: resolveCanonicalBaseUrl(request, env),
 			}
 			try {
 				const response = await MCP.serve(mcpResourcePath, {

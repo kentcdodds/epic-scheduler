@@ -1,11 +1,21 @@
 export const scheduleUiResourceUri =
 	'ui://schedule-app/entry-point.html' as const
 
+function escapeHtmlAttribute(value: string) {
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;')
+}
+
 export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
-	const stylesheetHref = new URL('/styles.css', baseUrl).toString()
+	const canonicalBaseUrl = new URL('/', baseUrl).toString()
+	const stylesheetHref = new URL('/styles.css', canonicalBaseUrl).toString()
 	const widgetScriptHref = new URL(
 		'/mcp-apps/schedule-widget.js',
-		baseUrl,
+		canonicalBaseUrl,
 	).toString()
 
 	return `
@@ -265,7 +275,11 @@ export function renderScheduleUiEntryPoint(baseUrl: string | URL) {
 		</style>
 	</head>
 	<body>
-		<main class="scheduler-widget" data-schedule-widget>
+		<main
+			class="scheduler-widget"
+			data-schedule-widget
+			data-api-base-url="${escapeHtmlAttribute(canonicalBaseUrl)}"
+		>
 			<section class="scheduler-card">
 				<h1 data-schedule-title>Your availability</h1>
 				<p class="scheduler-muted">

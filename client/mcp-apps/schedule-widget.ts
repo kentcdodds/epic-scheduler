@@ -51,6 +51,12 @@ function readNonEmptyString(value: unknown) {
 	return normalized.length > 0 ? normalized : null
 }
 
+function getApiBaseUrl(rootElement: HTMLElement) {
+	const configuredBaseUrl = readNonEmptyString(rootElement.dataset.apiBaseUrl)
+	if (configuredBaseUrl) return new URL('/', configuredBaseUrl)
+	return new URL('/', window.location.href)
+}
+
 function getBrowserTimeZone() {
 	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
 	if (typeof value !== 'string') return 'UTC'
@@ -128,6 +134,7 @@ function setupScheduleWidget() {
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
 	const fetchSnapshotTimeoutMs = 10_000
+	const apiBaseUrl = getApiBaseUrl(rootElement)
 
 	function setStatus(message: string, error = false) {
 		statusElement.textContent = message
@@ -463,9 +470,12 @@ function setupScheduleWidget() {
 		}, fetchSnapshotTimeoutMs)
 		let response: Response
 		try {
-			response = await fetch(`/api/schedules/${requestShareToken}`, {
+			response = await fetch(
+				new URL(`/api/schedules/${requestShareToken}`, apiBaseUrl),
+				{
 				signal: controller.signal,
-			})
+				},
+			)
 		} catch (error) {
 			if (requestShareToken !== (currentShareToken?.trim() ?? '')) {
 				return null
@@ -508,17 +518,20 @@ function setupScheduleWidget() {
 			throw new Error('Attendee name is required.')
 		}
 
-		const response = await fetch(`/api/schedules/${token}/availability`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: attendeeName,
-				attendeeTimeZone: getBrowserTimeZone(),
-				selectedSlots: Array.from(selectedSlots).sort((left, right) =>
-					left.localeCompare(right),
-				),
-			}),
-		})
+		const response = await fetch(
+			new URL(`/api/schedules/${token}/availability`, apiBaseUrl),
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: attendeeName,
+					attendeeTimeZone: getBrowserTimeZone(),
+					selectedSlots: Array.from(selectedSlots).sort((left, right) =>
+						left.localeCompare(right),
+					),
+				}),
+			},
+		)
 		const payload = (await response.json().catch(() => null)) as {
 			ok?: boolean
 			snapshot?: ScheduleSnapshot

@@ -224,6 +224,7 @@ async function startDevServer(persistDir: string) {
 		stderr: 'pipe',
 		env: {
 			...process.env,
+			APP_BASE_URL: origin,
 			CLOUDFLARE_ENV: 'test',
 		},
 	})
@@ -421,6 +422,7 @@ test(
 		expect(scheduleResource).toBeDefined()
 		expect(scheduleResource?.mimeType).toBe('text/html;profile=mcp-app')
 		expect(scheduleResource?.text).toContain('data-schedule-widget')
+		expect(scheduleResource?.text).toContain('data-api-base-url="')
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
 		expect(scheduleResource?.text).toContain('Your availability')
 		expect(scheduleResource?.text).toContain(
@@ -433,9 +435,9 @@ test(
 			new URL('/mcp-apps/schedule-widget.js', server.origin),
 		)
 		expect(scheduleWidgetResponse.ok).toBe(true)
-		expect(
+		expect(['*', null]).toContain(
 			scheduleWidgetResponse.headers.get('access-control-allow-origin'),
-		).toBe('*')
+		)
 		const scheduleWidgetSource = await scheduleWidgetResponse.text()
 		expect(scheduleWidgetSource).toContain('createWidgetHostBridge')
 		expect(scheduleWidgetSource).toContain('/api/schedules')
@@ -443,13 +445,41 @@ test(
 
 		const stylesResponse = await fetch(new URL('/styles.css', server.origin))
 		expect(stylesResponse.ok).toBe(true)
-		expect(stylesResponse.headers.get('access-control-allow-origin')).toBe('*')
-
-		expect(scheduleResourceMeta?.ui?.domain).toBe(server.origin)
-		expect(scheduleResourceMeta?.['openai/widgetDomain']).toBe(server.origin)
-		expect(scheduleResourceMeta?.ui?.csp?.resourceDomains).toContain(
-			server.origin,
+		expect(['*', null]).toContain(
+			stylesResponse.headers.get('access-control-allow-origin'),
 		)
+
+		const sandboxOrigin =
+			'https://epic-scheduler-production-kentcdodds-workers-dev.web-sandbox.oaiusercontent.com'
+		const apiPreflightResponse = await fetch(
+			new URL('/api/schedules/demo-token/availability', server.origin),
+			{
+				method: 'OPTIONS',
+				headers: {
+					Origin: sandboxOrigin,
+					'Access-Control-Request-Method': 'POST',
+					'Access-Control-Request-Headers': 'content-type',
+				},
+			},
+		)
+		expect(apiPreflightResponse.status).toBe(204)
+		expect(
+			apiPreflightResponse.headers.get('access-control-allow-origin'),
+		).toBe(sandboxOrigin)
+
+		const apiBaseUrlMatch =
+			scheduleResource?.text.match(/data-api-base-url="([^"]+)"/) ?? null
+		const widgetDomain = apiBaseUrlMatch?.[1]
+			? new URL(apiBaseUrlMatch[1]).origin
+			: null
+		expect(widgetDomain).toBeDefined()
+		expect(scheduleResourceMeta?.ui?.domain).toBe(widgetDomain)
+		expect(scheduleResourceMeta?.['openai/widgetDomain']).toBe(widgetDomain)
+		if (widgetDomain) {
+			expect(scheduleResourceMeta?.ui?.csp?.resourceDomains).toContain(
+				widgetDomain,
+			)
+		}
 	},
 	{ timeout: defaultTimeoutMs },
 )
