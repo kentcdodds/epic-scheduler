@@ -1,5 +1,6 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
+import { toDayKey } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import {
 	colors,
@@ -53,16 +54,6 @@ function formatSlotLabel(slot: string) {
 		hour: 'numeric',
 		minute: '2-digit',
 	}).format(new Date(slot))
-}
-
-function toDayKey(slot: string | null) {
-	if (!slot) return null
-	const date = new Date(slot)
-	if (Number.isNaN(date.getTime())) return null
-	const year = date.getFullYear()
-	const month = String(date.getMonth() + 1).padStart(2, '0')
-	const day = String(date.getDate()).padStart(2, '0')
-	return `${year}-${month}-${day}`
 }
 
 function buildEmptyAvailability(slots: Array<string>) {
@@ -135,6 +126,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let clipboardMessageTimer: ReturnType<typeof setTimeout> | null = null
 	let refreshTimer: ReturnType<typeof setInterval> | null = null
 	let lastPathname = ''
+	let snapshotRequestId = 0
 	const saveDebounceMs = 600
 	const refreshIntervalMs = 5000
 
@@ -262,7 +254,8 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	async function loadSnapshot() {
 		const requestShareToken = shareToken
-		if (!requestShareToken) return
+		if (!requestShareToken || handle.signal.aborted) return
+		const requestId = ++snapshotRequestId
 		try {
 			const response = await fetch(`/api/schedules/${requestShareToken}`, {
 				headers: { Accept: 'application/json' },
@@ -272,7 +265,13 @@ export function ScheduleHostRoute(handle: Handle) {
 				snapshot?: ScheduleSnapshot
 				error?: string
 			} | null
-			if (requestShareToken !== shareToken) return
+			if (
+				requestShareToken !== shareToken ||
+				handle.signal.aborted ||
+				requestId !== snapshotRequestId
+			) {
+				return
+			}
 			if (!response.ok || !payload?.ok || !payload.snapshot) {
 				const errorText =
 					typeof payload?.error === 'string'
@@ -287,7 +286,13 @@ export function ScheduleHostRoute(handle: Handle) {
 			isLoading = false
 			handle.update()
 		} catch {
-			if (requestShareToken !== shareToken) return
+			if (
+				requestShareToken !== shareToken ||
+				handle.signal.aborted ||
+				requestId !== snapshotRequestId
+			) {
+				return
+			}
 			isLoading = false
 			setStatus('Unable to load host dashboard.', true)
 		}

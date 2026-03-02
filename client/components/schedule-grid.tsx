@@ -6,7 +6,7 @@ import {
 	typography,
 } from '#client/styles/tokens.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
-import { buildGridModel } from '#client/schedule-utils.ts'
+import { buildGridModel, toDayKey } from '#client/schedule-utils.ts'
 
 type SlotAvailability = {
 	count: number
@@ -44,16 +44,6 @@ type ScheduleGridProps = {
 	onCellClick?: (slot: string, event: MouseEvent) => void
 	onCellFocus?: (slot: string) => void
 	onCellHover?: (slot: string | null) => void
-}
-
-function toDayKey(slot: string | null) {
-	if (!slot) return null
-	const date = new Date(slot)
-	if (Number.isNaN(date.getTime())) return null
-	const year = date.getFullYear()
-	const month = String(date.getMonth() + 1).padStart(2, '0')
-	const day = String(date.getDate()).padStart(2, '0')
-	return `${year}-${month}-${day}`
 }
 
 function toSelectionLabel(params: {

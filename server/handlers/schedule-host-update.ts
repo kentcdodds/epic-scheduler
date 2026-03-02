@@ -33,9 +33,11 @@ function toOptionalStringArray(value: unknown) {
 }
 
 function isHostUpdateValidationError(message: string) {
-	return /(not found|required|invalid|must|range|interval|too large)/i.test(
-		message,
-	)
+	return /(required|invalid|must|range|interval|too large)/i.test(message)
+}
+
+function isNotFoundError(message: string) {
+	return /not found/i.test(message)
 }
 
 export function createScheduleHostUpdateHandler(
@@ -121,6 +123,9 @@ export function createScheduleHostUpdateHandler(
 					error instanceof Error
 						? error.message
 						: 'Unable to update schedule host settings.'
+				if (isNotFoundError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 404 })
+				}
 				if (isHostUpdateValidationError(message)) {
 					return Response.json({ ok: false, error: message }, { status: 400 })
 				}

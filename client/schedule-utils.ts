@@ -55,6 +55,13 @@ export function addDays(date: Date, days: number) {
 	return next
 }
 
+export function toDayKey(slot: string | null) {
+	if (!slot) return null
+	const date = new Date(slot)
+	if (Number.isNaN(date.getTime())) return null
+	return formatDayKey(date)
+}
+
 export function createSlotRangeFromDateInputs(params: {
 	startDateInput: string
 	endDateInput: string
