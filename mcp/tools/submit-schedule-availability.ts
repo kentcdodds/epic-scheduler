@@ -15,6 +15,11 @@ const submitAvailabilityTool = {
 	} satisfies ToolAnnotations,
 } as const
 
+function summarizeShareToken(token: string) {
+	if (token.length <= 8) return token
+	return `${token.slice(0, 4)}...${token.slice(-4)}`
+}
+
 export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 	agent.server.registerTool(
 		submitAvailabilityTool.name,
@@ -51,6 +56,14 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 			attendeeTimeZone?: string
 			selectedSlots: Array<string>
 		}) => {
+			const requestSummary = {
+				shareToken: summarizeShareToken(shareToken),
+				attendeeNameLength: attendeeName.trim().length,
+				hasAttendeeTimeZone: Boolean(attendeeTimeZone),
+				selectedSlotsCount: selectedSlots.length,
+			}
+			console.info('submit_schedule_availability tool invoked', requestSummary)
+
 			try {
 				const scheduleRoom = agent.getScheduleRoomNamespace()
 				const roomId = scheduleRoom.idFromName(shareToken)
@@ -76,11 +89,22 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 						typeof payload?.error === 'string'
 							? payload.error
 							: 'Unable to update availability.'
+					console.warn(
+						'submit_schedule_availability tool returned error response',
+						{
+							...requestSummary,
+							upstreamStatus: response.status,
+							returnedMessage: errorMessage,
+						},
+					)
 					return {
 						content: [{ type: 'text', text: errorMessage }],
 						isError: true,
 					}
 				}
+				console.info('submit_schedule_availability tool succeeded', {
+					...requestSummary,
+				})
 
 				return {
 					content: [
@@ -101,6 +125,11 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 					error instanceof Error
 						? error.message
 						: 'Unable to update availability.'
+				console.error('submit_schedule_availability tool threw', {
+					...requestSummary,
+					returnedMessage: message,
+					errorName: error instanceof Error ? error.name : 'UnknownError',
+				})
 				return {
 					content: [{ type: 'text', text: message }],
 					isError: true,

@@ -30,6 +30,26 @@ Quick notes for getting a local epic-scheduler environment running.
 - `bun run test:e2e` to run Playwright specs.
 - `bun run test:mcp` to run MCP server E2E tests.
 
+## MCP diagnostics logs
+
+Production and local Worker logs now include structured MCP diagnostics for
+`/mcp` requests:
+
+- `mcp request received` with request metadata and decoded RPC summary
+  (`rpcMethod`, `rpcToolName`, `rpcArgumentKeys`, `isWriteToolCall`) when
+  available from `cf-mcp-message` headers or JSON request bodies.
+- `mcp request handled` with response status and duration.
+- `mcp request failed` with error name/message and the same request/RPC
+  metadata.
+
+Write tool handlers also emit safe invocation logs:
+
+- `create_schedule tool invoked|succeeded|returned error`
+- `submit_schedule_availability tool invoked|succeeded|returned error response|threw`
+
+These logs intentionally avoid full token/body dumps and only include safe shape
+metadata.
+
 ## PR preview deployments
 
 The GitHub Actions preview workflow creates per-preview Cloudflare resources so

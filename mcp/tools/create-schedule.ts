@@ -29,6 +29,11 @@ const safeCreateScheduleValidationMessages = new Set([
 	'Invalid hostTimeZone.',
 ])
 
+function summarizeShareToken(token: string) {
+	if (token.length <= 8) return token
+	return `${token.slice(0, 4)}...${token.slice(-4)}`
+}
+
 function toSafeCreateScheduleError(error: unknown) {
 	const message = error instanceof Error ? error.message : ''
 	if (safeCreateScheduleValidationMessages.has(message)) {
@@ -88,6 +93,17 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			rangeEndUtc: string
 			selectedSlots: Array<string>
 		}) => {
+			const requestSummary = {
+				titleLength: title.trim().length,
+				hostNameLength: hostName.trim().length,
+				hasHostTimeZone: Boolean(hostTimeZone),
+				intervalMinutes,
+				rangeStartUtc,
+				rangeEndUtc,
+				selectedSlotsCount: selectedSlots.length,
+			}
+			console.info('create_schedule tool invoked', requestSummary)
+
 			try {
 				const created = await createSchedule(agent.getAppDb(), {
 					title,
@@ -103,6 +119,10 @@ export async function registerCreateScheduleTool(agent: MCP) {
 					schedulePath,
 					agent.requireDomain(),
 				).toString()
+				console.info('create_schedule tool succeeded', {
+					...requestSummary,
+					shareToken: summarizeShareToken(created.shareToken),
+				})
 
 				return {
 					content: [
@@ -119,6 +139,12 @@ export async function registerCreateScheduleTool(agent: MCP) {
 				}
 			} catch (error) {
 				const message = toSafeCreateScheduleError(error)
+				console.warn('create_schedule tool returned error', {
+					...requestSummary,
+					returnedMessage: message,
+					isValidationMessage:
+						safeCreateScheduleValidationMessages.has(message),
+				})
 				return {
 					content: [{ type: 'text', text: message }],
 					isError: true,
