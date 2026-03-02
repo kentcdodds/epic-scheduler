@@ -7,6 +7,134 @@ export { ScheduleRoom } from './schedule-room.ts'
 
 const mcpResourcePath = '/mcp'
 const scheduleSocketPathPrefix = '/ws/'
+const mcpWriteToolNames = new Set([
+	'create_schedule',
+	'submit_schedule_availability',
+])
+
+type McpRpcSummarySource =
+	| 'none'
+	| 'header'
+	| 'header-decode-error'
+	| 'header-parse-error'
+	| 'body'
+	| 'body-read-error'
+	| 'body-parse-error'
+
+type McpRpcSummary = {
+	source: McpRpcSummarySource
+	rpcMethod: string | null
+	rpcToolName: string | null
+	rpcArgumentKeys: Array<string>
+	isWriteToolCall: boolean
+}
+
+function emptyMcpRpcSummary(source: McpRpcSummarySource): McpRpcSummary {
+	return {
+		source,
+		rpcMethod: null,
+		rpcToolName: null,
+		rpcArgumentKeys: [],
+		isWriteToolCall: false,
+	}
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+	return value as Record<string, unknown>
+}
+
+function decodeBase64Utf8(value: string) {
+	try {
+		const binary = atob(value)
+		const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+		return new TextDecoder().decode(bytes)
+	} catch {
+		return null
+	}
+}
+
+function summarizeJsonRpcPayload(
+	payload: unknown,
+): Omit<McpRpcSummary, 'source'> {
+	const message =
+		Array.isArray(payload) && payload.length > 0 ? payload[0] : payload
+	const messageRecord = toRecord(message)
+	if (!messageRecord) {
+		return {
+			rpcMethod: null,
+			rpcToolName: null,
+			rpcArgumentKeys: [],
+			isWriteToolCall: false,
+		}
+	}
+
+	const rpcMethod =
+		typeof messageRecord.method === 'string' ? messageRecord.method : null
+	const paramsRecord = toRecord(messageRecord.params)
+	const rpcToolName =
+		rpcMethod === 'tools/call' && typeof paramsRecord?.name === 'string'
+			? paramsRecord.name
+			: null
+	const argumentsRecord = toRecord(paramsRecord?.arguments)
+	const rpcArgumentKeys = argumentsRecord ? Object.keys(argumentsRecord) : []
+	const isWriteToolCall =
+		rpcMethod === 'tools/call' &&
+		rpcToolName !== null &&
+		mcpWriteToolNames.has(rpcToolName)
+
+	return {
+		rpcMethod,
+		rpcToolName,
+		rpcArgumentKeys,
+		isWriteToolCall,
+	}
+}
+
+async function summarizeMcpRpcRequest(
+	request: Request,
+): Promise<McpRpcSummary> {
+	const encodedRpcMessage = request.headers.get('cf-mcp-message')
+	if (encodedRpcMessage) {
+		const decodedRpcMessage = decodeBase64Utf8(encodedRpcMessage)
+		if (!decodedRpcMessage) {
+			return emptyMcpRpcSummary('header-decode-error')
+		}
+		try {
+			const parsed = JSON.parse(decodedRpcMessage)
+			return {
+				source: 'header',
+				...summarizeJsonRpcPayload(parsed),
+			}
+		} catch {
+			return emptyMcpRpcSummary('header-parse-error')
+		}
+	}
+
+	if (request.method !== 'POST') return emptyMcpRpcSummary('none')
+	const contentType = request.headers.get('content-type') ?? ''
+	if (!contentType.toLowerCase().includes('application/json')) {
+		return emptyMcpRpcSummary('none')
+	}
+
+	let requestBody = ''
+	try {
+		requestBody = await request.clone().text()
+	} catch {
+		return emptyMcpRpcSummary('body-read-error')
+	}
+	if (!requestBody.trim()) return emptyMcpRpcSummary('none')
+
+	try {
+		const parsed = JSON.parse(requestBody)
+		return {
+			source: 'body',
+			...summarizeJsonRpcPayload(parsed),
+		}
+	} catch {
+		return emptyMcpRpcSummary('body-parse-error')
+	}
+}
 
 const appHandler = withCors({
 	getCorsHeaders(request) {
@@ -29,6 +157,26 @@ const appHandler = withCors({
 		}
 
 		if (url.pathname === mcpResourcePath) {
+			const startedAt = Date.now()
+			const rpcSummary = await summarizeMcpRpcRequest(request)
+			const requestId = request.headers.get('cf-ray')
+			const sessionId = request.headers.get('mcp-session-id')
+			console.info('mcp request received', {
+				requestId,
+				requestMethod: request.method,
+				requestPath: url.pathname,
+				sessionId,
+				userAgent: request.headers.get('user-agent'),
+				mcpProtocolVersion: request.headers.get('mcp-protocol-version'),
+				cfMcpMethod: request.headers.get('cf-mcp-method'),
+				contentLength: request.headers.get('content-length'),
+				rpcSource: rpcSummary.source,
+				rpcMethod: rpcSummary.rpcMethod,
+				rpcToolName: rpcSummary.rpcToolName,
+				rpcArgumentKeys: rpcSummary.rpcArgumentKeys,
+				isWriteToolCall: rpcSummary.isWriteToolCall,
+			})
+
 			const mcpContext = ctx as ExecutionContext<{ baseUrl: string }>
 			;(
 				mcpContext as ExecutionContext<{ baseUrl: string }> & {
@@ -37,9 +185,37 @@ const appHandler = withCors({
 			).props = {
 				baseUrl: url.origin,
 			}
-			return MCP.serve(mcpResourcePath, {
-				binding: 'MCP_OBJECT',
-			}).fetch(request, env, mcpContext)
+			try {
+				const response = await MCP.serve(mcpResourcePath, {
+					binding: 'MCP_OBJECT',
+				}).fetch(request, env, mcpContext)
+				console.info('mcp request handled', {
+					requestId,
+					requestMethod: request.method,
+					requestPath: url.pathname,
+					sessionId,
+					responseStatus: response.status,
+					durationMs: Date.now() - startedAt,
+					rpcMethod: rpcSummary.rpcMethod,
+					rpcToolName: rpcSummary.rpcToolName,
+					isWriteToolCall: rpcSummary.isWriteToolCall,
+				})
+				return response
+			} catch (error) {
+				console.error('mcp request failed', {
+					requestId,
+					requestMethod: request.method,
+					requestPath: url.pathname,
+					sessionId,
+					durationMs: Date.now() - startedAt,
+					rpcMethod: rpcSummary.rpcMethod,
+					rpcToolName: rpcSummary.rpcToolName,
+					isWriteToolCall: rpcSummary.isWriteToolCall,
+					errorName: error instanceof Error ? error.name : 'UnknownError',
+					errorMessage: error instanceof Error ? error.message : String(error),
+				})
+				throw error
+			}
 		}
 
 		if (url.pathname.startsWith(scheduleSocketPathPrefix)) {
