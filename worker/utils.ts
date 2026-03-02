@@ -24,10 +24,19 @@ export function withCors<Props>({
 
 		// Call the original handler
 		const response = await handler(request, env, ctx)
+		const responseHasWebSocket = Boolean(
+			(
+				response as Response & {
+					webSocket?: WebSocket
+				}
+			).webSocket,
+		)
+		if (response.status === 101 && responseHasWebSocket) {
+			return response
+		}
 
 		// Add CORS headers to ALL responses, including early returns
 		const newHeaders = mergeHeaders(response.headers, corsHeaders)
-
 		return new Response(response.body, {
 			status: response.status,
 			statusText: response.statusText,
