@@ -79,6 +79,9 @@ test('home drag selection applies on release and Escape cancels', async ({
 			steps: 12,
 		},
 	)
+	await expect(
+		page.getByText(/release to apply or press Escape to cancel/i),
+	).toHaveCount(0)
 	expect(readSelectedCount(await selectedCountLabel.textContent())).toBe(
 		initialCount,
 	)

@@ -740,13 +740,6 @@ export function HomeRoute(handle: Handle) {
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							Times are shown in your browser timezone: {browserTimeZone}
 						</p>
-						{pointerSelectionMode ? (
-							<p css={{ margin: 0, color: colors.textMuted }}>
-								Selecting {pointerSelectionSlots.size} slot
-								{pointerSelectionSlots.size === 1 ? '' : 's'} — release to apply
-								or press Escape to cancel.
-							</p>
-						) : null}
 					</div>
 
 					{renderScheduleGrid({
