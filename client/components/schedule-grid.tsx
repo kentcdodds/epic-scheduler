@@ -116,31 +116,6 @@ const dayHeaderWeekdayFormatter = new Intl.DateTimeFormat(undefined, {
 	weekday: 'short',
 })
 
-function getLocaleStartOfWeekIndex() {
-	const localeConstructor = (
-		Intl as {
-			Locale?: new (locales?: string | string[]) => {
-				weekInfo?: { firstDay: number }
-			}
-		}
-	).Locale
-	if (!localeConstructor) return 0
-	const resolvedLocale = new Intl.DateTimeFormat().resolvedOptions().locale
-	const locale = new localeConstructor(resolvedLocale)
-	const firstDay = locale.weekInfo?.firstDay
-	if (
-		typeof firstDay !== 'number' ||
-		!Number.isInteger(firstDay) ||
-		firstDay < 1 ||
-		firstDay > 7
-	) {
-		return 0
-	}
-	return firstDay % 7
-}
-
-const localeStartOfWeekIndex = getLocaleStartOfWeekIndex()
-
 function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
 	const date = parseDateInputToLocalDate(dayKey)
 	if (!date) {
@@ -158,7 +133,7 @@ function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
 function isStartOfWeek(dayKey: string) {
 	const date = parseDateInputToLocalDate(dayKey)
 	if (!date) return false
-	return date.getDay() === localeStartOfWeekIndex
+	return date.getDay() === 0
 }
 
 function getRowCells(row: HTMLTableRowElement) {
