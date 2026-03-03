@@ -98,6 +98,8 @@ handled by the static asset fetcher in `worker/index.ts`.
   and availability strike-through styling.
 - Host dashboard tests should cover host profile edits (`Host name`) to ensure
   host settings autosave persists after reload.
+- Host dashboard tests should cover host-managed submission edits (rename and
+  delete) so respondent maintenance remains available from the host page.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions

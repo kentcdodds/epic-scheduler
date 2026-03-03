@@ -65,6 +65,13 @@ type UpdateScheduleHostSettingsInput = {
 	blockedSlots?: Array<string>
 	rangeStartUtc?: string
 	rangeEndUtc?: string
+	submissionUpdate?: UpdateScheduleSubmissionInput
+}
+
+type UpdateScheduleSubmissionInput = {
+	attendeeId: string
+	name?: string
+	delete?: boolean
 }
 
 type ScheduleRow = {
@@ -82,6 +89,12 @@ type AttendeeRow = {
 	name: string
 	is_host: number
 	time_zone: string | null
+}
+
+type AttendeeLookupRow = {
+	id: string
+	name_norm: string
+	is_host: number
 }
 
 type AvailabilityRow = {
@@ -586,6 +599,96 @@ export async function updateScheduleHostSettings(
 	}
 
 	const updates: Array<PreparedStatementLike> = []
+	if (input.submissionUpdate) {
+		const attendeeId = input.submissionUpdate.attendeeId.trim()
+		if (!attendeeId) {
+			throw new Error('Submission ID is required.')
+		}
+		const existingSubmission = await db
+			.prepare(
+				`SELECT
+					id,
+					name_norm,
+					is_host
+				FROM attendees
+				WHERE schedule_id = ?1
+					AND id = ?2
+				LIMIT 1`,
+			)
+			.bind(schedule.id, attendeeId)
+			.first<AttendeeLookupRow>()
+		if (!existingSubmission) {
+			throw new Error('Submission not found.')
+		}
+		if (existingSubmission.is_host === 1) {
+			throw new Error('Host submission cannot be changed here.')
+		}
+		if (
+			input.submissionUpdate.delete &&
+			typeof input.submissionUpdate.name === 'string'
+		) {
+			throw new Error(
+				'Submission update cannot include both a name and delete flag.',
+			)
+		}
+		if (input.submissionUpdate.delete) {
+			updates.push(
+				db
+					.prepare(
+						`DELETE FROM attendees
+						WHERE schedule_id = ?1
+							AND id = ?2
+							AND is_host = 0`,
+					)
+					.bind(schedule.id, attendeeId),
+			)
+		} else if (typeof input.submissionUpdate.name === 'string') {
+			const normalizedSubmissionName = normalizeName(
+				input.submissionUpdate.name,
+			)
+			if (!normalizedSubmissionName) {
+				throw new Error('Submission name is required.')
+			}
+			const normalizedSubmissionNameForMatch = normalizeNameForMatch(
+				normalizedSubmissionName,
+			)
+			if (normalizedSubmissionNameForMatch !== existingSubmission.name_norm) {
+				const conflictingSubmission = await db
+					.prepare(
+						`SELECT id
+						FROM attendees
+						WHERE schedule_id = ?1
+							AND name_norm = ?2
+							AND id <> ?3
+						LIMIT 1`,
+					)
+					.bind(schedule.id, normalizedSubmissionNameForMatch, attendeeId)
+					.first<{ id: string }>()
+				if (conflictingSubmission) {
+					throw new Error('Submission name must be unique.')
+				}
+			}
+			updates.push(
+				db
+					.prepare(
+						`UPDATE attendees
+						SET name = ?3,
+							name_norm = ?4
+						WHERE schedule_id = ?1
+							AND id = ?2
+							AND is_host = 0`,
+					)
+					.bind(
+						schedule.id,
+						attendeeId,
+						normalizedSubmissionName,
+						normalizedSubmissionNameForMatch,
+					),
+			)
+		} else {
+			throw new Error('Submission update requires a name or delete flag.')
+		}
+	}
 	if (typeof input.hostName === 'string') {
 		const normalizedHostName = normalizeName(input.hostName)
 		if (!normalizedHostName) {

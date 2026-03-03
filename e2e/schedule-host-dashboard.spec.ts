@@ -244,3 +244,134 @@ test('host dashboard can update host name', async ({ page }) => {
 	await page.reload()
 	await expect(page.getByLabel('Host name')).toHaveValue('Host Renamed')
 })
+
+test('host dashboard can rename and delete a submission', async ({ page }) => {
+	await page.goto('/')
+	await page.getByLabel('Your name').fill('Host')
+	await page.getByRole('button', { name: 'Create share link' }).click()
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
+	const { shareToken, hostAccessToken } = parseHostRouteTokens(page.url())
+	expect(shareToken).not.toBe('')
+	expect(hostAccessToken).not.toBe('')
+	if (!shareToken || !hostAccessToken) {
+		throw new Error('Expected host route share and access tokens.')
+	}
+
+	const submissionResponse = await page.request.post(
+		`/api/schedules/${shareToken}/availability`,
+		{
+			data: {
+				name: 'Alex',
+				attendeeTimeZone: 'UTC',
+				selectedSlots: [],
+			},
+		},
+	)
+	expect(submissionResponse.ok()).toBe(true)
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					`/api/schedules/${shareToken}/host-snapshot`,
+					{
+						headers: {
+							'X-Host-Token': hostAccessToken,
+						},
+					},
+				)
+				if (!response.ok()) return false
+				const payload = (await response.json()) as {
+					ok?: boolean
+					snapshot?: {
+						attendees?: Array<{ name?: string }>
+					}
+				}
+				if (!payload.ok || !payload.snapshot) return false
+				return (
+					payload.snapshot.attendees?.some(
+						(attendee) => attendee.name === 'Alex',
+					) ?? false
+				)
+			},
+			{ timeout: 12_000 },
+		)
+		.toBe(true)
+	await page.reload()
+
+	const alexNameInput = page.getByLabel('Submission name input for Alex')
+	await expect(alexNameInput).toBeVisible({ timeout: 12_000 })
+	await alexNameInput.fill('Jordan')
+	await page.getByLabel('Save renamed submission for Alex').click()
+
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					`/api/schedules/${shareToken}/host-snapshot`,
+					{
+						headers: {
+							'X-Host-Token': hostAccessToken,
+						},
+					},
+				)
+				if (!response.ok()) {
+					return { hasAlex: false, hasJordan: false }
+				}
+				const payload = (await response.json()) as {
+					ok?: boolean
+					snapshot?: {
+						attendees?: Array<{ name?: string }>
+					}
+				}
+				if (!payload.ok || !payload.snapshot) {
+					return { hasAlex: false, hasJordan: false }
+				}
+				const attendeeNames = payload.snapshot.attendees?.map(
+					(attendee) => attendee.name ?? '',
+				)
+				return {
+					hasAlex: attendeeNames?.includes('Alex') ?? false,
+					hasJordan: attendeeNames?.includes('Jordan') ?? false,
+				}
+			},
+			{ timeout: 12_000 },
+		)
+		.toEqual({ hasAlex: false, hasJordan: true })
+
+	await expect(
+		page.getByLabel('Submission name input for Jordan'),
+	).toBeVisible()
+	await page.getByLabel('Delete submission for Jordan').click()
+
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					`/api/schedules/${shareToken}/host-snapshot`,
+					{
+						headers: {
+							'X-Host-Token': hostAccessToken,
+						},
+					},
+				)
+				if (!response.ok()) return false
+				const payload = (await response.json()) as {
+					ok?: boolean
+					snapshot?: {
+						attendees?: Array<{ name?: string }>
+					}
+				}
+				if (!payload.ok || !payload.snapshot) return false
+				const attendeeNames = payload.snapshot.attendees?.map(
+					(attendee) => attendee.name ?? '',
+				)
+				return attendeeNames?.includes('Jordan') ?? false
+			},
+			{ timeout: 12_000 },
+		)
+		.toBe(false)
+
+	await expect(page.getByLabel('Submission name input for Jordan')).toHaveCount(
+		0,
+	)
+})
