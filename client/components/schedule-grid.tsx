@@ -146,6 +146,19 @@ function moveFocusWithinGridCellButtons(params: {
 		return focusButton(button)
 	}
 
+	function focusInRow(startIndex: number, step: 1 | -1) {
+		let nextIndex = startIndex + step
+		while (nextIndex >= 0 && nextIndex < rowCells.length) {
+			const cell = rowCells[nextIndex]
+			if (cell) {
+				const button = getCellButton(cell)
+				if (button) return focusButton(button)
+			}
+			nextIndex += step
+		}
+		return null
+	}
+
 	function focusInColumn(startIndex: number, step: 1 | -1) {
 		let nextIndex = startIndex + step
 		while (nextIndex >= 0 && nextIndex < rows.length) {
@@ -159,18 +172,8 @@ function moveFocusWithinGridCellButtons(params: {
 		return null
 	}
 
-	if (params.key === 'ArrowLeft') {
-		const targetCell = rowCells[columnIndex - 1]
-		const button = targetCell ? getCellButton(targetCell) : null
-		if (!button) return null
-		return focusButton(button)
-	}
-	if (params.key === 'ArrowRight') {
-		const targetCell = rowCells[columnIndex + 1]
-		const button = targetCell ? getCellButton(targetCell) : null
-		if (!button) return null
-		return focusButton(button)
-	}
+	if (params.key === 'ArrowLeft') return focusInRow(columnIndex, -1)
+	if (params.key === 'ArrowRight') return focusInRow(columnIndex, 1)
 	if (params.key === 'ArrowUp') return focusInColumn(rowIndex, -1)
 	if (params.key === 'ArrowDown') return focusInColumn(rowIndex, 1)
 	if (params.key === 'PageUp') {
