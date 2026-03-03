@@ -137,6 +137,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		? [resolvedMobileDayKey]
 		: dayKeys
 	const desktopVisibleDayKeys = dayKeys
+	const useCellPointerMove = !props.onCellPointerDown
 
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
 		return (
@@ -380,9 +381,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: props.onCellHover
 																? () => props.onCellHover?.(slot)
 																: undefined,
-													pointermove: props.onCellPointerMove
-														? (event) => props.onCellPointerMove?.(slot, event)
-														: undefined,
+													pointermove:
+														useCellPointerMove && props.onCellPointerMove
+															? (event) =>
+																	props.onCellPointerMove?.(slot, event)
+															: undefined,
 													pointerleave: props.onCellHover
 														? () => props.onCellHover?.(null)
 														: undefined,

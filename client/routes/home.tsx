@@ -426,14 +426,6 @@ export function HomeRoute(handle: Handle) {
 		updatePointerSelectionToSlot(slot)
 	}
 
-	function onCellPointerMove(event: PointerEvent) {
-		if (!pointerSelectionMode) return
-		pointerPointerX = event.clientX
-		pointerPointerY = event.clientY
-		refreshPointerSelectionAtPosition()
-		maybeStartPointerAutoScroll()
-	}
-
 	function onCellPointerUp() {
 		finishPointerSelection(false)
 	}
@@ -776,9 +768,6 @@ export function HomeRoute(handle: Handle) {
 						onCellPointerDown,
 						onCellPointerEnter: (slot, _event) => {
 							onCellPointerEnter(slot)
-						},
-						onCellPointerMove: (_slot, event) => {
-							onCellPointerMove(event)
 						},
 						onCellPointerUp: (_slot, _event) => {
 							onCellPointerUp()

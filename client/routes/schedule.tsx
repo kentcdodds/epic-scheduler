@@ -575,14 +575,6 @@ export function ScheduleRoute(handle: Handle) {
 		updatePointerSelectionToSlot(slot)
 	}
 
-	function handleCellPointerMove(event: PointerEvent) {
-		if (!pointerSelectionMode) return
-		pointerPointerX = event.clientX
-		pointerPointerY = event.clientY
-		refreshPointerSelectionAtPosition()
-		maybeStartPointerAutoScroll()
-	}
-
 	function handleCellPointerUp() {
 		finishPointerSelection(false)
 	}
@@ -866,9 +858,6 @@ export function ScheduleRoute(handle: Handle) {
 							onCellPointerDown: handleCellPointerDown,
 							onCellPointerEnter: (slot, _event) => {
 								handleCellPointerEnter(slot)
-							},
-							onCellPointerMove: (_slot, event) => {
-								handleCellPointerMove(event)
 							},
 							onCellPointerUp: (_slot, _event) => {
 								handleCellPointerUp()
