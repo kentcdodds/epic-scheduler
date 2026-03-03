@@ -17,6 +17,8 @@ import {
 
 type PreviewMode = 'all' | 'count'
 type ConnectionState = 'connecting' | 'live' | 'offline'
+const hostHoverTooltipPointerXVar = '--host-hover-tooltip-pointer-x'
+const hostHoverTooltipPointerYVar = '--host-hover-tooltip-pointer-y'
 
 function parseHostRouteParams(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
@@ -131,11 +133,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	let excludedAttendeeIds = new Set<string>()
 	let previewMode: PreviewMode = 'all'
 	let activePreviewSlot: string | null = null
-	let previewTooltip: {
-		slot: string
-		clientX: number
-		clientY: number
-	} | null = null
+	let previewTooltipSlot: string | null = null
+	let previewTooltipPointerX: number | null = null
+	let previewTooltipPointerY: number | null = null
 	let mobileDayKey: string | null = null
 	let isLoading = true
 	let isSaving = false
@@ -187,6 +187,30 @@ export function ScheduleHostRoute(handle: Handle) {
 		reconnectTimer = null
 	}
 
+	function setPreviewTooltipPointerPosition(clientX: number, clientY: number) {
+		if (typeof document === 'undefined') return
+		if (
+			previewTooltipPointerX === clientX &&
+			previewTooltipPointerY === clientY
+		) {
+			return
+		}
+		previewTooltipPointerX = clientX
+		previewTooltipPointerY = clientY
+		const rootStyle = document.documentElement.style
+		rootStyle.setProperty(hostHoverTooltipPointerXVar, `${clientX}px`)
+		rootStyle.setProperty(hostHoverTooltipPointerYVar, `${clientY}px`)
+	}
+
+	function clearPreviewTooltipPointerPosition() {
+		previewTooltipPointerX = null
+		previewTooltipPointerY = null
+		if (typeof document === 'undefined') return
+		const rootStyle = document.documentElement.style
+		rootStyle.removeProperty(hostHoverTooltipPointerXVar)
+		rootStyle.removeProperty(hostHoverTooltipPointerYVar)
+	}
+
 	const hostSelection = createPointerDragSelectionController({
 		requestRender: () => {
 			handle.update()
@@ -231,6 +255,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		hostSelection.cleanup()
 		clearSocketResources()
 		clearRefreshTimer()
+		clearPreviewTooltipPointerPosition()
 		pendingSave = false
 	}
 
@@ -596,7 +621,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		excludedAttendeeIds = new Set<string>()
 		previewMode = 'all'
 		activePreviewSlot = null
-		previewTooltip = null
+		previewTooltipSlot = null
+		clearPreviewTooltipPointerPosition()
 		mobileDayKey = null
 		hostSelection.cleanup()
 		isLoading = true
@@ -712,7 +738,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					),
 				}
 			: null
-		const hoveredPreviewSlot = previewTooltip?.slot ?? null
+		const hoveredPreviewSlot = previewTooltipSlot
 		const hoveredPreviewSlotDetails =
 			hoveredPreviewSlot && currentSnapshot?.slots.includes(hoveredPreviewSlot)
 				? {
@@ -728,25 +754,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					}
 				: null
 		const tooltipWidthPx = 300
-		const viewportWidth =
-			typeof window === 'undefined' ? 1440 : window.innerWidth
-		const viewportHeight =
-			typeof window === 'undefined' ? 900 : window.innerHeight
-		const tooltipLeft = previewTooltip
-			? Math.max(
-					12,
-					Math.min(
-						previewTooltip.clientX + 16,
-						viewportWidth - tooltipWidthPx - 12,
-					),
-				)
-			: 0
-		const tooltipTop = previewTooltip
-			? Math.max(
-					12,
-					Math.min(previewTooltip.clientY + 16, viewportHeight - 220),
-				)
-			: 0
+		const tooltipHeightPx = 220
 		const connectionLabel =
 			connectionState === 'live'
 				? 'Realtime connected'
@@ -1159,42 +1167,49 @@ export function ScheduleHostRoute(handle: Handle) {
 									onCellHover: (slot) => {
 										activePreviewSlot = slot
 										if (!slot) {
-											previewTooltip = null
+											previewTooltipSlot = null
+											clearPreviewTooltipPointerPosition()
 										}
 										handle.update()
 									},
 									onCellPointerMove: (slot, event) => {
 										if (event.pointerType !== 'mouse') return
+										setPreviewTooltipPointerPosition(
+											event.clientX,
+											event.clientY,
+										)
 										activePreviewSlot = slot
-										previewTooltip = {
-											slot,
-											clientX: event.clientX,
-											clientY: event.clientY,
+										if (previewTooltipSlot !== slot) {
+											previewTooltipSlot = slot
+											handle.update()
 										}
-										handle.update()
 									},
 									onCellFocus: (slot) => {
 										activePreviewSlot = slot
-										previewTooltip = null
+										previewTooltipSlot = null
+										clearPreviewTooltipPointerPosition()
 										handle.update()
 									},
 									onCellClick: (slot, _event) => {
 										activePreviewSlot = slot
-										previewTooltip = null
+										previewTooltipSlot = null
+										clearPreviewTooltipPointerPosition()
 										handle.update()
 									},
 								})}
-								{hoveredPreviewSlotDetails && previewTooltip ? (
+								{hoveredPreviewSlotDetails && previewTooltipSlot ? (
 									<aside
 										role="note"
 										data-host-hover-tooltip
 										aria-live="polite"
 										css={{
+											'--host-hover-tooltip-width': `min(${tooltipWidthPx}px, calc(100vw - 1.5rem))`,
+											'--host-hover-tooltip-height': `${tooltipHeightPx}px`,
 											position: 'fixed',
-											left: tooltipLeft,
-											top: tooltipTop,
+											left: 'max(12px, min(calc(var(--host-hover-tooltip-pointer-x, 0px) + 16px), calc(100vw - var(--host-hover-tooltip-width) - 12px)))',
+											top: 'max(12px, min(calc(var(--host-hover-tooltip-pointer-y, 0px) + 16px), calc(100vh - var(--host-hover-tooltip-height) - 12px)))',
 											zIndex: 40,
-											width: `min(${tooltipWidthPx}px, calc(100vw - 1.5rem))`,
+											width: 'var(--host-hover-tooltip-width)',
 											display: 'grid',
 											gap: spacing.xs,
 											padding: spacing.sm,
