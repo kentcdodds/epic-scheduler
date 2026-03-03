@@ -88,6 +88,8 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Host dashboard tests should cover realtime status updates
   (`Realtime connected`) and preview-grid tooltip behavior when attendee
   availability changes.
+- Host dashboard tests should cover host profile edits (`Host name`) to ensure
+  host settings autosave persists after reload.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions
