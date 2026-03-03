@@ -47,6 +47,7 @@ type ScheduleInsertInput = {
 	hostName: string
 	hostTimeZone?: string | null
 	selectedSlots: Array<string>
+	blockedSlots?: Array<string>
 }
 
 type UpsertAvailabilityInput = {
@@ -359,6 +360,14 @@ export async function createSchedule(
 		selectedSlots: input.selectedSlots,
 		allowedSlots: allowedSlotSet,
 	})
+	const blockedSlots = normalizeSelectedSlots({
+		selectedSlots: input.blockedSlots ?? [],
+		allowedSlots: allowedSlotSet,
+	})
+	const blockedSlotSet = new Set(blockedSlots)
+	const hostSelectedSlots = selectedSlots.filter(
+		(slot) => !blockedSlotSet.has(slot),
+	)
 
 	const id = crypto.randomUUID()
 	const shareToken = createShareToken()
@@ -415,7 +424,12 @@ export async function createSchedule(
 		db,
 		scheduleId: id,
 		attendeeId: hostAttendeeId,
-		selectedSlots,
+		selectedSlots: hostSelectedSlots,
+	})
+	await insertBlockedSlotRows({
+		db,
+		scheduleId: id,
+		blockedSlots,
 	})
 
 	return {

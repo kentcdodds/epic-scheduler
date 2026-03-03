@@ -1,6 +1,12 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import {
+	computeAutoScrollStep,
+	findSlotAtPoint,
+	getGridScrollerFromPointerEvent,
+	setPointerCaptureIfAvailable,
+} from '#client/grid-drag-autoscroll.ts'
+import {
 	getRectangularSlotSelection,
 	toDayKey,
 } from '#client/schedule-utils.ts'
@@ -132,6 +138,10 @@ export function ScheduleHostRoute(handle: Handle) {
 	let hostSelectionStartSlot: string | null = null
 	let hostSelectionEndSlot: string | null = null
 	let hostSelectionSlots = new Set<string>()
+	let hostSelectionScroller: HTMLElement | null = null
+	let hostPointerX = 0
+	let hostPointerY = 0
+	let hostAutoScrollRaf: number | null = null
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -182,16 +192,25 @@ export function ScheduleHostRoute(handle: Handle) {
 		reconnectTimer = null
 	}
 
+	function clearHostAutoScrollRaf() {
+		if (hostAutoScrollRaf === null) return
+		cancelAnimationFrame(hostAutoScrollRaf)
+		hostAutoScrollRaf = null
+	}
+
 	function clearHostSelection() {
+		clearHostAutoScrollRaf()
 		hostSelectionMode = null
 		hostSelectionStartSlot = null
 		hostSelectionEndSlot = null
 		hostSelectionSlots = new Set<string>()
+		hostSelectionScroller = null
 	}
 
 	function detachHostSelectionListeners() {
 		if (typeof window === 'undefined') return
 		window.removeEventListener('pointerup', handleHostGlobalPointerUp)
+		window.removeEventListener('pointermove', handleHostGlobalPointerMove)
 		window.removeEventListener('keydown', handleHostGlobalKeyDown)
 	}
 
@@ -199,6 +218,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (typeof window === 'undefined') return
 		detachHostSelectionListeners()
 		window.addEventListener('pointerup', handleHostGlobalPointerUp)
+		window.addEventListener('pointermove', handleHostGlobalPointerMove)
 		window.addEventListener('keydown', handleHostGlobalKeyDown)
 	}
 
@@ -224,6 +244,56 @@ export function ScheduleHostRoute(handle: Handle) {
 		return changed
 	}
 
+	function updateHostSelectionToSlot(slot: string) {
+		if (
+			!hostSelectionMode ||
+			!hostSelectionStartSlot ||
+			hostSelectionEndSlot === slot
+		) {
+			return
+		}
+		hostSelectionEndSlot = slot
+		hostSelectionSlots = getHostSelectionSlots(hostSelectionStartSlot, slot)
+		handle.update()
+	}
+
+	function refreshHostSelectionAtPointerPosition() {
+		const slot = findSlotAtPoint(hostPointerX, hostPointerY, {
+			withinElement: hostSelectionScroller,
+		})
+		if (!slot) return
+		updateHostSelectionToSlot(slot)
+	}
+
+	function runHostAutoScrollStep() {
+		hostAutoScrollRaf = null
+		if (!hostSelectionMode || !hostSelectionScroller) return
+		const delta = computeAutoScrollStep({
+			clientX: hostPointerX,
+			clientY: hostPointerY,
+			rect: hostSelectionScroller.getBoundingClientRect(),
+		})
+		if (delta.left === 0 && delta.top === 0) return
+		hostSelectionScroller.scrollBy({
+			left: delta.left,
+			top: delta.top,
+		})
+		refreshHostSelectionAtPointerPosition()
+		hostAutoScrollRaf = requestAnimationFrame(runHostAutoScrollStep)
+	}
+
+	function maybeStartHostAutoScroll() {
+		if (!hostSelectionMode || !hostSelectionScroller) return
+		if (hostAutoScrollRaf !== null) return
+		const delta = computeAutoScrollStep({
+			clientX: hostPointerX,
+			clientY: hostPointerY,
+			rect: hostSelectionScroller.getBoundingClientRect(),
+		})
+		if (delta.left === 0 && delta.top === 0) return
+		hostAutoScrollRaf = requestAnimationFrame(runHostAutoScrollStep)
+	}
+
 	function finishHostSelection(cancelled = false) {
 		if (!hostSelectionMode) return
 		detachHostSelectionListeners()
@@ -238,6 +308,14 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function handleHostGlobalPointerUp() {
 		finishHostSelection(false)
+	}
+
+	function handleHostGlobalPointerMove(event: PointerEvent) {
+		if (!hostSelectionMode) return
+		hostPointerX = event.clientX
+		hostPointerY = event.clientY
+		refreshHostSelectionAtPointerPosition()
+		maybeStartHostAutoScroll()
 	}
 
 	function handleHostGlobalKeyDown(event: KeyboardEvent) {
@@ -593,21 +671,30 @@ export function ScheduleHostRoute(handle: Handle) {
 		finishHostSelection(false)
 	}
 
-	function handleHostUnavailablePointerDown(slot: string) {
+	function handleHostUnavailablePointerDown(slot: string, event: PointerEvent) {
+		setPointerCaptureIfAvailable(event)
 		hostSelectionMode = blockedSlots.has(slot) ? 'remove' : 'add'
 		hostSelectionStartSlot = slot
 		hostSelectionEndSlot = slot
 		hostSelectionSlots = getHostSelectionSlots(slot, slot)
+		hostSelectionScroller = getGridScrollerFromPointerEvent(event)
+		hostPointerX = event.clientX
+		hostPointerY = event.clientY
 		attachHostSelectionListeners()
+		maybeStartHostAutoScroll()
 		handle.update()
 	}
 
 	function handleHostUnavailablePointerEnter(slot: string) {
-		if (!hostSelectionMode || !hostSelectionStartSlot) return
-		if (hostSelectionEndSlot === slot) return
-		hostSelectionEndSlot = slot
-		hostSelectionSlots = getHostSelectionSlots(hostSelectionStartSlot, slot)
-		handle.update()
+		updateHostSelectionToSlot(slot)
+	}
+
+	function handleHostUnavailablePointerMove(event: PointerEvent) {
+		if (!hostSelectionMode) return
+		hostPointerX = event.clientX
+		hostPointerY = event.clientY
+		refreshHostSelectionAtPointerPosition()
+		maybeStartHostAutoScroll()
 	}
 
 	function toggleIncludedAttendee(attendeeId: string) {
@@ -1371,11 +1458,14 @@ export function ScheduleHostRoute(handle: Handle) {
 										mobileDayKey = dayKey
 										handle.update()
 									},
-									onCellPointerDown: (slot, _event) => {
-										handleHostUnavailablePointerDown(slot)
+									onCellPointerDown: (slot, event) => {
+										handleHostUnavailablePointerDown(slot, event)
 									},
 									onCellPointerEnter: (slot, _event) => {
 										handleHostUnavailablePointerEnter(slot)
+									},
+									onCellPointerMove: (_slot, event) => {
+										handleHostUnavailablePointerMove(event)
 									},
 									onCellPointerUp: (_slot, _event) => {
 										handleHostUnavailablePointerUp()

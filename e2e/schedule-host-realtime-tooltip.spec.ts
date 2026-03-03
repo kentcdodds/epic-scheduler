@@ -32,6 +32,7 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 		ok?: boolean
 		snapshot?: {
 			slots: Array<string>
+			blockedSlots: Array<string>
 			attendees: Array<{ id: string; isHost?: boolean }>
 			availabilityByAttendee: Record<string, Array<string>>
 		}
@@ -47,10 +48,18 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	if (!hostAttendee) {
 		throw new Error('Expected at least one attendee in snapshot.')
 	}
-	const hostSlots = snapshot.availabilityByAttendee[hostAttendee.id] ?? []
-	const alexOnlySlot = hostSlots[0] ?? snapshot.slots[0]
+	const blockedSlots = new Set(snapshot.blockedSlots ?? [])
+	const unblockedSlots = snapshot.slots.filter(
+		(slot) => !blockedSlots.has(slot),
+	)
+	const hostSlots =
+		snapshot.availabilityByAttendee[hostAttendee.id] ?? unblockedSlots
+	const alexOnlySlot = hostSlots[0] ?? unblockedSlots[0] ?? snapshot.slots[0]
 	const tooltipSlot =
-		snapshot.slots.find((slot) => slot !== alexOnlySlot) ?? snapshot.slots[0]
+		hostSlots.find((slot) => slot !== alexOnlySlot) ??
+		unblockedSlots.find((slot) => slot !== alexOnlySlot) ??
+		snapshot.slots.find((slot) => slot !== alexOnlySlot) ??
+		snapshot.slots[0]
 	if (!alexOnlySlot || !tooltipSlot) {
 		throw new Error('Expected slots for tooltip test.')
 	}

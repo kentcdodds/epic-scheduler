@@ -141,6 +141,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
 		return (
 			<div
+				data-schedule-grid-scroller
 				css={{
 					border: `1px solid ${colors.border}`,
 					borderRadius: radius.lg,
@@ -299,6 +300,19 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										: ''
 									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${highlightedLabel}${pendingSelectionLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
+									const pendingSelectionOverlay = isPendingSelection
+										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
+										: null
+									const activeSlotRing =
+										isRangeAnchor || isActive
+											? `inset 0 0 0 2px ${colors.primary}`
+											: null
+									const combinedBoxShadow = [
+										pendingSelectionOverlay,
+										activeSlotRing,
+									]
+										.filter((value): value is string => !!value)
+										.join(', ')
 
 									return (
 										<td
@@ -337,18 +351,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: 'pointer',
 													fontSize: typography.fontSize.xs,
 													fontWeight: typography.fontWeight.medium,
-													boxShadow: isPendingSelection
-														? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
-														: undefined,
-													outline:
-														isRangeAnchor || isActive || isPendingSelection
-															? `2px solid ${colors.primary}`
-															: 'none',
-													outlineStyle:
-														isPendingSelection && !(isRangeAnchor || isActive)
-															? 'dashed'
-															: 'solid',
-													outlineOffset: '-2px',
+													boxShadow: combinedBoxShadow || undefined,
 													opacity: isDisabled ? 0.58 : 1,
 													'&:focus-visible': {
 														outline: `2px solid ${colors.primary}`,

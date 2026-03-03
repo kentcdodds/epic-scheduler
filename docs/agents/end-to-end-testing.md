@@ -25,6 +25,8 @@ on the Epic Web E2E workshop and our existing setup.
   removing ranges when users tap an already selected slot as the range start.
 - Desktop drag selection behavior where dragging creates a pending range that
   applies on pointer release and can be canceled with Escape.
+- Drag autoscroll behavior when pointer nears or exits table edges, so range
+  selection can extend without manual wheel/trackpad scroll.
 - Attendee slot-detail metadata such as displayed attendee timezone and
   attendee-local time for the selected slot.
 - Collapsed attendee/preview axes when an entire row or column is host-blocked,

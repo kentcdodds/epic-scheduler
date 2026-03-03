@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 
+function readBlockedCount(text: string | null) {
+	const match = text?.match(/(\d+)\s+blocked slot/)
+	if (!match) return -1
+	return Number.parseInt(match[1] ?? '-1', 10)
+}
+
 test('host dashboard can block slots from attendee selection', async ({
 	page,
 }) => {
@@ -16,10 +22,19 @@ test('host dashboard can block slots from attendee selection', async ({
 	await expect(
 		page.getByRole('heading', { name: 'Host unavailable slots' }),
 	).toBeVisible()
+	const blockedCountLabel = page.getByText(/blocked slot/)
+	const initialBlockedCount = readBlockedCount(
+		await blockedCountLabel.first().textContent(),
+	)
+	expect(initialBlockedCount).toBeGreaterThanOrEqual(0)
 
 	const hostUnavailableGrid = page.locator('[data-schedule-grid-shell]').nth(1)
-	const firstHostSlot = hostUnavailableGrid.locator('button[data-slot]').first()
-	const secondHostSlot = hostUnavailableGrid.locator('button[data-slot]').nth(1)
+	const firstHostSlot = hostUnavailableGrid
+		.locator('button[aria-pressed="false"]')
+		.first()
+	const secondHostSlot = hostUnavailableGrid
+		.locator('button[aria-pressed="false"]')
+		.nth(1)
 	await expect(firstHostSlot).toBeVisible()
 	await expect(secondHostSlot).toBeVisible()
 	const blockedSlotValue = await firstHostSlot.getAttribute('data-slot')
@@ -37,7 +52,11 @@ test('host dashboard can block slots from attendee selection', async ({
 	await page.mouse.down()
 	await secondHostSlot.hover()
 	await page.mouse.up()
-	await expect(page.getByText('2 blocked slots')).toBeVisible()
+	await expect
+		.poll(async () =>
+			readBlockedCount(await blockedCountLabel.first().textContent()),
+		)
+		.toBe(initialBlockedCount + 2)
 	await expect
 		.poll(
 			async () => {

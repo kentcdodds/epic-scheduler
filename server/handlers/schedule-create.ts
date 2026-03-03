@@ -11,6 +11,7 @@ type CreateScheduleRequest = {
 	hostName?: unknown
 	hostTimeZone?: unknown
 	selectedSlots?: unknown
+	blockedSlots?: unknown
 }
 
 function toStringValue(value: unknown) {
@@ -75,6 +76,7 @@ export function createScheduleCreateHandler(appEnv: Pick<AppEnv, 'APP_DB'>) {
 					hostName: toStringValue(body.hostName),
 					hostTimeZone: toStringValue(body.hostTimeZone),
 					selectedSlots: toStringArray(body.selectedSlots),
+					blockedSlots: toStringArray(body.blockedSlots),
 				})
 				const snapshot = await getScheduleSnapshot(
 					appEnv.APP_DB,

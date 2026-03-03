@@ -1,5 +1,11 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
+import {
+	computeAutoScrollStep,
+	findSlotAtPoint,
+	getGridScrollerFromPointerEvent,
+	setPointerCaptureIfAvailable,
+} from '#client/grid-drag-autoscroll.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
@@ -77,6 +83,10 @@ export function ScheduleRoute(handle: Handle) {
 	let pointerSelectionStartSlot: string | null = null
 	let pointerSelectionEndSlot: string | null = null
 	let pointerSelectionSlots = new Set<string>()
+	let pointerSelectionScroller: HTMLElement | null = null
+	let pointerPointerX = 0
+	let pointerPointerY = 0
+	let pointerAutoScrollRaf: number | null = null
 	let lastPathname = ''
 	let initialNameLoaded = false
 	const autoSaveDelayMs = 650
@@ -152,16 +162,25 @@ export function ScheduleRoute(handle: Handle) {
 		offlinePollInFlight = false
 	}
 
+	function clearPointerAutoScrollRaf() {
+		if (pointerAutoScrollRaf === null) return
+		cancelAnimationFrame(pointerAutoScrollRaf)
+		pointerAutoScrollRaf = null
+	}
+
 	function clearPointerSelection() {
+		clearPointerAutoScrollRaf()
 		pointerSelectionMode = null
 		pointerSelectionStartSlot = null
 		pointerSelectionEndSlot = null
 		pointerSelectionSlots = new Set<string>()
+		pointerSelectionScroller = null
 	}
 
 	function detachPointerSelectionListeners() {
 		if (typeof window === 'undefined') return
 		window.removeEventListener('pointerup', handleGlobalPointerUp)
+		window.removeEventListener('pointermove', handleGlobalPointerMove)
 		window.removeEventListener('keydown', handleGlobalKeyDown)
 	}
 
@@ -169,6 +188,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (typeof window === 'undefined') return
 		detachPointerSelectionListeners()
 		window.addEventListener('pointerup', handleGlobalPointerUp)
+		window.addEventListener('pointermove', handleGlobalPointerMove)
 		window.addEventListener('keydown', handleGlobalKeyDown)
 	}
 
@@ -197,6 +217,61 @@ export function ScheduleRoute(handle: Handle) {
 		return changed
 	}
 
+	function updatePointerSelectionToSlot(slot: string) {
+		if (
+			useTapRangeMode ||
+			!pointerSelectionMode ||
+			!pointerSelectionStartSlot ||
+			pointerSelectionEndSlot === slot
+		) {
+			return
+		}
+		pointerSelectionEndSlot = slot
+		pointerSelectionSlots = getPointerSelectionSlots(
+			pointerSelectionStartSlot,
+			slot,
+		)
+		activeSlot = slot
+		handle.update()
+	}
+
+	function refreshPointerSelectionAtPosition() {
+		const slot = findSlotAtPoint(pointerPointerX, pointerPointerY, {
+			withinElement: pointerSelectionScroller,
+		})
+		if (!slot) return
+		updatePointerSelectionToSlot(slot)
+	}
+
+	function runPointerAutoScrollStep() {
+		pointerAutoScrollRaf = null
+		if (!pointerSelectionMode || !pointerSelectionScroller) return
+		const delta = computeAutoScrollStep({
+			clientX: pointerPointerX,
+			clientY: pointerPointerY,
+			rect: pointerSelectionScroller.getBoundingClientRect(),
+		})
+		if (delta.left === 0 && delta.top === 0) return
+		pointerSelectionScroller.scrollBy({
+			left: delta.left,
+			top: delta.top,
+		})
+		refreshPointerSelectionAtPosition()
+		pointerAutoScrollRaf = requestAnimationFrame(runPointerAutoScrollStep)
+	}
+
+	function maybeStartPointerAutoScroll() {
+		if (!pointerSelectionMode || !pointerSelectionScroller) return
+		if (pointerAutoScrollRaf !== null) return
+		const delta = computeAutoScrollStep({
+			clientX: pointerPointerX,
+			clientY: pointerPointerY,
+			rect: pointerSelectionScroller.getBoundingClientRect(),
+		})
+		if (delta.left === 0 && delta.top === 0) return
+		pointerAutoScrollRaf = requestAnimationFrame(runPointerAutoScrollStep)
+	}
+
 	function finishPointerSelection(cancelled = false) {
 		if (!pointerSelectionMode) return
 		detachPointerSelectionListeners()
@@ -211,6 +286,14 @@ export function ScheduleRoute(handle: Handle) {
 
 	function handleGlobalPointerUp() {
 		finishPointerSelection(false)
+	}
+
+	function handleGlobalPointerMove(event: PointerEvent) {
+		if (!pointerSelectionMode) return
+		pointerPointerX = event.clientX
+		pointerPointerY = event.clientY
+		refreshPointerSelectionAtPosition()
+		maybeStartPointerAutoScroll()
 	}
 
 	function handleGlobalKeyDown(event: KeyboardEvent) {
@@ -474,31 +557,30 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		if (useTapRangeMode) return
 		if (!ensureSlotIsEditable(slot)) return
+		setPointerCaptureIfAvailable(event)
 		pointerSelectionMode = selectedSlots.has(slot) ? 'remove' : 'add'
 		pointerSelectionStartSlot = slot
 		pointerSelectionEndSlot = slot
 		pointerSelectionSlots = getPointerSelectionSlots(slot, slot)
+		pointerSelectionScroller = getGridScrollerFromPointerEvent(event)
+		pointerPointerX = event.clientX
+		pointerPointerY = event.clientY
 		activeSlot = slot
 		attachPointerSelectionListeners()
+		maybeStartPointerAutoScroll()
 		handle.update()
 	}
 
 	function handleCellPointerEnter(slot: string) {
-		if (
-			useTapRangeMode ||
-			!pointerSelectionMode ||
-			!pointerSelectionStartSlot
-		) {
-			return
-		}
-		if (pointerSelectionEndSlot === slot) return
-		pointerSelectionEndSlot = slot
-		pointerSelectionSlots = getPointerSelectionSlots(
-			pointerSelectionStartSlot,
-			slot,
-		)
-		activeSlot = slot
-		handle.update()
+		updatePointerSelectionToSlot(slot)
+	}
+
+	function handleCellPointerMove(event: PointerEvent) {
+		if (!pointerSelectionMode) return
+		pointerPointerX = event.clientX
+		pointerPointerY = event.clientY
+		refreshPointerSelectionAtPosition()
+		maybeStartPointerAutoScroll()
 	}
 
 	function handleCellPointerUp() {
@@ -784,6 +866,9 @@ export function ScheduleRoute(handle: Handle) {
 							onCellPointerDown: handleCellPointerDown,
 							onCellPointerEnter: (slot, _event) => {
 								handleCellPointerEnter(slot)
+							},
+							onCellPointerMove: (_slot, event) => {
+								handleCellPointerMove(event)
 							},
 							onCellPointerUp: (_slot, _event) => {
 								handleCellPointerUp()

@@ -115,7 +115,9 @@ test('host settings auto-save retries after transient failure', async ({
 	})
 
 	const hostUnavailableGrid = page.locator('[data-schedule-grid-shell]').nth(1)
-	const firstHostSlot = hostUnavailableGrid.locator('button[data-slot]').first()
+	const firstHostSlot = hostUnavailableGrid
+		.locator('button[aria-pressed="false"]')
+		.first()
 	await expect(firstHostSlot).toBeVisible()
 	const blockedSlot = await firstHostSlot.getAttribute('data-slot')
 	expect(blockedSlot).not.toBeNull()
