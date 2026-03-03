@@ -62,6 +62,9 @@ export function HomeRoute(handle: Handle) {
 	let selectedSlots = new Set<string>()
 	let rangeAnchor: string | null = null
 	let tapRangeAction: 'add' | 'remove' | null = null
+	let keyboardRangeAnchor: string | null = null
+	let keyboardRangeAction: 'add' | 'remove' | null = null
+	let keyboardRangeSlots = new Set<string>()
 	let activeSlot: string | null = null
 	let mobileDayKey: string | null = null
 	let status: RequestStatus = 'idle'
@@ -89,6 +92,26 @@ export function HomeRoute(handle: Handle) {
 		selectedSlots = new Set(
 			Array.from(selectedSlots).filter((slot) => validSlots.has(slot)),
 		)
+		if (rangeAnchor && !validSlots.has(rangeAnchor)) {
+			rangeAnchor = null
+			tapRangeAction = null
+		}
+		if (keyboardRangeAnchor && !validSlots.has(keyboardRangeAnchor)) {
+			keyboardRangeAnchor = null
+			keyboardRangeAction = null
+			keyboardRangeSlots = new Set<string>()
+		} else if (keyboardRangeSlots.size > 0) {
+			keyboardRangeSlots = new Set(
+				Array.from(keyboardRangeSlots).filter((slot) => validSlots.has(slot)),
+			)
+			if (keyboardRangeSlots.size === 0) {
+				keyboardRangeAnchor = null
+				keyboardRangeAction = null
+			}
+		}
+		if (activeSlot && !validSlots.has(activeSlot)) {
+			activeSlot = null
+		}
 	}
 
 	function setMessage(nextStatus: RequestStatus, text: string | null) {
@@ -139,6 +162,66 @@ export function HomeRoute(handle: Handle) {
 			if (!slot) continue
 			setSlotSelection(slot, shouldSelect)
 		}
+	}
+
+	function clearKeyboardRangeSelection() {
+		keyboardRangeAnchor = null
+		keyboardRangeAction = null
+		keyboardRangeSlots = new Set<string>()
+	}
+
+	function updateKeyboardRangePreview(params: {
+		fromSlot: string
+		toSlot: string
+		shiftKey: boolean
+	}) {
+		if (!params.shiftKey) {
+			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
+				clearKeyboardRangeSelection()
+				handle.update()
+			}
+			return
+		}
+		if (!generatedSlots.includes(params.fromSlot)) return
+		if (!generatedSlots.includes(params.toSlot)) return
+		if (!keyboardRangeAnchor) {
+			keyboardRangeAnchor = params.fromSlot
+			keyboardRangeAction = selectedSlots.has(params.fromSlot)
+				? 'remove'
+				: 'add'
+		}
+		if (!keyboardRangeAnchor) return
+		keyboardRangeSlots = new Set(
+			getRectangularSlotSelection({
+				slots: generatedSlots,
+				startSlot: keyboardRangeAnchor,
+				endSlot: params.toSlot,
+			}),
+		)
+		activeSlot = params.toSlot
+		handle.update()
+	}
+
+	function applyKeyboardRangeSelection() {
+		if (!keyboardRangeAnchor || !keyboardRangeAction) return false
+		if (keyboardRangeSlots.size === 0) return false
+		const shouldSelect = keyboardRangeAction === 'add'
+		for (const slot of keyboardRangeSlots) {
+			setSlotSelection(slot, shouldSelect)
+		}
+		clearKeyboardRangeSelection()
+		setMessage('idle', null)
+		return true
+	}
+
+	function toggleSlotSelection(slot: string) {
+		const shouldSelect = !selectedSlots.has(slot)
+		setSlotSelection(slot, shouldSelect)
+		activeSlot = slot
+		rangeAnchor = null
+		tapRangeAction = null
+		clearKeyboardRangeSelection()
+		setMessage('idle', null)
 	}
 
 	const pointerSelection = createPointerDragSelectionController({
@@ -272,6 +355,7 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
+		clearKeyboardRangeSelection()
 		const nextMode = resolveTapRangeModeFromPointer({
 			currentMode: useTapRangeMode,
 			pointerType: event.pointerType,
@@ -321,6 +405,11 @@ export function HomeRoute(handle: Handle) {
 		setMessage('idle', null)
 	}
 
+	function onCellKeyboardActivate(slot: string) {
+		if (applyKeyboardRangeSelection()) return
+		toggleSlotSelection(slot)
+	}
+
 	function onCellFocus(slot: string) {
 		activeSlot = slot
 		handle.update()
@@ -339,6 +428,14 @@ export function HomeRoute(handle: Handle) {
 		const slotAvailability = getSlotAvailability()
 		const selectedCount = selectedSlots.size
 		const isSaving = status === 'saving'
+		const isPointerRangePending = pointerSelection.state.mode !== null
+		const pendingSelectionSlots = isPointerRangePending
+			? pointerSelection.state.slots
+			: keyboardRangeSlots
+		const pendingSelectionLabel = isPointerRangePending
+			? 'included in pending drag selection'
+			: 'included in pending keyboard range selection'
+		const gridRangeAnchor = keyboardRangeAnchor ?? rangeAnchor
 
 		return (
 			<section
@@ -658,7 +755,11 @@ export function HomeRoute(handle: Handle) {
 							alignItems: 'center',
 						}}
 					>
-						<p css={{ margin: 0, color: secondaryTextColor }}>
+						<p
+							role="status"
+							aria-live="polite"
+							css={{ margin: 0, color: secondaryTextColor }}
+						>
 							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 						</p>
 						<p css={{ margin: 0, color: secondaryTextColor }}>
@@ -669,13 +770,13 @@ export function HomeRoute(handle: Handle) {
 					{renderScheduleGrid({
 						slots: generatedSlots,
 						selectedSlots,
-						selectionSlots: pointerSelection.state.slots,
-						selectionSlotLabel: 'included in pending drag selection',
+						selectionSlots: pendingSelectionSlots,
+						selectionSlotLabel: pendingSelectionLabel,
 						mobileDayKey,
 						slotAvailability,
 						maxAvailabilityCount: 1,
 						activeSlot,
-						rangeAnchor,
+						rangeAnchor: gridRangeAnchor,
 						onMobileDayChange: (dayKey) => {
 							mobileDayKey = dayKey
 							handle.update()
@@ -690,6 +791,10 @@ export function HomeRoute(handle: Handle) {
 						onCellClick: (slot, _event) => {
 							if (!useTapRangeMode) return
 							onCellClick(slot)
+						},
+						onCellKeyboardActivate: onCellKeyboardActivate,
+						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
+							updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
 						},
 						onCellFocus,
 					})}
@@ -733,6 +838,9 @@ export function HomeRoute(handle: Handle) {
 								click: () => {
 									pointerSelection.cleanup()
 									selectedSlots = buildDefaultSelection(generatedSlots)
+									clearKeyboardRangeSelection()
+									rangeAnchor = null
+									tapRangeAction = null
 									setMessage('idle', null)
 								},
 							}}
@@ -743,7 +851,8 @@ export function HomeRoute(handle: Handle) {
 
 					{message ? (
 						<p
-							role={status === 'error' ? 'alert' : undefined}
+							role={status === 'error' ? 'alert' : 'status'}
+							aria-live="polite"
 							css={{
 								margin: 0,
 								color: status === 'error' ? colors.error : colors.textMuted,

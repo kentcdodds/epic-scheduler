@@ -13,6 +13,29 @@ type SlotAvailability = {
 	availableNames: Array<string>
 }
 
+const visuallyHiddenCss = {
+	position: 'absolute',
+	width: 1,
+	height: 1,
+	padding: 0,
+	margin: -1,
+	overflow: 'hidden',
+	clip: 'rect(0, 0, 0, 0)',
+	whiteSpace: 'nowrap',
+	border: 0,
+} as const
+
+const gridNavigationKeys = new Set([
+	'ArrowUp',
+	'ArrowDown',
+	'ArrowLeft',
+	'ArrowRight',
+	'Home',
+	'End',
+	'PageUp',
+	'PageDown',
+])
+
 const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
 	weekday: 'long',
 	month: 'long',
@@ -46,8 +69,15 @@ type ScheduleGridProps = {
 	onCellPointerMove?: (slot: string, event: PointerEvent) => void
 	onCellPointerUp?: (slot: string, event: PointerEvent) => void
 	onCellClick?: (slot: string, event: MouseEvent) => void
+	onCellKeyboardActivate?: (slot: string) => void
 	onCellFocus?: (slot: string) => void
 	onCellHover?: (slot: string | null) => void
+	onCellKeyboardNavigate?: (params: {
+		fromSlot: string
+		toSlot: string
+		key: string
+		shiftKey: boolean
+	}) => void
 }
 
 function toSelectionLabel(params: {
@@ -83,6 +113,120 @@ function getCellBackground(params: {
 		maxCount: params.maxCount,
 		isSelected: params.isSelected,
 	})
+}
+
+function getRowCells(row: HTMLTableRowElement) {
+	return Array.from(row.querySelectorAll('td'))
+}
+
+function getCellButton(cell: HTMLTableCellElement) {
+	const button = cell.querySelector('button[data-slot]')
+	return button instanceof HTMLButtonElement ? button : null
+}
+
+function moveFocusWithinGridCellButtons(params: {
+	key: string
+	currentButton: HTMLButtonElement
+}) {
+	const currentCell = params.currentButton.closest('td')
+	const currentRow = currentCell?.parentElement
+	const tableBody = currentRow?.parentElement
+	if (!(currentCell instanceof HTMLTableCellElement)) return null
+	if (!(currentRow instanceof HTMLTableRowElement)) return null
+	if (!(tableBody instanceof HTMLTableSectionElement)) return null
+	if (tableBody.tagName.toLowerCase() !== 'tbody') return null
+
+	const rows = Array.from(tableBody.querySelectorAll('tr'))
+	const rowIndex = rows.indexOf(currentRow)
+	if (rowIndex < 0) return null
+
+	const rowCells = getRowCells(currentRow)
+	const columnIndex = rowCells.indexOf(currentCell)
+	if (columnIndex < 0) return null
+
+	function focusButton(button: HTMLButtonElement) {
+		button.focus()
+		return button
+	}
+
+	function focusCellAt(row: HTMLTableRowElement, col: number) {
+		const cell = getRowCells(row)[col]
+		if (!cell) return null
+		const button = getCellButton(cell)
+		if (!button) return null
+		return focusButton(button)
+	}
+
+	function focusInColumn(startIndex: number, step: 1 | -1) {
+		let nextIndex = startIndex + step
+		while (nextIndex >= 0 && nextIndex < rows.length) {
+			const row = rows[nextIndex]
+			if (row) {
+				const button = focusCellAt(row, columnIndex)
+				if (button) return button
+			}
+			nextIndex += step
+		}
+		return null
+	}
+
+	if (params.key === 'ArrowLeft') {
+		const targetCell = rowCells[columnIndex - 1]
+		const button = targetCell ? getCellButton(targetCell) : null
+		if (!button) return null
+		return focusButton(button)
+	}
+	if (params.key === 'ArrowRight') {
+		const targetCell = rowCells[columnIndex + 1]
+		const button = targetCell ? getCellButton(targetCell) : null
+		if (!button) return null
+		return focusButton(button)
+	}
+	if (params.key === 'ArrowUp') return focusInColumn(rowIndex, -1)
+	if (params.key === 'ArrowDown') return focusInColumn(rowIndex, 1)
+	if (params.key === 'PageUp') {
+		for (let nextIndex = 0; nextIndex < rowIndex; nextIndex += 1) {
+			const row = rows[nextIndex]
+			if (row) {
+				const button = focusCellAt(row, columnIndex)
+				if (button) return button
+			}
+		}
+		return null
+	}
+	if (params.key === 'PageDown') {
+		for (
+			let nextIndex = rows.length - 1;
+			nextIndex > rowIndex;
+			nextIndex -= 1
+		) {
+			const row = rows[nextIndex]
+			if (row) {
+				const button = focusCellAt(row, columnIndex)
+				if (button) return button
+			}
+		}
+		return null
+	}
+	if (params.key === 'Home') {
+		for (const cell of rowCells) {
+			const button = getCellButton(cell)
+			if (!button) continue
+			return focusButton(button)
+		}
+		return null
+	}
+	if (params.key === 'End') {
+		for (let index = rowCells.length - 1; index >= 0; index -= 1) {
+			const cell = rowCells[index]
+			if (!cell) continue
+			const button = getCellButton(cell)
+			if (!button) continue
+			return focusButton(button)
+		}
+		return null
+	}
+	return null
 }
 
 export function renderScheduleGrid(props: ScheduleGridProps) {
@@ -161,6 +305,44 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	}
 
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
+		const tableCaption = props.readOnly
+			? 'Availability grid. Use arrow keys to move between time slots. Press Enter or Space to focus slot details.'
+			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range.'
+
+		function handleCellKeyDown(event: KeyboardEvent) {
+			if (event.metaKey || event.ctrlKey || event.altKey) return
+			const currentTarget = event.currentTarget
+			if (!(currentTarget instanceof HTMLButtonElement)) return
+			const slot = currentTarget.dataset.slot
+			if (
+				(event.key === 'Enter' ||
+					event.key === ' ' ||
+					event.key === 'Spacebar') &&
+				slot &&
+				props.onCellKeyboardActivate
+			) {
+				event.preventDefault()
+				props.onCellKeyboardActivate(slot)
+				return
+			}
+			if (!gridNavigationKeys.has(event.key)) return
+			const fromSlot = currentTarget.dataset.slot
+			const focusedButton = moveFocusWithinGridCellButtons({
+				key: event.key,
+				currentButton: currentTarget,
+			})
+			event.preventDefault()
+			const toSlot = focusedButton?.dataset.slot ?? fromSlot
+			if (fromSlot && toSlot) {
+				props.onCellKeyboardNavigate?.({
+					fromSlot,
+					toSlot,
+					key: event.key,
+					shiftKey: event.shiftKey,
+				})
+			}
+		}
+
 		return (
 			<div
 				data-schedule-grid-scroller
@@ -188,6 +370,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 						width: '100%',
 					}}
 				>
+					<caption css={visuallyHiddenCss}>{tableCaption}</caption>
 					<thead>
 						<tr>
 							<th
@@ -334,6 +517,16 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										availability.count > 0
 											? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
 											: 'no attendees available'
+									const attendeeNamesLabel =
+										availability.availableNames.length === 0
+											? ''
+											: availability.availableNames.length <= 3
+												? `, available attendees: ${availability.availableNames.join(', ')}`
+												: `, available attendees include ${availability.availableNames
+														.slice(0, 3)
+														.join(', ')}, and ${
+														availability.availableNames.length - 3
+													} more`
 									const highlightedLabel =
 										isHighlighted && props.highlightedSlotLabel
 											? `, ${props.highlightedSlotLabel}`
@@ -347,7 +540,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const disabledLabel = isDisabled
 										? ', unavailable for scheduling'
 										: ''
-									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${highlightedLabel}${pendingSelectionLabel}${disabledLabel}`
+									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
 									const pendingSelectionOverlay = isPendingSelection
 										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
@@ -452,6 +645,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													blur: props.onCellHover
 														? () => props.onCellHover?.(null)
 														: undefined,
+													keydown: handleCellKeyDown,
 												}}
 											>
 												<span css={{ position: 'relative', zIndex: 1 }}>
