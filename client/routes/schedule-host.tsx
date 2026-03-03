@@ -551,17 +551,20 @@ export function ScheduleHostRoute(handle: Handle) {
 			setStatus('Host name is required.', true)
 			return
 		}
+		const shouldUpdateRange = hasLocalRangeChanges(currentSnapshot)
 		let nextRangeStartUtc = ''
 		let nextRangeEndUtc = ''
-		try {
-			const rangeDraft = getDraftRangeFromDateInputs(currentSnapshot)
-			nextRangeStartUtc = rangeDraft.rangeStartUtc
-			nextRangeEndUtc = rangeDraft.rangeEndUtc
-		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : 'Invalid date range.'
-			setStatus(errorMessage, true)
-			return
+		if (shouldUpdateRange) {
+			try {
+				const rangeDraft = getDraftRangeFromDateInputs(currentSnapshot)
+				nextRangeStartUtc = rangeDraft.rangeStartUtc
+				nextRangeEndUtc = rangeDraft.rangeEndUtc
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : 'Invalid date range.'
+				setStatus(errorMessage, true)
+				return
+			}
 		}
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
@@ -572,19 +575,28 @@ export function ScheduleHostRoute(handle: Handle) {
 		isSaving = true
 		handle.update()
 		try {
+			const body: {
+				hostName: string
+				title: string
+				blockedSlots: Array<string>
+				rangeStartUtc?: string
+				rangeEndUtc?: string
+			} = {
+				hostName,
+				title,
+				blockedSlots: sortedBlockedSlots,
+			}
+			if (shouldUpdateRange) {
+				body.rangeStartUtc = nextRangeStartUtc
+				body.rangeEndUtc = nextRangeEndUtc
+			}
 			const response = await fetch(`/api/schedules/${requestShareToken}/host`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-Host-Token': requestHostAccessToken,
 				},
-				body: JSON.stringify({
-					hostName,
-					title,
-					blockedSlots: sortedBlockedSlots,
-					rangeStartUtc: nextRangeStartUtc,
-					rangeEndUtc: nextRangeEndUtc,
-				}),
+				body: JSON.stringify(body),
 			})
 			const payload = (await response.json().catch(() => null)) as {
 				ok?: boolean
