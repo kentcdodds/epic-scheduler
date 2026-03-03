@@ -125,7 +125,9 @@ export function ScheduleRoute(handle: Handle) {
 		const normalizedName = normalizeNameForLookup(name)
 		if (!normalizedName) return false
 		return snapshot.attendees.some(
-			(attendee) => normalizeNameForLookup(attendee.name) === normalizedName,
+			(attendee) =>
+				!attendee.isHost &&
+				normalizeNameForLookup(attendee.name) === normalizedName,
 		)
 	}
 
@@ -135,7 +137,9 @@ export function ScheduleRoute(handle: Handle) {
 		if (!normalizedName) return null
 		return (
 			snapshot.attendees.find(
-				(attendee) => normalizeNameForLookup(attendee.name) === normalizedName,
+				(attendee) =>
+					!attendee.isHost &&
+					normalizeNameForLookup(attendee.name) === normalizedName,
 			)?.name ?? null
 		)
 	}
@@ -428,11 +432,14 @@ export function ScheduleRoute(handle: Handle) {
 			return
 		}
 
+		const previousDirtyChanges = hasDirtyChanges
+		const previousPendingSave = pendingSave
 		clearSaveDebounceTimer()
 		hasDirtyChanges = false
 		pendingSave = false
 		isDeletingSubmission = true
 		handle.update()
+		let shouldRestoreDirtyState = false
 
 		try {
 			const response = await fetch(
@@ -457,6 +464,7 @@ export function ScheduleRoute(handle: Handle) {
 						? payload.error
 						: 'Unable to delete submission.'
 				setStatus(errorMessage, true)
+				shouldRestoreDirtyState = true
 				return
 			}
 
@@ -476,9 +484,17 @@ export function ScheduleRoute(handle: Handle) {
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatus('Network error while deleting submission.', true)
+			shouldRestoreDirtyState = true
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isDeletingSubmission = false
+				if (shouldRestoreDirtyState) {
+					hasDirtyChanges = previousDirtyChanges
+					pendingSave = previousPendingSave
+					if (hasDirtyChanges) {
+						scheduleAutoSave()
+					}
+				}
 				handle.update()
 			}
 		}
@@ -506,11 +522,14 @@ export function ScheduleRoute(handle: Handle) {
 			return
 		}
 
+		const previousDirtyChanges = hasDirtyChanges
+		const previousPendingSave = pendingSave
 		clearSaveDebounceTimer()
 		hasDirtyChanges = false
 		pendingSave = false
 		isRenamingSubmission = true
 		handle.update()
+		let shouldRestoreDirtyState = false
 
 		try {
 			const response = await fetch(
@@ -538,6 +557,7 @@ export function ScheduleRoute(handle: Handle) {
 						? payload.error
 						: 'Unable to update attendee name.'
 				setStatus(errorMessage, true)
+				shouldRestoreDirtyState = true
 				return
 			}
 
@@ -553,9 +573,17 @@ export function ScheduleRoute(handle: Handle) {
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatus('Network error while updating attendee name.', true)
+			shouldRestoreDirtyState = true
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isRenamingSubmission = false
+				if (shouldRestoreDirtyState) {
+					hasDirtyChanges = previousDirtyChanges
+					pendingSave = previousPendingSave
+					if (hasDirtyChanges) {
+						scheduleAutoSave()
+					}
+				}
 				handle.update()
 			}
 		}
