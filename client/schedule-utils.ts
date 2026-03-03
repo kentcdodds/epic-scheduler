@@ -320,6 +320,15 @@ export function formatSlotLabel(slot: string, style: SlotLabelStyle = 'short') {
 	if (Number.isNaN(slotDate.getTime())) return slot
 	return slotLabelFormatters[style].format(slotDate)
 }
+const attendeeRangeTimeFormatters = new Map<
+	string,
+	{
+		dayKeyFormatter: Intl.DateTimeFormat
+		timeFormatter: Intl.DateTimeFormat
+		dayTimeFormatter: Intl.DateTimeFormat
+		zoneFormatter: Intl.DateTimeFormat
+	}
+>()
 
 export function formatSlotForAttendeeTimeZone(
 	slot: string,
@@ -354,6 +363,85 @@ export function formatSlotForAttendeeTimeZone(
 		}
 	} catch {
 		return { localTime: 'Local time unknown', timeZoneLabel: timeZone }
+	}
+}
+
+function getAttendeeRangeTimeFormatters(timeZone: string) {
+	let formatters = attendeeRangeTimeFormatters.get(timeZone)
+	if (formatters) return formatters
+	formatters = {
+		dayKeyFormatter: new Intl.DateTimeFormat('en-CA', {
+			timeZone,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+		}),
+		timeFormatter: new Intl.DateTimeFormat(undefined, {
+			timeZone,
+			hour: 'numeric',
+			minute: '2-digit',
+		}),
+		dayTimeFormatter: new Intl.DateTimeFormat(undefined, {
+			timeZone,
+			weekday: 'short',
+			hour: 'numeric',
+			minute: '2-digit',
+		}),
+		zoneFormatter: new Intl.DateTimeFormat(undefined, {
+			timeZone,
+			timeZoneName: 'short',
+			hour: 'numeric',
+			minute: '2-digit',
+		}),
+	}
+	attendeeRangeTimeFormatters.set(timeZone, formatters)
+	return formatters
+}
+
+export function formatSlotRangeForAttendeeTimeZone(params: {
+	rangeStartSlot: string
+	rangeEndSlotExclusive: string
+	timeZone: string | null
+}) {
+	if (!params.timeZone) {
+		return {
+			localRange: 'Local time unknown',
+			timeZoneLabel: 'timezone unknown',
+		}
+	}
+	const rangeStartDate = new Date(params.rangeStartSlot)
+	const rangeEndDate = new Date(params.rangeEndSlotExclusive)
+	if (
+		Number.isNaN(rangeStartDate.getTime()) ||
+		Number.isNaN(rangeEndDate.getTime())
+	) {
+		return {
+			localRange: 'Local time unknown',
+			timeZoneLabel: params.timeZone,
+		}
+	}
+	try {
+		const formatters = getAttendeeRangeTimeFormatters(params.timeZone)
+		const startTime = formatters.timeFormatter.format(rangeStartDate)
+		const endTime = formatters.timeFormatter.format(rangeEndDate)
+		const sameDay =
+			formatters.dayKeyFormatter.format(rangeStartDate) ===
+			formatters.dayKeyFormatter.format(rangeEndDate)
+		const startZonePart = formatters.zoneFormatter
+			.formatToParts(rangeStartDate)
+			.find((part) => part.type === 'timeZoneName')
+		const timeZoneLabel = startZonePart?.value ?? params.timeZone
+		return {
+			localRange: sameDay
+				? `${startTime}-${endTime}`
+				: `${formatters.dayTimeFormatter.format(rangeStartDate)}-${formatters.dayTimeFormatter.format(rangeEndDate)}`,
+			timeZoneLabel,
+		}
+	} catch {
+		return {
+			localRange: 'Local time unknown',
+			timeZoneLabel: params.timeZone,
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('host dashboard receives realtime updates and shows hover tooltip', async ({
+test('host dashboard keeps attendee summary stable across hover changes', async ({
 	page,
 }) => {
 	await page.goto('/')
@@ -56,13 +56,13 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	const hostSlots =
 		snapshot.availabilityByAttendee[hostAttendee.id] ?? unblockedSlots
 	const alexOnlySlot = hostSlots[0] ?? unblockedSlots[0] ?? snapshot.slots[0]
-	const tooltipSlot =
+	const hoveredSlot =
 		hostSlots.find((slot) => slot !== alexOnlySlot) ??
 		unblockedSlots.find((slot) => slot !== alexOnlySlot) ??
 		snapshot.slots.find((slot) => slot !== alexOnlySlot) ??
 		snapshot.slots[0]
-	if (!alexOnlySlot || !tooltipSlot) {
-		throw new Error('Expected slots for tooltip test.')
+	if (!alexOnlySlot || !hoveredSlot) {
+		throw new Error('Expected slots for summary test.')
 	}
 
 	const submitResponse = await page.request.post(
@@ -77,89 +77,45 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	)
 	expect(submitResponse.ok()).toBe(true)
 
-	await expect(page.getByText('Alex')).toBeVisible({ timeout: 4_000 })
+	await expect(
+		page.locator('label').filter({ hasText: 'Alex' }).first(),
+	).toBeVisible({
+		timeout: 4_000,
+	})
+
+	const summary = page.locator('[data-host-preview-attendee-summary]').first()
+	await expect(summary).toBeVisible()
+	await expect(summary).toContainText('No range selected yet.')
+	await expect(summary).toContainText(
+		'Showing total available slots per attendee.',
+	)
+	await expect(
+		summary.locator('[data-host-preview-attendee]').filter({
+			hasText: 'Alex (1) - UTC',
+		}),
+	).toHaveCount(1)
 
 	const previewGrid = page.locator('[data-schedule-grid-shell]').first()
-	const tooltipSlotButton = previewGrid
-		.locator(`button[data-slot="${tooltipSlot}"]`)
+	const hoveredSlotButton = previewGrid
+		.locator(`button[data-slot="${hoveredSlot}"]`)
 		.first()
 	const alexSlotButton = previewGrid
 		.locator(`button[data-slot="${alexOnlySlot}"]`)
 		.first()
-	await expect(tooltipSlotButton).toBeVisible()
+	await expect(hoveredSlotButton).toBeVisible()
 	await expect(alexSlotButton).toBeVisible()
-
-	await tooltipSlotButton.scrollIntoViewIfNeeded()
-	await tooltipSlotButton.hover()
-
-	const tooltip = page.locator('aside[data-host-hover-tooltip]').first()
-	await expect(tooltip).toBeVisible()
-	await expect(tooltip.locator('li', { hasText: 'Host' })).toBeVisible()
-	await expect(tooltip.locator('li', { hasText: 'Alex' })).toBeVisible()
-
-	const visibleSlotButtons = previewGrid.locator('button[data-slot]:visible')
-	const visibleSlotButtonCount = await visibleSlotButtons.count()
-	expect(visibleSlotButtonCount).toBeGreaterThan(1)
-	const movementStartButton = visibleSlotButtons.first()
-	const movementEndButton = visibleSlotButtons.nth(1)
-	const movementStartBounds = await movementStartButton.boundingBox()
-	const movementEndBounds = await movementEndButton.boundingBox()
-	if (!movementStartBounds || !movementEndBounds) {
-		throw new Error('Expected visible slot bounds for hover continuity test.')
-	}
-	await movementStartButton.hover()
-	await page.evaluate(() => {
-		type TooltipWindow = Window & {
-			__hostHoverTooltipDetachCount?: number
-			__hostHoverTooltipVisible?: boolean
-			__hostHoverTooltipObserver?: MutationObserver
-		}
-		const tooltipWindow = window as TooltipWindow
-		tooltipWindow.__hostHoverTooltipDetachCount = 0
-		tooltipWindow.__hostHoverTooltipVisible = !!document.querySelector(
-			'aside[data-host-hover-tooltip]',
-		)
-		const observer = new MutationObserver(() => {
-			const isVisible = !!document.querySelector(
-				'aside[data-host-hover-tooltip]',
-			)
-			if (tooltipWindow.__hostHoverTooltipVisible && !isVisible) {
-				tooltipWindow.__hostHoverTooltipDetachCount =
-					(tooltipWindow.__hostHoverTooltipDetachCount ?? 0) + 1
-			}
-			tooltipWindow.__hostHoverTooltipVisible = isVisible
-		})
-		observer.observe(document.body, { childList: true, subtree: true })
-		tooltipWindow.__hostHoverTooltipObserver = observer
-	})
-	const movementStartX =
-		movementStartBounds.x + Math.max(1, movementStartBounds.width - 1)
-	const movementStartY = movementStartBounds.y + movementStartBounds.height / 2
-	const movementEndX = movementEndBounds.x + 1
-	const movementEndY = movementEndBounds.y + movementEndBounds.height / 2
-	await page.mouse.move(movementStartX, movementStartY)
-	await page.mouse.move(movementEndX, movementEndY, { steps: 20 })
-	const hoverTooltipDetachCount = await page.evaluate(() => {
-		type TooltipWindow = Window & {
-			__hostHoverTooltipDetachCount?: number
-			__hostHoverTooltipObserver?: MutationObserver
-			__hostHoverTooltipVisible?: boolean
-		}
-		const tooltipWindow = window as TooltipWindow
-		tooltipWindow.__hostHoverTooltipObserver?.disconnect()
-		delete tooltipWindow.__hostHoverTooltipObserver
-		delete tooltipWindow.__hostHoverTooltipVisible
-		return tooltipWindow.__hostHoverTooltipDetachCount ?? 0
-	})
-	expect(hoverTooltipDetachCount).toBe(0)
-
-	const alexTextDecoration = await tooltip
-		.locator('li', { hasText: 'Alex' })
-		.evaluate((element) => getComputedStyle(element).textDecorationLine)
-	expect(alexTextDecoration).toContain('line-through')
-
+	const summaryRowCount = await summary
+		.locator('[data-host-preview-attendee]')
+		.count()
 	await alexSlotButton.scrollIntoViewIfNeeded()
-	await alexSlotButton.hover()
-	await expect(tooltip).toBeVisible()
-	await expect(tooltip.locator('li', { hasText: 'Alex' })).toBeVisible()
+	await hoveredSlotButton.hover()
+	await expect(summary).toBeVisible()
+	await expect(summary.locator('[data-host-preview-attendee]')).toHaveCount(
+		summaryRowCount,
+	)
+	await page.mouse.move(0, 0)
+	await expect(summary).toBeVisible()
+	await expect(summary.locator('[data-host-preview-attendee]')).toHaveCount(
+		summaryRowCount,
+	)
 })
