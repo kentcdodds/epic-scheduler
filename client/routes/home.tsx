@@ -71,6 +71,7 @@ export function HomeRoute(handle: Handle) {
 	let message: string | null = null
 	let useTapRangeMode = detectTapRangeMode()
 	let didInitializeSelection = false
+	const nameRequiredMessage = 'Name is required before making a submission.'
 
 	function syncSlots() {
 		const nextRange = createSlotRangeFromDateInputs({
@@ -118,6 +119,23 @@ export function HomeRoute(handle: Handle) {
 		status = nextStatus
 		message = text
 		handle.update()
+	}
+
+	function focusHostNameInput() {
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		window.setTimeout(() => {
+			const nameInput = document.querySelector<HTMLInputElement>(
+				'input[name="hostName"]',
+			)
+			nameInput?.focus()
+		}, 0)
+	}
+
+	function ensureNameProvidedForSubmission() {
+		if (hostName.trim()) return true
+		setMessage('error', nameRequiredMessage)
+		focusHostNameInput()
+		return false
 	}
 
 	function updateDateRange(next: {
@@ -281,7 +299,7 @@ export function HomeRoute(handle: Handle) {
 	async function createScheduleRequest() {
 		const normalizedHostName = hostName.trim()
 		if (!normalizedHostName) {
-			setMessage('error', 'Host name is required.')
+			ensureNameProvidedForSubmission()
 			return
 		}
 
@@ -371,6 +389,7 @@ export function HomeRoute(handle: Handle) {
 			}
 		}
 		if (useTapRangeMode) return
+		if (!ensureNameProvidedForSubmission()) return
 		pointerSelection.startSelection({
 			slot,
 			event,
@@ -388,6 +407,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellClick(slot: string) {
 		if (!useTapRangeMode) return
+		if (!ensureNameProvidedForSubmission()) return
 
 		if (!rangeAnchor) {
 			rangeAnchor = slot

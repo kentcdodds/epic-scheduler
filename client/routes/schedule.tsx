@@ -89,6 +89,7 @@ export function ScheduleRoute(handle: Handle) {
 	let lastPathname = ''
 	let initialNameLoaded = false
 	let pendingRenameSourceName: string | null = null
+	const nameRequiredMessage = 'Name is required before making a submission.'
 	const autoSaveDelayMs = 650
 	const reconnectDelayMs = 1200
 	const offlinePollIntervalMs = 4000
@@ -97,6 +98,16 @@ export function ScheduleRoute(handle: Handle) {
 		statusMessage = nextMessage
 		statusError = error
 		handle.update()
+	}
+
+	function focusAttendeeNameInput() {
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		window.setTimeout(() => {
+			const nameInput = document.querySelector<HTMLInputElement>(
+				'input[name="attendeeName"]',
+			)
+			nameInput?.focus()
+		}, 0)
 	}
 
 	function getPathname() {
@@ -391,7 +402,8 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
-			setStatus('Enter your name before selecting availability.', true)
+			setStatus(nameRequiredMessage, true)
+			focusAttendeeNameInput()
 			return
 		}
 
@@ -742,7 +754,8 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
-			setStatus('Enter your name before selecting availability.', true)
+			setStatus(nameRequiredMessage, true)
+			focusAttendeeNameInput()
 			return false
 		}
 		return true
@@ -1120,6 +1133,7 @@ export function ScheduleRoute(handle: Handle) {
 							</span>
 							<input
 								type="text"
+								name="attendeeName"
 								value={attendeeName}
 								placeholder="Add your name"
 								on={{
