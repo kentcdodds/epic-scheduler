@@ -12,14 +12,21 @@ test('home page renders scheduler creation flow', async ({ page }) => {
 	await expect(
 		page.getByRole('button', { name: 'Create share link' }),
 	).toBeVisible()
+	await expect(page.getByLabel('Schedule title')).toHaveValue('')
+	await expect(page.getByLabel('Your name')).toHaveAttribute(
+		'placeholder',
+		'Your name',
+	)
 })
 
-test('create schedule link navigates to schedule page', async ({ page }) => {
+test('create schedule link navigates to host dashboard', async ({ page }) => {
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
 	await expect(
-		page.getByRole('button', { name: 'Save availability' }),
+		page.getByRole('heading', { name: 'Host dashboard' }),
 	).toBeVisible()
+	await expect(page.getByText('Attendee submission link')).toBeVisible()
+	await expect(page.getByText('Host dashboard link')).toBeVisible()
 })

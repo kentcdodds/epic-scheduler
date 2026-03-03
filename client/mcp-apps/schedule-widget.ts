@@ -11,6 +11,13 @@ import {
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import { extractScheduleToolInput } from './schedule-widget-tool-input.js'
+import {
+	createFullscreenManager,
+	getWidgetElement as getFormElement,
+	isRecord,
+	readNonEmptyString,
+	readTheme,
+} from './schedule-widget-shared.js'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
 
 const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -21,58 +28,16 @@ const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
 	minute: '2-digit',
 })
 
-function readTheme(source: Record<string, unknown> | undefined) {
-	const value = source?.theme
-	return value === 'dark' || value === 'light' ? value : undefined
-}
-
-function isDisplayMode(
-	value: unknown,
-): value is 'inline' | 'fullscreen' | 'pip' {
-	return value === 'inline' || value === 'fullscreen' || value === 'pip'
-}
-
-function readAvailableDisplayModes(
-	source: Record<string, unknown> | undefined,
-) {
-	if (!Array.isArray(source?.availableDisplayModes)) {
-		return [] as Array<'inline' | 'fullscreen' | 'pip'>
-	}
-	return source.availableDisplayModes.filter((mode) => isDisplayMode(mode))
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
-
-function readNonEmptyString(value: unknown) {
-	if (typeof value !== 'string') return null
-	const normalized = value.trim()
-	return normalized.length > 0 ? normalized : null
-}
-
 function getApiBaseUrl(rootElement: HTMLElement) {
 	const configuredBaseUrl = readNonEmptyString(rootElement.dataset.apiBaseUrl)
 	if (configuredBaseUrl) return new URL('/', configuredBaseUrl)
 	return new URL('/', window.location.href)
 }
-
 function getBrowserTimeZone() {
 	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
 	if (typeof value !== 'string') return 'UTC'
 	const normalized = value.trim()
 	return normalized || 'UTC'
-}
-
-function getFormElement<T extends HTMLElement>(
-	root: ParentNode,
-	selector: string,
-): T {
-	const element = root.querySelector<T>(selector)
-	if (!element) {
-		throw new Error(`Missing widget element: ${selector}`)
-	}
-	return element
 }
 
 function escapeHtml(value: string) {
@@ -125,6 +90,12 @@ function setupScheduleWidget() {
 		rootElement,
 		'input[name="attendeeName"]',
 	)
+	const fullscreenToggleButton = rootElement.querySelector<HTMLButtonElement>(
+		'[data-action="request-fullscreen"]',
+	)
+	if (fullscreenToggleButton) {
+		fullscreenToggleButton.hidden = true
+	}
 
 	browserTimeZoneElement.textContent = getBrowserTimeZone()
 
@@ -133,6 +104,8 @@ function setupScheduleWidget() {
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
+	let fullscreenManager: ReturnType<typeof createFullscreenManager> | null =
+		null
 	const fetchSnapshotTimeoutMs = 10_000
 	const apiBaseUrl = getApiBaseUrl(rootElement)
 
@@ -426,6 +399,7 @@ function setupScheduleWidget() {
 				appRoot.removeAttribute('data-theme')
 			}
 			maybeApplyToolInput(extractScheduleToolInput(renderData))
+			fullscreenManager?.updateFullscreenButton()
 		},
 		onHostContextChanged: (hostContext) => {
 			const theme = readTheme(hostContext)
@@ -434,27 +408,22 @@ function setupScheduleWidget() {
 			} else {
 				appRoot.removeAttribute('data-theme')
 			}
+			fullscreenManager?.updateFullscreenButton()
+			void fullscreenManager?.maybeAutoRequestFullscreen()
 		},
 	})
 
-	async function requestFullscreenMode() {
-		const availableModes = readAvailableDisplayModes(
-			hostBridge.getHostContext(),
-		)
-		if (availableModes.length > 0 && !availableModes.includes('fullscreen')) {
-			throw new Error(
-				`Host does not advertise fullscreen mode support. Available modes: ${availableModes.join(', ')}`,
-			)
+	fullscreenManager = createFullscreenManager({
+		hostBridge,
+		fullscreenToggleButton,
+		autoFullscreenErrorLabel: 'schedule widget',
+	})
+
+	async function toggleFullscreenMode() {
+		if (!fullscreenManager) {
+			throw new Error('Fullscreen controls are unavailable.')
 		}
-		const grantedMode = await hostBridge.requestDisplayMode('fullscreen')
-		if (!grantedMode) {
-			throw new Error('Host did not grant fullscreen mode request.')
-		}
-		return {
-			ok: true,
-			requestedMode: 'fullscreen',
-			grantedMode,
-		}
+		return fullscreenManager.toggleFullscreenMode()
 	}
 
 	async function fetchSnapshot() {
@@ -648,11 +617,9 @@ function setupScheduleWidget() {
 		renderSlotDetails()
 	})
 
-	rootElement
-		.querySelector('[data-action="request-fullscreen"]')
-		?.addEventListener('click', () => {
-			void withOutput('Requesting fullscreen mode', requestFullscreenMode)
-		})
+	fullscreenToggleButton?.addEventListener('click', () => {
+		void withOutput('Updating display mode', toggleFullscreenMode)
+	})
 
 	rootElement
 		.querySelector('[data-action="submit"]')
@@ -679,8 +646,13 @@ function setupScheduleWidget() {
 		hostBridge.handleHostMessage(event.data)
 	})
 
-	void hostBridge.initialize()
+	void hostBridge.initialize().then((ready) => {
+		fullscreenManager?.updateFullscreenButton()
+		if (!ready) return
+		void fullscreenManager?.maybeAutoRequestFullscreen()
+	})
 	hostBridge.requestRenderData()
+	fullscreenManager?.updateFullscreenButton()
 	updateSelectionSummary()
 	setStatus('Waiting for share token input.')
 	const openAiBridge = (

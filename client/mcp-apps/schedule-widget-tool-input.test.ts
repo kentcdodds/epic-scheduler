@@ -14,6 +14,7 @@ test('extracts share token from toolInput render data', () => {
 
 	expect(result.shareToken).toBe('abc123')
 	expect(result.attendeeName).toBeNull()
+	expect(result.hostAccessToken).toBeNull()
 })
 
 test('extracts share token from toolOutput structured content', () => {
@@ -50,11 +51,13 @@ test('supports snake_case keys and trims values', () => {
 		arguments: {
 			share_token: '  snake-token  ',
 			attendee_name: '  Alex  ',
+			host_access_token: '  host-key  ',
 		},
 	})
 
 	expect(result.shareToken).toBe('snake-token')
 	expect(result.attendeeName).toBe('Alex')
+	expect(result.hostAccessToken).toBe('host-key')
 })
 
 test('falls back to generic attendee name when provided', () => {
@@ -79,4 +82,16 @@ test('ignores blank token values', () => {
 	})
 
 	expect(result.shareToken).toBeNull()
+})
+
+test('extracts host token from host key aliases', () => {
+	const result = extractScheduleToolInput({
+		params: {
+			arguments: {
+				hostKey: 'host-dashboard-key',
+			},
+		},
+	})
+
+	expect(result.hostAccessToken).toBe('host-dashboard-key')
 })

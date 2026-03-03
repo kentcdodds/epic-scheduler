@@ -13,7 +13,7 @@ const scheduleAppResource = {
 	name: 'schedule_app_resource',
 	title: 'Schedule App Resource',
 	description:
-		'Interactive scheduler MCP app for selecting availability and viewing overlap on existing links.',
+		'Interactive attendee MCP app for selecting availability and viewing overlap on existing links.',
 } as const
 
 export async function registerScheduleAppResource(agent: MCP) {

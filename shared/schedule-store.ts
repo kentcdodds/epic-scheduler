@@ -20,6 +20,7 @@ export type AttendeeRecord = {
 export type ScheduleSnapshot = {
 	schedule: ScheduleRecord
 	slots: Array<string>
+	blockedSlots: Array<string>
 	attendees: Array<AttendeeRecord>
 	availabilityByAttendee: Record<string, Array<string>>
 	countsBySlot: Record<string, number>
@@ -46,6 +47,7 @@ type ScheduleInsertInput = {
 	hostName: string
 	hostTimeZone?: string | null
 	selectedSlots: Array<string>
+	blockedSlots?: Array<string>
 }
 
 type UpsertAvailabilityInput = {
@@ -54,6 +56,12 @@ type UpsertAvailabilityInput = {
 	attendeeTimeZone?: string | null
 	selectedSlots: Array<string>
 	isHost?: boolean
+}
+
+type UpdateScheduleHostSettingsInput = {
+	shareToken: string
+	title?: string
+	blockedSlots?: Array<string>
 }
 
 type ScheduleRow = {
@@ -78,8 +86,30 @@ type AvailabilityRow = {
 	slot_start_utc: string
 }
 
+type BlockedSlotRow = {
+	slot_start_utc: string
+}
+
+type ScheduleHostAccessTokenRow = {
+	host_access_token_hash: string | null
+}
+
 export function createShareToken() {
 	return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+}
+
+export function createHostAccessToken() {
+	return crypto.randomUUID().replace(/-/g, '')
+}
+
+export async function hashHostAccessToken(hostAccessToken: string) {
+	const digest = await crypto.subtle.digest(
+		'SHA-256',
+		new TextEncoder().encode(hostAccessToken),
+	)
+	return Array.from(new Uint8Array(digest), (byte) =>
+		byte.toString(16).padStart(2, '0'),
+	).join('')
 }
 
 export function normalizeName(name: string) {
@@ -195,7 +225,14 @@ async function insertAvailabilityRows(params: {
 					attendee_id,
 					slot_start_utc,
 					updated_at
-				) VALUES (?1, ?2, ?3, ?4)`,
+				)
+				SELECT ?1, ?2, ?3, ?4
+				WHERE NOT EXISTS (
+					SELECT 1
+					FROM schedule_blocked_slots
+					WHERE schedule_id = ?1
+						AND slot_start_utc = ?3
+				)`,
 			)
 			.bind(params.scheduleId, params.attendeeId, slot, now),
 	)
@@ -207,6 +244,51 @@ async function insertAvailabilityRows(params: {
 	for (const statement of statements) {
 		await statement.run()
 	}
+}
+
+async function insertBlockedSlotRows(params: {
+	db: D1DatabaseLike
+	scheduleId: string
+	blockedSlots: Array<string>
+}) {
+	if (params.blockedSlots.length === 0) return
+
+	const now = new Date().toISOString()
+	const statements = params.blockedSlots.map((slot) =>
+		params.db
+			.prepare(
+				`INSERT OR REPLACE INTO schedule_blocked_slots (
+					schedule_id,
+					slot_start_utc,
+					updated_at
+				) VALUES (?1, ?2, ?3)`,
+			)
+			.bind(params.scheduleId, slot, now),
+	)
+	if (typeof params.db.batch === 'function') {
+		await params.db.batch(statements)
+		return
+	}
+
+	for (const statement of statements) {
+		await statement.run()
+	}
+}
+
+async function getBlockedSlotsForScheduleId(
+	db: D1DatabaseLike,
+	scheduleId: string,
+) {
+	const blockedRows = await db
+		.prepare(
+			`SELECT
+				slot_start_utc
+			FROM schedule_blocked_slots
+			WHERE schedule_id = ?1`,
+		)
+		.bind(scheduleId)
+		.all<BlockedSlotRow>()
+	return blockedRows.results.map((row) => row.slot_start_utc)
 }
 
 export async function getScheduleByShareToken(
@@ -233,6 +315,30 @@ export async function getScheduleByShareToken(
 	return toScheduleRecord(row)
 }
 
+export async function verifyScheduleHostAccessToken(
+	db: D1DatabaseLike,
+	shareToken: string,
+	providedHostAccessToken: string,
+) {
+	const normalizedHostAccessToken = providedHostAccessToken.trim()
+	if (!normalizedHostAccessToken) return 'invalid'
+	const row = await db
+		.prepare(
+			`SELECT
+				host_access_token_hash
+			FROM schedules
+			WHERE share_token = ?1
+			LIMIT 1`,
+		)
+		.bind(shareToken)
+		.first<ScheduleHostAccessTokenRow>()
+	if (!row) return 'not-found'
+
+	const providedTokenHash = await hashHostAccessToken(normalizedHostAccessToken)
+	if (!row.host_access_token_hash) return 'invalid'
+	return row.host_access_token_hash === providedTokenHash ? 'valid' : 'invalid'
+}
+
 export async function createSchedule(
 	db: D1DatabaseLike,
 	input: ScheduleInsertInput,
@@ -254,9 +360,19 @@ export async function createSchedule(
 		selectedSlots: input.selectedSlots,
 		allowedSlots: allowedSlotSet,
 	})
+	const blockedSlots = normalizeSelectedSlots({
+		selectedSlots: input.blockedSlots ?? [],
+		allowedSlots: allowedSlotSet,
+	})
+	const blockedSlotSet = new Set(blockedSlots)
+	const hostSelectedSlots = selectedSlots.filter(
+		(slot) => !blockedSlotSet.has(slot),
+	)
 
 	const id = crypto.randomUUID()
 	const shareToken = createShareToken()
+	const hostAccessToken = createHostAccessToken()
+	const hostAccessTokenHash = await hashHostAccessToken(hostAccessToken)
 	const hostAttendeeId = crypto.randomUUID()
 	const createdAt = new Date().toISOString()
 	const nameNorm = normalizeNameForMatch(hostName)
@@ -267,16 +383,18 @@ export async function createSchedule(
 			`INSERT INTO schedules (
 				id,
 				share_token,
+				host_access_token_hash,
 				title,
 				interval_minutes,
 				range_start_utc,
 				range_end_utc,
 				created_at
-			) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+			) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
 		)
 		.bind(
 			id,
 			shareToken,
+			hostAccessTokenHash,
 			title,
 			intervalMinutes,
 			slots[0],
@@ -306,12 +424,18 @@ export async function createSchedule(
 		db,
 		scheduleId: id,
 		attendeeId: hostAttendeeId,
-		selectedSlots,
+		selectedSlots: hostSelectedSlots,
+	})
+	await insertBlockedSlotRows({
+		db,
+		scheduleId: id,
+		blockedSlots,
 	})
 
 	return {
 		scheduleId: id,
 		shareToken,
+		hostAccessToken,
 		hostAttendeeId,
 	}
 }
@@ -337,6 +461,10 @@ export async function upsertAttendeeAvailability(
 			intervalMinutes: schedule.intervalMinutes,
 		}),
 	)
+	const blockedSlots = await getBlockedSlotsForScheduleId(db, schedule.id)
+	for (const blockedSlot of blockedSlots) {
+		allowedSlots.delete(blockedSlot)
+	}
 	const selectedSlots = normalizeSelectedSlots({
 		selectedSlots: input.selectedSlots,
 		allowedSlots,
@@ -416,6 +544,93 @@ export async function upsertAttendeeAvailability(
 	}
 }
 
+export async function updateScheduleHostSettings(
+	db: D1DatabaseLike,
+	input: UpdateScheduleHostSettingsInput,
+) {
+	const schedule = await getScheduleByShareToken(db, input.shareToken)
+	if (!schedule) {
+		throw new Error('Schedule not found.')
+	}
+
+	const updates: Array<PreparedStatementLike> = []
+	if (typeof input.title === 'string') {
+		const normalizedTitle = input.title.trim() || 'New schedule'
+		updates.push(
+			db
+				.prepare(
+					`UPDATE schedules
+					SET title = ?2
+					WHERE id = ?1`,
+				)
+				.bind(schedule.id, normalizedTitle),
+		)
+	}
+
+	let normalizedBlockedSlots: Array<string> | null = null
+	if (Array.isArray(input.blockedSlots)) {
+		const allowedSlots = new Set(
+			buildSlots({
+				rangeStartUtc: schedule.rangeStartUtc,
+				rangeEndUtc: schedule.rangeEndUtc,
+				intervalMinutes: schedule.intervalMinutes,
+			}),
+		)
+		normalizedBlockedSlots = normalizeSelectedSlots({
+			selectedSlots: input.blockedSlots,
+			allowedSlots,
+		})
+
+		updates.push(
+			db
+				.prepare(
+					`DELETE FROM schedule_blocked_slots
+					WHERE schedule_id = ?1`,
+				)
+				.bind(schedule.id),
+		)
+	}
+
+	if (updates.length > 0) {
+		if (typeof db.batch === 'function') {
+			await db.batch(updates)
+		} else {
+			for (const statement of updates) {
+				await statement.run()
+			}
+		}
+	}
+
+	if (normalizedBlockedSlots !== null) {
+		await insertBlockedSlotRows({
+			db,
+			scheduleId: schedule.id,
+			blockedSlots: normalizedBlockedSlots,
+		})
+
+		if (normalizedBlockedSlots.length > 0) {
+			const deleteStatements = normalizedBlockedSlots.map((slot) =>
+				db
+					.prepare(
+						`DELETE FROM availability
+						WHERE schedule_id = ?1
+							AND slot_start_utc = ?2`,
+					)
+					.bind(schedule.id, slot),
+			)
+			if (typeof db.batch === 'function') {
+				await db.batch(deleteStatements)
+			} else {
+				for (const statement of deleteStatements) {
+					await statement.run()
+				}
+			}
+		}
+	}
+
+	return { scheduleId: schedule.id }
+}
+
 export async function getScheduleSnapshot(
 	db: D1DatabaseLike,
 	shareToken: string,
@@ -428,6 +643,15 @@ export async function getScheduleSnapshot(
 		rangeEndUtc: schedule.rangeEndUtc,
 		intervalMinutes: schedule.intervalMinutes,
 	})
+	const validSlots = new Set(slots)
+	const blockedSlotsSet = new Set(
+		(await getBlockedSlotsForScheduleId(db, schedule.id)).filter((slot) =>
+			validSlots.has(slot),
+		),
+	)
+	const blockedSlots = Array.from(blockedSlotsSet).sort((left, right) =>
+		left.localeCompare(right),
+	)
 
 	const attendeeRows = await db
 		.prepare(
@@ -476,10 +700,10 @@ export async function getScheduleSnapshot(
 		string,
 		Array<string>
 	> = Object.fromEntries(slots.map((slot) => [slot, []]))
-	const validSlots = new Set(slots)
 
 	for (const row of availabilityRows.results) {
 		if (!validSlots.has(row.slot_start_utc)) continue
+		if (blockedSlotsSet.has(row.slot_start_utc)) continue
 		if (!availabilityByAttendee[row.attendee_id]) {
 			availabilityByAttendee[row.attendee_id] = []
 		}
@@ -499,6 +723,7 @@ export async function getScheduleSnapshot(
 	return {
 		schedule,
 		slots,
+		blockedSlots,
 		attendees,
 		availabilityByAttendee,
 		countsBySlot,

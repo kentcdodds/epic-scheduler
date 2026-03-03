@@ -11,8 +11,19 @@ test('attendee update appears in host schedule view', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
-	const hostChosenSlot = page.locator('button[aria-pressed="true"]').first()
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
+	const hostDashboardUrl = new URL(page.url())
+	const shareToken =
+		hostDashboardUrl.pathname.split('/').filter(Boolean)[1] ?? ''
+	expect(shareToken).not.toBe('')
+	const attendeeUrl = `${hostDashboardUrl.origin}/s/${shareToken}`
+	await page.goto(`${attendeeUrl}?name=Host`)
+	await expect(page).toHaveURL(new RegExp(`/s/${shareToken}`))
+	const hostChosenSlot = page
+		.locator('[data-schedule-grid-shell] table:visible')
+		.first()
+		.locator('button[aria-pressed="true"]')
+		.first()
 	await expect(hostChosenSlot).toBeVisible()
 	const hostLabel = (await hostChosenSlot.getAttribute('aria-label')) ?? ''
 	const slotPrefixMatch = hostLabel.match(
@@ -21,28 +32,53 @@ test('attendee update appears in host schedule view', async ({
 	const slotPrefix = slotPrefixMatch?.[1] ?? ''
 	expect(slotPrefix.length).toBeGreaterThan(0)
 
-	const hostUrl = page.url()
 	const attendeeContext = await browser.newContext()
 	const attendeePage = await attendeeContext.newPage()
 
 	try {
-		await attendeePage.goto(`${hostUrl}?name=Alex`)
+		await attendeePage.goto(`${attendeeUrl}?name=Alex`)
 		await attendeePage.getByLabel('Your name').fill('Alex')
 
-		const candidateSlot = attendeePage.getByRole('button', {
-			name: new RegExp(`^${escapeRegex(slotPrefix)}`),
-		})
+		const candidateSlot = attendeePage
+			.locator('[data-schedule-grid-shell] table:visible')
+			.first()
+			.getByRole('button', {
+				name: new RegExp(`^${escapeRegex(slotPrefix)}`),
+			})
 		await expect(candidateSlot).toBeVisible()
+		const candidateSlotValue = await candidateSlot.getAttribute('data-slot')
+		expect(candidateSlotValue).not.toBeNull()
 		await candidateSlot.click()
-		await attendeePage
-			.getByRole('button', { name: 'Save availability' })
-			.click()
+		await expect
+			.poll(
+				async () => {
+					const response = await page.request.get(
+						`/api/schedules/${shareToken}`,
+					)
+					if (!response.ok()) return 0
+					const payload = (await response.json()) as {
+						ok?: boolean
+						snapshot?: {
+							countsBySlot?: Record<string, number>
+						}
+					}
+					if (!payload.ok || !payload.snapshot || !candidateSlotValue) return 0
+					return payload.snapshot.countsBySlot?.[candidateSlotValue] ?? 0
+				},
+				{ timeout: 16_000 },
+			)
+			.toBe(2)
 		await page.reload()
-		const hostUpdatedSlot = page.getByRole('button', {
-			name: new RegExp(`^${escapeRegex(slotPrefix)}`),
-		})
+		const hostUpdatedSlot = page
+			.locator('[data-schedule-grid-shell] table:visible')
+			.first()
+			.getByRole('button', {
+				name: new RegExp(`^${escapeRegex(slotPrefix)}`),
+			})
 		await expect(hostUpdatedSlot).toBeVisible()
-		await expect(hostUpdatedSlot).toHaveAttribute('aria-label', /2 attendee/)
+		await expect(hostUpdatedSlot).toHaveAttribute('aria-label', /2 attendee/, {
+			timeout: 8_000,
+		})
 	} finally {
 		await attendeeContext.close()
 	}

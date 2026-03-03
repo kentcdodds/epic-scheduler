@@ -10,6 +10,7 @@ const scheduleSocketPathPrefix = '/ws/'
 const mcpWriteToolNames = new Set([
 	'create_schedule',
 	'submit_schedule_availability',
+	'update_schedule_host_settings',
 ])
 const openAiSandboxOriginSuffix = '.web-sandbox.oaiusercontent.com'
 
@@ -274,7 +275,7 @@ const appHandler = withCors({
 			}
 			const roomId = env.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = env.SCHEDULE_ROOM.get(roomId)
-			return room.fetch(new Request('https://schedule-room/connect', request))
+			return room.fetch(request)
 		}
 
 		// Sandboxed widget iframes have an opaque origin, so JS/CSS loads become CORS fetches.
@@ -305,6 +306,22 @@ const appHandler = withCors({
 				await import('#mcp/apps/schedule-ui-entry-point.ts')
 			const baseUrl = new URL('/', url.origin)
 			const html = renderScheduleUiEntryPoint(baseUrl)
+			return new Response(html, {
+				headers: {
+					'Content-Type': 'text/html; charset=utf-8',
+				},
+			})
+		}
+
+		// Dev route: serve schedule host UI for iframe testing (simulates ChatGPT/MCP Jam)
+		if (
+			url.pathname === '/dev/schedule-host-ui' &&
+			(request.method === 'GET' || request.method === 'HEAD')
+		) {
+			const { renderScheduleHostUiEntryPoint } =
+				await import('#mcp/apps/schedule-host-ui-entry-point.ts')
+			const baseUrl = new URL('/', url.origin)
+			const html = renderScheduleHostUiEntryPoint(baseUrl)
 			return new Response(html, {
 				headers: {
 					'Content-Type': 'text/html; charset=utf-8',

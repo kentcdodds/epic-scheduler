@@ -7,7 +7,7 @@ const submitAvailabilityTool = {
 	name: 'submit_schedule_availability',
 	title: 'Submit Schedule Availability',
 	description:
-		'Create or update one attendee availability selection for an existing schedule.',
+		'Attendee-side action: create or update one attendee availability selection for an existing schedule. Does not edit schedule title or blocked slots.',
 	annotations: {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -106,7 +106,7 @@ export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {
 					content: [
 						{
 							type: 'text',
-							text: `Updated availability for ${attendeeName}.`,
+							text: `Updated attendee availability for ${attendeeName}. This does not change host schedule settings.`,
 						},
 					],
 					structuredContent: {

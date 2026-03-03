@@ -23,8 +23,14 @@ on the Epic Web E2E workshop and our existing setup.
   until touch interaction auto-enables tap-based range selection mode.
 - Tap-range selection mode behavior on mobile, including both adding and
   removing ranges when users tap an already selected slot as the range start.
+- Desktop drag selection behavior where dragging creates a pending range that
+  applies on pointer release and can be canceled with Escape.
+- Drag autoscroll behavior when pointer nears or exits table edges, so range
+  selection can extend without manual wheel/trackpad scroll.
 - Attendee slot-detail metadata such as displayed attendee timezone and
   attendee-local time for the selected slot.
+- Collapsed attendee/preview axes when an entire row or column is host-blocked,
+  while host unavailable-slots grid still renders the full matrix.
 - Integration across the worker, client router, and API endpoints.
 - Regressions that are expensive to catch in unit tests.
 
@@ -47,6 +53,10 @@ Prefer stable, user-facing selectors:
 
 Avoid `page.locator('css')` unless no accessible alternative exists.
 
+For schedule-grid interactions, scope locators to visible elements (for example
+`table:visible` and `button:visible`) because both desktop and mobile tables are
+rendered in the DOM and one is hidden with CSS.
+
 ## Server and routing
 
 - The test server is started via Playwright `webServer` using Wrangler.
@@ -68,6 +78,15 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Use real input values and a happy-path payload.
 - Use fake participant names (for example `Alex`, `Jordan`) and generated share
   tokens from test-created schedules.
+- Creating a schedule from `/` now redirects to
+  `/s/{shareToken}/{hostAccessToken}`; tests that validate attendee availability
+  should navigate to `/s/{shareToken}` after extracting the share token.
+- Host dashboard data loading now calls
+  `/api/schedules/{shareToken}/host-snapshot` and must include `X-Host-Token`;
+  add a negative-path check for invalid host keys when host-route auth changes.
+- Host dashboard tests should cover realtime status updates
+  (`Realtime connected`) and preview-grid tooltip behavior when attendee
+  availability changes.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions

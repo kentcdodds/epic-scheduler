@@ -67,6 +67,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			},
 			outputSchema: {
 				shareToken: z.string(),
+				hostAccessToken: z.string(),
 				schedulePath: z.string(),
 				scheduleUrl: z.string(),
 			},
@@ -129,6 +130,7 @@ export async function registerCreateScheduleTool(agent: MCP) {
 					],
 					structuredContent: {
 						shareToken: created.shareToken,
+						hostAccessToken: created.hostAccessToken,
 						schedulePath,
 						scheduleUrl,
 					},

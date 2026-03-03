@@ -17,8 +17,11 @@ test('desktop drag can paint across day columns', async ({ page }) => {
 	const initialCount = readSelectedCount(await selectedCountLabel.textContent())
 	expect(initialCount).toBeGreaterThan(0)
 
-	const dragTargets = await page.evaluate(() => {
-		const rows = Array.from(document.querySelectorAll('tbody tr'))
+	const visibleGridTable = page
+		.locator('[data-schedule-grid-shell] table:visible')
+		.first()
+	const dragTargets = await visibleGridTable.evaluate((table) => {
+		const rows = Array.from(table.querySelectorAll('tbody tr'))
 		for (const [rowIndex, row] of rows.entries()) {
 			const cells = Array.from(row.querySelectorAll('td'))
 			const selectedCellIndexes = cells
@@ -36,10 +39,7 @@ test('desktop drag can paint across day columns', async ({ page }) => {
 			if (startCellIndex === undefined || endCellIndex === undefined) continue
 			if (startCellIndex === endCellIndex) continue
 
-			return {
-				startSelector: `tbody tr:nth-child(${rowIndex + 1}) td:nth-of-type(${startCellIndex + 1}) button`,
-				endSelector: `tbody tr:nth-child(${rowIndex + 1}) td:nth-of-type(${endCellIndex + 1}) button`,
-			}
+			return { rowIndex, startCellIndex, endCellIndex }
 		}
 
 		return null
@@ -48,8 +48,12 @@ test('desktop drag can paint across day columns', async ({ page }) => {
 	expect(dragTargets).not.toBeNull()
 	if (!dragTargets) return
 
-	const startCell = page.locator(dragTargets.startSelector)
-	const endCell = page.locator(dragTargets.endSelector)
+	const startCell = visibleGridTable.locator(
+		`tbody tr:nth-child(${dragTargets.rowIndex + 1}) td:nth-of-type(${dragTargets.startCellIndex + 1}) button`,
+	)
+	const endCell = visibleGridTable.locator(
+		`tbody tr:nth-child(${dragTargets.rowIndex + 1}) td:nth-of-type(${dragTargets.endCellIndex + 1}) button`,
+	)
 	await expect(startCell).toBeVisible()
 	await expect(endCell).toBeVisible()
 	await startCell.scrollIntoViewIfNeeded()

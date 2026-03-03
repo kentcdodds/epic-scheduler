@@ -55,6 +55,13 @@ export function addDays(date: Date, days: number) {
 	return next
 }
 
+export function toDayKey(slot: string | null) {
+	if (!slot) return null
+	const date = new Date(slot)
+	if (Number.isNaN(date.getTime())) return null
+	return formatDayKey(date)
+}
+
 export function createSlotRangeFromDateInputs(params: {
 	startDateInput: string
 	endDateInput: string
@@ -144,6 +151,54 @@ export function buildGridModel(slots: Array<string>): GridModel {
 		timeLabels,
 		cellByDayAndTime,
 	}
+}
+
+export function getRectangularSlotSelection(params: {
+	slots: Array<string>
+	startSlot: string
+	endSlot: string
+}) {
+	const grid = buildGridModel(params.slots)
+	const slotCoordinates = new Map<
+		string,
+		{ dayIndex: number; timeIndex: number }
+	>()
+
+	for (const [dayIndex, dayKey] of grid.dayKeys.entries()) {
+		const dayCells = grid.cellByDayAndTime[dayKey]
+		if (!dayCells) continue
+		for (const [timeIndex, timeKey] of grid.timeKeys.entries()) {
+			const slot = dayCells[timeKey]
+			if (!slot) continue
+			slotCoordinates.set(slot, { dayIndex, timeIndex })
+		}
+	}
+
+	const startCoordinate = slotCoordinates.get(params.startSlot)
+	const endCoordinate = slotCoordinates.get(params.endSlot)
+	if (!startCoordinate || !endCoordinate) return []
+
+	const minDay = Math.min(startCoordinate.dayIndex, endCoordinate.dayIndex)
+	const maxDay = Math.max(startCoordinate.dayIndex, endCoordinate.dayIndex)
+	const minTime = Math.min(startCoordinate.timeIndex, endCoordinate.timeIndex)
+	const maxTime = Math.max(startCoordinate.timeIndex, endCoordinate.timeIndex)
+	const selection: Array<string> = []
+
+	for (let dayIndex = minDay; dayIndex <= maxDay; dayIndex += 1) {
+		const dayKey = grid.dayKeys[dayIndex]
+		if (!dayKey) continue
+		const dayCells = grid.cellByDayAndTime[dayKey]
+		if (!dayCells) continue
+		for (let timeIndex = minTime; timeIndex <= maxTime; timeIndex += 1) {
+			const timeKey = grid.timeKeys[timeIndex]
+			if (!timeKey) continue
+			const slot = dayCells[timeKey]
+			if (!slot) continue
+			selection.push(slot)
+		}
+	}
+
+	return selection
 }
 
 const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()

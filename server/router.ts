@@ -2,8 +2,10 @@ import { createRouter } from 'remix/fetch-router'
 import { type AppEnv } from '#types/env-schema.ts'
 import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
 import { createHealthHandler } from './handlers/health.ts'
+import { createScheduleHostReadHandler } from './handlers/schedule-host-read.ts'
 import { home } from './handlers/home.ts'
 import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
+import { createScheduleHostUpdateHandler } from './handlers/schedule-host-update.ts'
 import { createScheduleReadHandler } from './handlers/schedule-read.ts'
 import { createScheduleSubmitAvailabilityHandler } from './handlers/schedule-submit-availability.ts'
 import {
@@ -38,10 +40,12 @@ export function createAppRouter(appEnv: AppEnv) {
 	router.map(routes.health, createHealthHandler(appEnv))
 	router.map(routes.scheduleCreate, createScheduleCreateHandler(appEnv))
 	router.map(routes.scheduleRead, createScheduleReadHandler(appEnv))
+	router.map(routes.scheduleHostRead, createScheduleHostReadHandler(appEnv))
 	router.map(
 		routes.scheduleSubmitAvailability,
 		createScheduleSubmitAvailabilityHandler(appEnv),
 	)
+	router.map(routes.scheduleHostUpdate, createScheduleHostUpdateHandler(appEnv))
 
 	return router
 }

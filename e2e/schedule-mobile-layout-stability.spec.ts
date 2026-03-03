@@ -7,11 +7,15 @@ test('mobile selection keeps schedule grid vertically stable', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
+	const shareToken =
+		new URL(page.url()).pathname.split('/').filter(Boolean)[1] ?? ''
+	expect(shareToken).not.toBe('')
+	await page.goto(`/s/${shareToken}?name=Host`)
 
-	const grid = page.locator('table').first()
+	const grid = page.locator('[data-schedule-grid-shell] table:visible')
 	await expect(grid).toBeVisible()
-	const selectedSlotLocator = page.locator('button[aria-pressed="true"]')
+	const selectedSlotLocator = grid.locator('button[aria-pressed="true"]')
 	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
 	for (let index = 0; index < 14; index += 1) {
 		if ((await selectedSlotLocator.count()) > 0) break
@@ -21,19 +25,33 @@ test('mobile selection keeps schedule grid vertically stable', async ({
 	const selectedSlot = selectedSlotLocator.first()
 	await expect(selectedSlot).toBeVisible()
 	await selectedSlot.scrollIntoViewIfNeeded()
+	const gridShell = page.locator('[data-schedule-grid-shell]')
+	await expect(gridShell).toBeVisible()
 
 	const initialGridBox = await grid.boundingBox()
 	expect(initialGridBox).not.toBeNull()
 
 	await selectedSlot.click()
-	await expect(page.getByText('Pending remove: 1')).toBeVisible()
+	await expect
+		.poll(
+			() => gridShell.evaluate((element) => getComputedStyle(element).opacity),
+			{
+				timeout: 2_000,
+			},
+		)
+		.toBe('0.6')
 
 	const pendingGridBox = await grid.boundingBox()
 	expect(pendingGridBox).not.toBeNull()
 
-	await expect(page.getByText('All changes saved')).toBeVisible({
-		timeout: 10_000,
-	})
+	await expect
+		.poll(
+			() => gridShell.evaluate((element) => getComputedStyle(element).opacity),
+			{
+				timeout: 10_000,
+			},
+		)
+		.toBe('1')
 	const settledGridBox = await grid.boundingBox()
 	expect(settledGridBox).not.toBeNull()
 

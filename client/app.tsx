@@ -21,7 +21,7 @@ export function App(handle: Handle) {
 		return (
 			<main
 				css={{
-					maxWidth: '52rem',
+					maxWidth: '80rem',
 					margin: '0 auto',
 					padding: spacing['2xl'],
 					fontFamily: typography.fontFamily,

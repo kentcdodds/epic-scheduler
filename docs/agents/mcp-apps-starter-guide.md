@@ -70,6 +70,9 @@ In `mcp/tools/<your-tool>.ts`:
 - Set `_meta.ui.resourceUri` to the **same** `ui://` URI as the resource.
 - Include annotations (`readOnlyHint`, `idempotentHint`, etc.).
 - Provide `outputSchema` for machine-usable outputs where relevant.
+- If your domain has role-specific workflows (for example attendee availability
+  vs host schedule management), expose separate write tools and make the
+  distinction explicit in tool descriptions and server instructions.
 
 ### 4) Wire registration in server init
 

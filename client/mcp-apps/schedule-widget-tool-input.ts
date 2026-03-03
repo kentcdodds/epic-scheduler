@@ -1,6 +1,7 @@
 type ScheduleToolInput = {
 	shareToken: string | null
 	attendeeName: string | null
+	hostAccessToken: string | null
 }
 
 const nestedToolInputKeys: Array<string> = [
@@ -64,5 +65,10 @@ export function extractScheduleToolInput(source: unknown): ScheduleToolInput {
 			findNestedStringByKey({ source, key: 'attendeeName' }) ??
 			findNestedStringByKey({ source, key: 'attendee_name' }) ??
 			findNestedStringByKey({ source, key: 'name' }),
+		hostAccessToken:
+			findNestedStringByKey({ source, key: 'hostAccessToken' }) ??
+			findNestedStringByKey({ source, key: 'host_access_token' }) ??
+			findNestedStringByKey({ source, key: 'hostKey' }) ??
+			findNestedStringByKey({ source, key: 'host_key' }),
 	}
 }

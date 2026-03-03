@@ -10,7 +10,15 @@ test('slot details show attendee timezone and local slot time', async ({
 	await page.goto('/')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
-	await expect(page).toHaveURL(/\/s\/[a-z0-9]+/i)
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
+	const shareTokenFromDashboard = new URL(page.url()).pathname
+		.split('/')
+		.filter(Boolean)[1]
+	expect(shareTokenFromDashboard).toBeTruthy()
+	if (!shareTokenFromDashboard) {
+		throw new Error('Unable to read share token from host dashboard URL.')
+	}
+	await page.goto(`/s/${shareTokenFromDashboard}?name=Host`)
 
 	const hostTimeZone = await page.evaluate(
 		() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',

@@ -6,13 +6,13 @@ import {
 	type ContentBlock,
 } from '@modelcontextprotocol/sdk/types.js'
 import getPort from 'get-port'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { scheduleHostUiResourceUri } from '#shared/mcp-ui-resource-uris.ts'
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
-const migrationsDir = join(projectRoot, 'migrations')
 const bunBin = process.execPath
 const defaultTimeoutMs = 60_000
 const scheduleUiResourceUri = 'ui://schedule-app/entry-point.html'
@@ -21,12 +21,19 @@ function delay(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function runWrangler(args: Array<string>) {
+async function runBunCommand(
+	args: Array<string>,
+	env?: Record<string, string>,
+) {
 	const proc = Bun.spawn({
-		cmd: [bunBin, 'x', 'wrangler', ...args],
+		cmd: [bunBin, ...args],
 		cwd: projectRoot,
 		stdout: 'pipe',
 		stderr: 'pipe',
+		env: {
+			...process.env,
+			...env,
+		},
 	})
 	const stdoutPromise = proc.stdout
 		? new Response(proc.stdout).text()
@@ -38,7 +45,7 @@ async function runWrangler(args: Array<string>) {
 	const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise])
 	if (exitCode !== 0) {
 		throw new Error(
-			`wrangler ${args.join(' ')} failed (${exitCode}). ${stderr || stdout}`,
+			`bun ${args.join(' ')} failed (${exitCode}). ${stderr || stdout}`,
 		)
 	}
 	return { stdout, stderr }
@@ -46,8 +53,9 @@ async function runWrangler(args: Array<string>) {
 
 async function createTestDatabase() {
 	const persistDir = await mkdtemp(join(tmpdir(), 'epic-scheduler-mcp-e2e-'))
-
-	await applyMigrations(persistDir)
+	await runBunCommand(['run', 'migrate:local', '--persist-to', persistDir], {
+		CLOUDFLARE_ENV: 'test',
+	})
 
 	return {
 		persistDir,
@@ -55,36 +63,6 @@ async function createTestDatabase() {
 			await rm(persistDir, { recursive: true, force: true })
 		},
 	}
-}
-
-async function applyMigrations(persistDir: string) {
-	const migrationFiles = await listMigrationFiles()
-	if (migrationFiles.length === 0) {
-		throw new Error('No migration files found in migrations directory.')
-	}
-
-	for (const migrationFile of migrationFiles) {
-		await runWrangler([
-			'd1',
-			'execute',
-			'APP_DB',
-			'--local',
-			'--env',
-			'test',
-			'--persist-to',
-			persistDir,
-			'--file',
-			join('migrations', migrationFile),
-		])
-	}
-}
-
-async function listMigrationFiles() {
-	const entries = await readdir(migrationsDir, { withFileTypes: true })
-	return entries
-		.filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
-		.map((entry) => entry.name)
-		.sort((left, right) => left.localeCompare(right))
 }
 
 function captureOutput(stream: ReadableStream<Uint8Array> | null) {
@@ -273,8 +251,10 @@ test(
 		expect(toolNames.sort()).toEqual([
 			'create_schedule',
 			'get_schedule_snapshot',
+			'open_schedule_host_ui',
 			'open_schedule_ui',
 			'submit_schedule_availability',
+			'update_schedule_host_settings',
 		])
 	},
 	{ timeout: defaultTimeoutMs },
@@ -296,6 +276,7 @@ test(
 		)
 
 		expect(resourceUris).toContain(scheduleUiResourceUri)
+		expect(resourceUris).toContain(scheduleHostUiResourceUri)
 	},
 	{ timeout: defaultTimeoutMs },
 )
@@ -329,7 +310,12 @@ test(
 			typeof createStructured?.shareToken === 'string'
 				? createStructured.shareToken
 				: ''
+		const hostAccessToken =
+			typeof createStructured?.hostAccessToken === 'string'
+				? createStructured.hostAccessToken
+				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
+		expect(hostAccessToken.length).toBeGreaterThan(8)
 
 		const submitResult = await mcpClient.client.callTool({
 			name: 'submit_schedule_availability',
@@ -343,6 +329,26 @@ test(
 			.structuredContent as Record<string, unknown> | undefined
 		expect(submitStructured?.ok).toBe(true)
 
+		const hostUpdateResult = await mcpClient.client.callTool({
+			name: 'update_schedule_host_settings',
+			arguments: {
+				shareToken,
+				hostAccessToken,
+				title: 'Host-managed test schedule',
+				blockedSlots: [start.toISOString()],
+			},
+		})
+		const hostUpdateStructured = (hostUpdateResult as CallToolResult)
+			.structuredContent as Record<string, unknown> | undefined
+		expect(hostUpdateStructured?.ok).toBe(true)
+		expect(hostUpdateStructured?.title).toBe('Host-managed test schedule')
+		const hostUpdateBlockedSlots = Array.isArray(
+			hostUpdateStructured?.blockedSlots,
+		)
+			? hostUpdateStructured.blockedSlots
+			: []
+		expect(hostUpdateBlockedSlots).toContain(start.toISOString())
+
 		const snapshotResult = await mcpClient.client.callTool({
 			name: 'get_schedule_snapshot',
 			arguments: {
@@ -353,8 +359,16 @@ test(
 			.structuredContent as Record<string, unknown> | undefined
 		expect(snapshotStructured?.ok).toBe(true)
 		const snapshot = snapshotStructured?.snapshot as
-			| { attendees?: Array<{ name?: string }> }
+			| {
+					schedule?: { title?: string }
+					blockedSlots?: Array<string>
+					countsBySlot?: Record<string, number>
+					attendees?: Array<{ name?: string }>
+			  }
 			| undefined
+		expect(snapshot?.schedule?.title).toBe('Host-managed test schedule')
+		expect(snapshot?.blockedSlots ?? []).toContain(start.toISOString())
+		expect(snapshot?.countsBySlot?.[start.toISOString()] ?? 0).toBe(0)
 		const attendeeNames = (snapshot?.attendees ?? [])
 			.map((attendee) => attendee.name)
 			.filter((name): name is string => typeof name === 'string')
@@ -429,7 +443,7 @@ test(
 			'Share token: <code data-share-token>',
 		)
 		expect(scheduleResource?.text).toContain('Waiting for share token input.')
-		expect(scheduleResource?.text).toContain('Request fullscreen mode')
+		expect(scheduleResource?.text).toContain('Fullscreen')
 
 		const scheduleWidgetResponse = await fetch(
 			new URL('/mcp-apps/schedule-widget.js', server.origin),
@@ -442,6 +456,17 @@ test(
 		expect(scheduleWidgetSource).toContain('createWidgetHostBridge')
 		expect(scheduleWidgetSource).toContain('/api/schedules')
 		expect(scheduleWidgetSource).toContain('ui/request-display-mode')
+
+		const scheduleHostWidgetResponse = await fetch(
+			new URL('/mcp-apps/schedule-host-widget.js', server.origin),
+		)
+		expect(scheduleHostWidgetResponse.ok).toBe(true)
+		expect(
+			scheduleHostWidgetResponse.headers.get('access-control-allow-origin'),
+		).toBe('*')
+		const scheduleHostWidgetSource = await scheduleHostWidgetResponse.text()
+		expect(scheduleHostWidgetSource).toContain('schedule-host-widget')
+		expect(scheduleHostWidgetSource).toContain('/s/')
 
 		const stylesResponse = await fetch(new URL('/styles.css', server.origin))
 		expect(stylesResponse.ok).toBe(true)
@@ -481,6 +506,48 @@ test(
 				widgetDomain,
 			)
 		}
+	},
+	{ timeout: defaultTimeoutMs },
+)
+
+test(
+	'mcp server serves schedule host ui resource',
+	async () => {
+		await using database = await createTestDatabase()
+		await using server = await startDevServer(database.persistDir)
+		await using mcpClient = await createMcpClient(server.origin)
+
+		const result = await mcpClient.client.callTool({
+			name: 'open_schedule_host_ui',
+			arguments: {
+				shareToken: 'demo-host-token',
+				hostAccessToken: 'demo-host-key',
+			},
+		})
+		const structuredResult = (result as CallToolResult).structuredContent as
+			| Record<string, unknown>
+			| undefined
+		expect(structuredResult?.widget).toBe('schedule_host')
+		expect(structuredResult?.resourceUri).toBe(scheduleHostUiResourceUri)
+		expect(structuredResult?.shareToken).toBe('demo-host-token')
+		expect(structuredResult?.hostAccessToken).toBe('demo-host-key')
+
+		const resourceResult = await mcpClient.client.readResource({
+			uri: scheduleHostUiResourceUri,
+		})
+		const hostResource = resourceResult.contents.find(
+			(content): content is { uri: string; text: string } =>
+				content.uri === scheduleHostUiResourceUri &&
+				'text' in content &&
+				typeof content.text === 'string',
+		)
+		expect(hostResource).toBeDefined()
+		expect(hostResource?.text).toContain('Host dashboard')
+		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
+		expect(hostResource?.text).toContain('data-api-base-url="')
+		expect(hostResource?.text).toContain(
+			'Waiting for share token and host key input',
+		)
 	},
 	{ timeout: defaultTimeoutMs },
 )

@@ -22,9 +22,11 @@ test('home mobile tap-range mode can deselect a selected slot', async ({
 	expect(initialCount).toBeGreaterThan(0)
 
 	const selectedSlotLocator = page.locator(
-		'[data-schedule-grid-shell] table button[aria-pressed="true"]',
+		'[data-schedule-grid-shell] table:visible button[aria-pressed="true"]',
 	)
-	const nextDayButton = page.getByRole('button', { name: 'Show next day' })
+	const nextDayButton = page.locator(
+		'button[aria-label="Show next day"]:visible',
+	)
 	for (let index = 0; index < 14; index += 1) {
 		if ((await selectedSlotLocator.count()) > 0) break
 		if (await nextDayButton.isDisabled()) break
