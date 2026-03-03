@@ -66,6 +66,13 @@ function formatSlotLabel(slot: string) {
 	}).format(new Date(slot))
 }
 
+function getBrowserTimeZone() {
+	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
+	if (typeof value !== 'string') return 'UTC'
+	const normalized = value.trim()
+	return normalized || 'UTC'
+}
+
 function buildEmptyAvailability(slots: Array<string>) {
 	return Object.fromEntries(
 		slots.map((slot) => [
@@ -114,6 +121,7 @@ function copyTextWithFallback(text: string) {
 }
 
 export function ScheduleHostRoute(handle: Handle) {
+	const browserTimeZone = getBrowserTimeZone()
 	let shareToken = ''
 	let hostAccessToken = ''
 	let snapshot: ScheduleSnapshot | null = null
@@ -780,6 +788,9 @@ export function ScheduleHostRoute(handle: Handle) {
 						Manage schedule settings and choose the best meeting slot.
 					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
+					<p css={{ margin: 0, color: colors.textMuted }}>
+						Times are shown in your browser timezone: {browserTimeZone}
+					</p>
 					<p css={{ margin: 0, color: colors.text }}>Save these links.</p>
 					<div
 						css={{
