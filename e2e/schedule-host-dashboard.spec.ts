@@ -15,6 +15,42 @@ function parseHostRouteTokens(url: string) {
 	}
 }
 
+function parseDateInput(value: string) {
+	const [rawYear, rawMonth, rawDay] = value.split('-')
+	const year = Number.parseInt(rawYear ?? '', 10)
+	const month = Number.parseInt(rawMonth ?? '', 10)
+	const day = Number.parseInt(rawDay ?? '', 10)
+	if (
+		!Number.isInteger(year) ||
+		!Number.isInteger(month) ||
+		!Number.isInteger(day)
+	) {
+		throw new Error(`Invalid date input value: ${value}`)
+	}
+	return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0))
+}
+
+function formatDateInput(date: Date) {
+	return date.toISOString().slice(0, 10)
+}
+
+function addDateInputDays(value: string, days: number) {
+	const next = parseDateInput(value)
+	next.setUTCDate(next.getUTCDate() + days)
+	return formatDateInput(next)
+}
+
+function getDayCountInclusive(startDateInput: string, endDateInput: string) {
+	const start = parseDateInput(startDateInput).getTime()
+	const end = parseDateInput(endDateInput).getTime()
+	const dayMs = 24 * 60 * 60 * 1000
+	const diffDays = Math.floor((end - start) / dayMs)
+	if (diffDays < 0) {
+		throw new Error('End date must not be earlier than start date.')
+	}
+	return diffDays + 1
+}
+
 test('host dashboard can block slots from attendee selection', async ({
 	page,
 }) => {
@@ -36,6 +72,45 @@ test('host dashboard can block slots from attendee selection', async ({
 	await expect(
 		page.getByRole('heading', { name: 'Host unavailable slots' }),
 	).toBeVisible()
+
+	const startDateInput = page.getByLabel('Start date')
+	const endDateInput = page.getByLabel('End date')
+	await expect(startDateInput).toBeVisible()
+	await expect(endDateInput).toBeVisible()
+	const initialStartDate = await startDateInput.inputValue()
+	const initialEndDate = await endDateInput.inputValue()
+	expect(initialStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+	expect(initialEndDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+	const nextEndDate = addDateInputDays(initialEndDate, -1)
+	await endDateInput.fill(nextEndDate)
+	await endDateInput.blur()
+	await expect(endDateInput).toHaveValue(nextEndDate)
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(`/api/schedules/${shareToken}`)
+				if (!response.ok()) return false
+				const payload = (await response.json()) as {
+					ok?: boolean
+					snapshot?: {
+						slots?: Array<string>
+						schedule?: {
+							intervalMinutes?: number
+						}
+					}
+				}
+				if (!payload.ok || !payload.snapshot?.schedule?.intervalMinutes) {
+					return false
+				}
+				const expectedDays = getDayCountInclusive(initialStartDate, nextEndDate)
+				const expectedSlotCount =
+					expectedDays * 24 * (60 / payload.snapshot.schedule.intervalMinutes)
+				return (payload.snapshot.slots?.length ?? -1) === expectedSlotCount
+			},
+			{ timeout: 12_000 },
+		)
+		.toBe(true)
+
 	const blockedCountLabel = page.getByText(/blocked slot/)
 	const initialBlockedCount = readBlockedCount(
 		await blockedCountLabel.first().textContent(),
