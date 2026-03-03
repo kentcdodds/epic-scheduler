@@ -302,15 +302,18 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		const relatedTarget = event.relatedTarget
 		if (!(currentTarget instanceof Element)) return true
 		if (!(relatedTarget instanceof Element)) return true
-		const relatedSlotButton = relatedTarget.closest('button[data-slot]')
-		if (!relatedSlotButton) return true
 		const currentScroller = currentTarget.closest(
 			'[data-schedule-grid-scroller]',
 		)
+		if (!currentScroller) return true
+		const relatedSlotButton =
+			relatedTarget.closest('button[data-slot]') ??
+			relatedTarget.closest('td')?.querySelector('button[data-slot]')
+		if (!relatedSlotButton) return true
 		const relatedScroller = relatedSlotButton.closest(
 			'[data-schedule-grid-scroller]',
 		)
-		if (!currentScroller || !relatedScroller) return true
+		if (!relatedScroller) return true
 		return currentScroller !== relatedScroller
 	}
 
