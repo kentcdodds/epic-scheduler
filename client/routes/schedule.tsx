@@ -915,6 +915,7 @@ export function ScheduleRoute(handle: Handle) {
 											selectedSlots = new Set(persistedSelectedSlots)
 										}
 										if (!normalizeName(attendeeName)) {
+											pendingRenameSourceName = null
 											clearSaveDebounceTimer()
 										} else if (hasDirtyChanges) {
 											scheduleAutoSave()

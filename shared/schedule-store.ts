@@ -573,16 +573,20 @@ export async function deleteAttendeeSubmission(
 	const nameNorm = normalizeNameForMatch(attendeeName)
 	const attendee = await db
 		.prepare(
-			`SELECT id
+			`SELECT id,
+				is_host
 			FROM attendees
 			WHERE schedule_id = ?1
 				AND name_norm = ?2
 			LIMIT 1`,
 		)
 		.bind(schedule.id, nameNorm)
-		.first<{ id: string }>()
+		.first<{ id: string; is_host: number }>()
 	if (!attendee) {
 		return { scheduleId: schedule.id, deleted: false }
+	}
+	if (attendee.is_host === 1) {
+		throw new Error('Host submission must not be deleted.')
 	}
 
 	await db
@@ -618,16 +622,20 @@ export async function renameAttendeeSubmission(
 	const nextNameNorm = normalizeNameForMatch(nextAttendeeName)
 	const attendee = await db
 		.prepare(
-			`SELECT id
+			`SELECT id,
+				is_host
 			FROM attendees
 			WHERE schedule_id = ?1
 				AND name_norm = ?2
 			LIMIT 1`,
 		)
 		.bind(schedule.id, currentNameNorm)
-		.first<{ id: string }>()
+		.first<{ id: string; is_host: number }>()
 	if (!attendee) {
 		throw new Error('Attendee submission not found.')
+	}
+	if (attendee.is_host === 1) {
+		throw new Error('Host submission must not be renamed.')
 	}
 
 	if (currentNameNorm !== nextNameNorm) {
