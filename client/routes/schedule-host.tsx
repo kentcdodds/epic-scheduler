@@ -2003,10 +2003,6 @@ export function ScheduleHostRoute(handle: Handle) {
 									onCellPointerUp: (_slot, _event) => {
 										handleHostUnavailablePointerUp()
 									},
-									onCellClick: (slot, event) => {
-										if (event.detail > 0) return
-										handleHostUnavailableKeyboardActivate(slot)
-									},
 									onCellKeyboardActivate: handleHostUnavailableKeyboardActivate,
 									onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
 										updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
