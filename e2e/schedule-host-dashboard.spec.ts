@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { type Locator, type Page, expect, test } from '@playwright/test'
 
 function readBlockedCount(text: string | null) {
 	const match = text?.match(/(\d+)\s+blocked slot/)
@@ -51,16 +51,41 @@ function getDayCountInclusive(startDateInput: string, endDateInput: string) {
 	return diffDays + 1
 }
 
-test('host dashboard can block slots from attendee selection', async ({
-	page,
-}) => {
+async function dispatchTouchTap(target: Locator) {
+	await target.dispatchEvent('pointerdown', {
+		pointerType: 'touch',
+		pointerId: 1,
+		isPrimary: true,
+		bubbles: true,
+	})
+	await target.dispatchEvent('pointerup', {
+		pointerType: 'touch',
+		pointerId: 1,
+		isPrimary: true,
+		bubbles: true,
+	})
+	await target.dispatchEvent('click', { bubbles: true })
+}
+
+async function createHostDashboard(page: Page) {
 	await page.goto('/')
 	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
-	const { shareToken } = parseHostRouteTokens(page.url())
+	const { shareToken, hostAccessToken } = parseHostRouteTokens(page.url())
 	expect(shareToken).not.toBe('')
+	expect(hostAccessToken).not.toBe('')
+	if (!shareToken || !hostAccessToken) {
+		throw new Error('Expected host route share and access tokens.')
+	}
+	return { shareToken, hostAccessToken }
+}
+
+test('host dashboard can block slots from attendee selection', async ({
+	page,
+}) => {
+	const { shareToken } = await createHostDashboard(page)
 	await expect(
 		page.getByRole('heading', { name: 'Host dashboard' }),
 	).toBeVisible()
@@ -439,4 +464,136 @@ test('host dashboard keeps wide tables within local horizontal scrollers', async
 	for (const scroller of overflowSnapshot.scrollers) {
 		expect(scroller.overflowX).not.toBe('visible')
 	}
+})
+
+test('host preview attendee summary sorts by selected window coverage', async ({
+	page,
+}) => {
+	const { shareToken } = await createHostDashboard(page)
+	const snapshotResponse = await page.request.get(
+		`/api/schedules/${shareToken}`,
+	)
+	expect(snapshotResponse.ok()).toBe(true)
+	const snapshotPayload = (await snapshotResponse.json()) as {
+		ok?: boolean
+		snapshot?: {
+			slots: Array<string>
+			blockedSlots: Array<string>
+		}
+	}
+	expect(snapshotPayload.ok).toBe(true)
+	const snapshot = snapshotPayload.snapshot
+	if (!snapshot) {
+		throw new Error('Expected host dashboard snapshot.')
+	}
+	const blockedSlots = new Set(snapshot.blockedSlots ?? [])
+	const availableSlots = snapshot.slots.filter((slot) => !blockedSlots.has(slot))
+	const firstPreviewSlot = availableSlots[0]
+	const secondPreviewSlot = availableSlots[1]
+	if (!firstPreviewSlot || !secondPreviewSlot) {
+		throw new Error('Expected at least two unblocked slots.')
+	}
+
+	const submitJordanResponse = await page.request.post(
+		`/api/schedules/${shareToken}/availability`,
+		{
+			data: {
+				name: 'Jordan',
+				attendeeTimeZone: 'UTC',
+				selectedSlots: [firstPreviewSlot, secondPreviewSlot],
+			},
+		},
+	)
+	expect(submitJordanResponse.ok()).toBe(true)
+	const submitAlexResponse = await page.request.post(
+		`/api/schedules/${shareToken}/availability`,
+		{
+			data: {
+				name: 'Alex',
+				attendeeTimeZone: 'UTC',
+				selectedSlots: [firstPreviewSlot],
+			},
+		},
+	)
+	expect(submitAlexResponse.ok()).toBe(true)
+	await expect(
+		page.locator('label').filter({ hasText: 'Jordan' }).first(),
+	).toBeVisible({ timeout: 4_000 })
+	await expect(page.locator('label').filter({ hasText: 'Alex' }).first()).toBeVisible({
+		timeout: 4_000,
+	})
+
+	const previewGrid = page.locator('[data-schedule-grid-shell]').first()
+	const firstPreviewButton = previewGrid
+		.locator(`button[data-slot="${firstPreviewSlot}"]`)
+		.first()
+	const secondPreviewButton = previewGrid
+		.locator(`button[data-slot="${secondPreviewSlot}"]`)
+		.first()
+	await expect(firstPreviewButton).toBeVisible()
+	await expect(secondPreviewButton).toBeVisible()
+
+	await firstPreviewButton.hover()
+	await page.mouse.down()
+	await secondPreviewButton.hover()
+	await page.mouse.up()
+
+	const summary = page.locator('[data-host-preview-attendee-summary]')
+	await expect(summary).toContainText('(2 slots)')
+	await expect(summary).toContainText(
+		'2/3 attendees can make the whole window.',
+	)
+	await expect(
+		summary.locator('[data-host-preview-attendee]').last(),
+	).toContainText('Alex (1) -')
+
+	const hostName = summary
+		.locator('[data-host-preview-attendee]')
+		.filter({ hasText: 'Host (2)' })
+		.locator('[data-host-preview-attendee-name]')
+		.first()
+	const alexName = summary
+		.locator('[data-host-preview-attendee]')
+		.filter({ hasText: 'Alex (1)' })
+		.locator('[data-host-preview-attendee-name]')
+		.first()
+	const hostBackgroundImage = await hostName.evaluate(
+		(element) => getComputedStyle(element).backgroundImage,
+	)
+	const alexBackgroundImage = await alexName.evaluate(
+		(element) => getComputedStyle(element).backgroundImage,
+	)
+	expect(hostBackgroundImage).toBe('none')
+	expect(alexBackgroundImage).toContain('linear-gradient')
+	await expect(
+		summary.locator('[data-host-preview-attendee]').filter({
+			hasText: 'Alex (1) -',
+		}),
+	).toContainText('UTC')
+})
+
+test('host preview supports touch tap start/end range selection', async ({
+	page,
+}) => {
+	await createHostDashboard(page)
+	const previewGrid = page.locator('[data-schedule-grid-shell]').first()
+	const firstPreviewButton = previewGrid
+		.locator('button[data-slot]:not([aria-disabled="true"])')
+		.first()
+	const secondPreviewButton = previewGrid
+		.locator('button[data-slot]:not([aria-disabled="true"])')
+		.nth(1)
+	await expect(firstPreviewButton).toBeVisible()
+	await expect(secondPreviewButton).toBeVisible()
+
+	const summary = page.locator('[data-host-preview-attendee-summary]')
+	await dispatchTouchTap(firstPreviewButton)
+	await expect(summary).toContainText(
+		'Range start selected. Tap another slot to choose range.',
+	)
+	await dispatchTouchTap(secondPreviewButton)
+	await expect(summary).toContainText('(2 slots)')
+	await expect(summary).not.toContainText(
+		'Range start selected. Tap another slot to choose range.',
+	)
 })

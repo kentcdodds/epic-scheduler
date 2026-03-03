@@ -118,6 +118,9 @@ handled by the static asset fetcher in `worker/index.ts`.
   host settings autosave persists after reload.
 - Host dashboard tests should cover host-managed submission edits (rename and
   delete) so respondent maintenance remains available from the host page.
+- Host dashboard tests should cover preview-window range selection (mouse drag
+  and touch tap-start/end), including attendee summary sorting by covered slots
+  and attendee-local time range rendering.
 - Avoid hidden fixtures or global state in the Playwright tests.
 
 ## Assertions
