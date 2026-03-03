@@ -1181,8 +1181,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			return
 		}
-		if (!clearPreviewHoverTooltip()) return
-		handle.update()
+		const previousActiveSlot = activePreviewSlot
+		const didClearTooltip = clearPreviewHoverTooltip()
+		if (!previewSelection.state.mode) {
+			activePreviewSlot = null
+		}
+		if (didClearTooltip || activePreviewSlot !== previousActiveSlot) {
+			handle.update()
+		}
 	}
 
 	function handlePreviewFocus(slot: string) {
