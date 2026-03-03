@@ -60,6 +60,7 @@ type UpsertAvailabilityInput = {
 
 type UpdateScheduleHostSettingsInput = {
 	shareToken: string
+	hostName?: string
 	title?: string
 	blockedSlots?: Array<string>
 }
@@ -554,6 +555,38 @@ export async function updateScheduleHostSettings(
 	}
 
 	const updates: Array<PreparedStatementLike> = []
+	if (typeof input.hostName === 'string') {
+		const normalizedHostName = normalizeName(input.hostName)
+		if (!normalizedHostName) {
+			throw new Error('Host name is required.')
+		}
+		const normalizedHostNameForMatch = normalizeNameForMatch(normalizedHostName)
+		const existingNonHostAttendee = await db
+			.prepare(
+				`SELECT id
+				FROM attendees
+				WHERE schedule_id = ?1
+					AND name_norm = ?2
+					AND is_host = 0
+				LIMIT 1`,
+			)
+			.bind(schedule.id, normalizedHostNameForMatch)
+			.first<{ id: string }>()
+		if (existingNonHostAttendee) {
+			throw new Error('Host name must be unique.')
+		}
+		updates.push(
+			db
+				.prepare(
+					`UPDATE attendees
+					SET name = ?2,
+						name_norm = ?3
+					WHERE schedule_id = ?1
+						AND is_host = 1`,
+				)
+				.bind(schedule.id, normalizedHostName, normalizedHostNameForMatch),
+		)
+	}
 	if (typeof input.title === 'string') {
 		const normalizedTitle = input.title.trim() || 'New schedule'
 		updates.push(

@@ -8,6 +8,7 @@ import { type AppEnv } from '#types/env-schema.ts'
 import { type routes } from '#server/routes.ts'
 
 type HostUpdateRequest = {
+	hostName?: unknown
 	title?: unknown
 	blockedSlots?: unknown
 }
@@ -101,6 +102,12 @@ export function createScheduleHostUpdateHandler(
 					{ status: 400 },
 				)
 			}
+			if (body.hostName !== undefined && typeof body.hostName !== 'string') {
+				return Response.json(
+					{ ok: false, error: 'hostName must be a string.' },
+					{ status: 400 },
+				)
+			}
 			if (
 				body.blockedSlots !== undefined &&
 				(!Array.isArray(body.blockedSlots) ||
@@ -115,6 +122,7 @@ export function createScheduleHostUpdateHandler(
 			try {
 				await updateScheduleHostSettings(appEnv.APP_DB, {
 					shareToken,
+					hostName: toOptionalString(body.hostName),
 					title: toOptionalString(body.title),
 					blockedSlots: toOptionalStringArray(body.blockedSlots),
 				})

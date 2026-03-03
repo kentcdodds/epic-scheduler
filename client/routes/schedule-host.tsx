@@ -5,7 +5,7 @@ import {
 	getRectangularSlotSelection,
 	toDayKey,
 } from '#client/schedule-utils.ts'
-import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
+import { normalizeName, type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import {
 	colors,
 	mq,
@@ -82,6 +82,12 @@ function buildEmptyAvailability(slots: Array<string>) {
 	)
 }
 
+function getHostAttendeeName(snapshot: ScheduleSnapshot | null) {
+	if (!snapshot) return ''
+	const hostAttendee = snapshot.attendees.find((attendee) => attendee.isHost)
+	return hostAttendee?.name ?? ''
+}
+
 function renderCopyIcon() {
 	return (
 		<svg
@@ -125,6 +131,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let shareToken = ''
 	let hostAccessToken = ''
 	let snapshot: ScheduleSnapshot | null = null
+	let hostNameDraft = ''
 	let titleDraft = ''
 	let blockedSlots = new Set<string>()
 	let persistedBlockedSlots = new Set<string>()
@@ -298,12 +305,19 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function hasLocalHostChanges() {
 		if (!snapshot) return false
+		const hostNameChanged =
+			normalizeName(hostNameDraft) !==
+			normalizeName(getHostAttendeeName(snapshot))
 		const titleChanged = titleDraft.trim() !== snapshot.schedule.title.trim()
 		const blockedChanged = !areSetsEqual(blockedSlots, persistedBlockedSlots)
-		return titleChanged || blockedChanged
+		return hostNameChanged || titleChanged || blockedChanged
 	}
 
 	function applySnapshot(nextSnapshot: ScheduleSnapshot) {
+		const currentHostName = getHostAttendeeName(snapshot)
+		const keepLocalHostName =
+			!!snapshot &&
+			normalizeName(hostNameDraft) !== normalizeName(currentHostName)
 		const keepLocalTitle =
 			!!snapshot && titleDraft.trim() !== snapshot.schedule.title.trim()
 		const keepLocalBlocked =
@@ -311,6 +325,9 @@ export function ScheduleHostRoute(handle: Handle) {
 		const nextBlockedSlots = toSet(nextSnapshot.blockedSlots)
 		snapshot = nextSnapshot
 		persistedBlockedSlots = new Set(nextBlockedSlots)
+		if (!keepLocalHostName) {
+			hostNameDraft = getHostAttendeeName(nextSnapshot)
+		}
 		if (!keepLocalTitle) {
 			titleDraft = nextSnapshot.schedule.title
 		}
@@ -455,6 +472,11 @@ export function ScheduleHostRoute(handle: Handle) {
 			setStatus('Host access token missing.', true)
 			return
 		}
+		const hostName = normalizeName(hostNameDraft)
+		if (!hostName) {
+			setStatus('Host name is required.', true)
+			return
+		}
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
@@ -471,6 +493,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					'X-Host-Token': requestHostAccessToken,
 				},
 				body: JSON.stringify({
+					hostName,
 					title,
 					blockedSlots: sortedBlockedSlots,
 				}),
@@ -495,6 +518,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			snapshot = payload.snapshot
 			persistedBlockedSlots = new Set(nextBlockedSlots)
 			if (!hadQueuedLocalChanges && saveVersion === changeVersion) {
+				hostNameDraft = getHostAttendeeName(payload.snapshot)
 				titleDraft = payload.snapshot.schedule.title
 				blockedSlots = new Set(nextBlockedSlots)
 			}
@@ -590,6 +614,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		shareToken = routeParams?.shareToken ?? ''
 		hostAccessToken = routeParams?.hostAccessToken ?? ''
 		snapshot = null
+		hostNameDraft = ''
 		titleDraft = ''
 		blockedSlots = new Set<string>()
 		persistedBlockedSlots = new Set<string>()
@@ -936,6 +961,35 @@ export function ScheduleHostRoute(handle: Handle) {
 						</p>
 					) : currentSnapshot ? (
 						<>
+							<label css={{ display: 'grid', gap: spacing.xs }}>
+								<span
+									css={{ color: colors.text, fontSize: typography.fontSize.sm }}
+								>
+									Host name
+								</span>
+								<input
+									type="text"
+									value={hostNameDraft}
+									on={{
+										input: (event) => {
+											const nextHostName = event.currentTarget.value
+											if (nextHostName === hostNameDraft) return
+											hostNameDraft = nextHostName
+											changeVersion += 1
+											queueHostSettingsSave()
+											handle.update()
+										},
+									}}
+									css={{
+										padding: `${spacing.sm} ${spacing.md}`,
+										borderRadius: radius.md,
+										border: `1px solid ${colors.border}`,
+										backgroundColor: colors.background,
+										color: colors.text,
+									}}
+								/>
+							</label>
+
 							<label css={{ display: 'grid', gap: spacing.xs }}>
 								<span
 									css={{ color: colors.text, fontSize: typography.fontSize.sm }}
