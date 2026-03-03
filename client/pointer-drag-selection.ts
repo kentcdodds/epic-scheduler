@@ -48,6 +48,7 @@ export function createPointerDragSelectionController(
 	let selectionScroller: HTMLElement | null = null
 	let pointerX = 0
 	let pointerY = 0
+	let activePointerId: number | null = null
 	let autoScrollRaf: number | null = null
 
 	function clearAutoScrollRaf() {
@@ -63,11 +64,13 @@ export function createPointerDragSelectionController(
 		state.endSlot = null
 		state.slots = new Set<string>()
 		selectionScroller = null
+		activePointerId = null
 	}
 
 	function detachSelectionListeners() {
 		if (typeof window === 'undefined') return
 		window.removeEventListener('pointerup', handleGlobalPointerUp)
+		window.removeEventListener('pointercancel', handleGlobalPointerCancel)
 		window.removeEventListener('pointermove', handleGlobalPointerMove)
 		window.removeEventListener('keydown', handleGlobalKeyDown)
 	}
@@ -76,6 +79,7 @@ export function createPointerDragSelectionController(
 		if (typeof window === 'undefined') return
 		detachSelectionListeners()
 		window.addEventListener('pointerup', handleGlobalPointerUp)
+		window.addEventListener('pointercancel', handleGlobalPointerCancel)
 		window.addEventListener('pointermove', handleGlobalPointerMove)
 		window.addEventListener('keydown', handleGlobalKeyDown)
 	}
@@ -129,21 +133,30 @@ export function createPointerDragSelectionController(
 	function finishSelection(cancelled = false) {
 		if (!state.mode) return
 		detachSelectionListeners()
-		const changed = cancelled
-			? false
-			: params.applySelection({
-					mode: state.mode,
-					slots: state.slots,
-				})
-		clearSelection()
-		const shouldRender = params.onSelectionFinished?.({ changed, cancelled })
-		if (shouldRender !== false) {
-			params.requestRender()
+		try {
+			const changed = cancelled
+				? false
+				: params.applySelection({
+						mode: state.mode,
+						slots: state.slots,
+					})
+			const shouldRender = params.onSelectionFinished?.({ changed, cancelled })
+			if (shouldRender !== false) {
+				params.requestRender()
+			}
+		} finally {
+			clearSelection()
 		}
 	}
 
-	function handleGlobalPointerUp() {
+	function handleGlobalPointerUp(event: PointerEvent) {
+		if (activePointerId !== null && event.pointerId !== activePointerId) return
 		finishSelection(false)
+	}
+
+	function handleGlobalPointerCancel(event: PointerEvent) {
+		if (activePointerId !== null && event.pointerId !== activePointerId) return
+		finishSelection(true)
 	}
 
 	function handlePointerMove(event: PointerEvent) {
@@ -155,6 +168,7 @@ export function createPointerDragSelectionController(
 	}
 
 	function handleGlobalPointerMove(event: PointerEvent) {
+		if (activePointerId !== null && event.pointerId !== activePointerId) return
 		handlePointerMove(event)
 	}
 
@@ -173,6 +187,7 @@ export function createPointerDragSelectionController(
 		selectionScroller = getGridScrollerFromPointerEvent(args.event)
 		pointerX = args.event.clientX
 		pointerY = args.event.clientY
+		activePointerId = args.event.pointerId
 		params.onSelectionPreviewSlot?.(args.slot)
 		attachSelectionListeners()
 		maybeStartAutoScroll()
