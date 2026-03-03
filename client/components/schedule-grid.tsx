@@ -9,10 +9,9 @@ import { visuallyHiddenCss } from '#client/styles/visually-hidden.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
 import {
 	buildScheduleGridTableModel,
-	formatScheduleGridSlotLabel,
 	type ScheduleGridSlotAvailability,
 } from '#client/schedule-grid-model.ts'
-import { toDayKey } from '#client/schedule-utils.ts'
+import { formatSlotLabel, toDayKey } from '#client/schedule-utils.ts'
 
 const gridNavigationKeys = new Set([
 	'ArrowUp',
@@ -471,7 +470,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										isHighlighted,
 										selectedBackground: props.selectedBackground,
 									})
-									const slotLabel = formatScheduleGridSlotLabel(slot)
+									const slotLabel = formatSlotLabel(slot, 'long')
 									const availabilitySelectionLabel = toSelectionLabel({
 										selected: isSelected,
 										selectedSlotLabel: props.selectedSlotLabel,

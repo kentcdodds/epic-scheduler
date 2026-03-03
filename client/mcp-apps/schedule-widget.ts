@@ -1,9 +1,6 @@
 import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
-import {
-	buildScheduleGridTableModel,
-	formatScheduleGridSlotLabel,
-} from '#client/schedule-grid-model.ts'
+import { buildScheduleGridTableModel } from '#client/schedule-grid-model.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
@@ -11,6 +8,7 @@ import {
 } from '#client/schedule-snapshot-utils.ts'
 import {
 	findSelectionForAttendee,
+	formatSlotLabel,
 	formatSlotForAttendeeTimeZone,
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
@@ -189,7 +187,7 @@ function setupScheduleWidget() {
 						})
 						.join('')}</ul>`
 				: '<p class="scheduler-muted">None</p>'
-		const formattedSlot = formatScheduleGridSlotLabel(activeSlotValue)
+		const formattedSlot = formatSlotLabel(activeSlotValue, 'long')
 
 		slotDetailsElement.hidden = false
 		slotDetailsElement.innerHTML = `
@@ -270,7 +268,7 @@ function setupScheduleWidget() {
 							maxCount: maxAvailabilityCount,
 							isSelected,
 						})
-						const slotLabel = formatScheduleGridSlotLabel(slot)
+						const slotLabel = formatSlotLabel(slot, 'long')
 						const attendeeLabel =
 							availability.count > 0
 								? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`

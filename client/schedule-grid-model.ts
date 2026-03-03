@@ -1,21 +1,7 @@
 import { buildGridModel } from '#client/schedule-utils.ts'
+import { type SlotAvailability } from '#client/schedule-snapshot-utils.ts'
 
-export type ScheduleGridSlotAvailability = {
-	count: number
-	availableNames: Array<string>
-}
-
-const scheduleGridSlotDateFormatter = new Intl.DateTimeFormat(undefined, {
-	weekday: 'long',
-	month: 'long',
-	day: 'numeric',
-	hour: 'numeric',
-	minute: '2-digit',
-})
-
-export function formatScheduleGridSlotLabel(slot: string) {
-	return scheduleGridSlotDateFormatter.format(new Date(slot))
-}
+export type ScheduleGridSlotAvailability = SlotAvailability
 
 export function buildScheduleGridTableModel(params: {
 	slots: Array<string>

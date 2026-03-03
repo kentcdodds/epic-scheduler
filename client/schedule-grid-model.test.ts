@@ -1,8 +1,5 @@
 import { expect, test } from 'bun:test'
-import {
-	buildScheduleGridTableModel,
-	formatScheduleGridSlotLabel,
-} from './schedule-grid-model.ts'
+import { buildScheduleGridTableModel } from './schedule-grid-model.ts'
 
 function toIso(year: number, month: number, day: number, hour: number) {
 	return new Date(year, month - 1, day, hour, 0, 0, 0).toISOString()
@@ -37,11 +34,4 @@ test('buildScheduleGridTableModel collapses disabled-only rows and columns', () 
 	expect(
 		model.cellByDayAndTime[model.dayKeys[0] ?? '']?.[model.timeKeys[0] ?? ''],
 	).toBe(firstDayNine)
-})
-
-test('formatScheduleGridSlotLabel returns a readable date label', () => {
-	const label = formatScheduleGridSlotLabel(toIso(2026, 6, 15, 14))
-
-	expect(label).toBeTruthy()
-	expect(label).not.toContain('Invalid')
 })
