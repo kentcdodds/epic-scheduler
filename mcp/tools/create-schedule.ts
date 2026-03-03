@@ -1,6 +1,10 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { buildSlots, createSchedule } from '#shared/schedule-store.ts'
+import {
+	buildSlots,
+	createSchedule,
+	normalizeTimeZone,
+} from '#shared/schedule-store.ts'
 import { type MCP } from '#mcp/index.ts'
 import { summarizeShareToken } from './summarize-share-token.ts'
 
@@ -100,20 +104,6 @@ function normalizeDisabledDays(days: Array<string | number>) {
 	return normalized
 }
 
-function normalizeHostTimeZone(hostTimeZone?: string) {
-	const normalizedHostTimeZone = hostTimeZone?.trim() || ''
-	if (!normalizedHostTimeZone) return null
-	try {
-		new Intl.DateTimeFormat('en-US', {
-			timeZone: normalizedHostTimeZone,
-			weekday: 'short',
-		}).format(new Date(0))
-	} catch {
-		throw new Error('Invalid hostTimeZone.')
-	}
-	return normalizedHostTimeZone
-}
-
 function toWeekdayIndex(params: {
 	slot: string
 	hostTimeZone: string | null
@@ -139,7 +129,10 @@ function buildBlockedSlotsFromDisabledDays(params: {
 	disabledDays: ReadonlySet<number>
 }) {
 	if (params.disabledDays.size === 0) return []
-	const normalizedHostTimeZone = normalizeHostTimeZone(params.hostTimeZone)
+	const normalizedHostTimeZone = normalizeTimeZone(
+		params.hostTimeZone,
+		'hostTimeZone',
+	)
 	const slots = buildSlots({
 		rangeStartUtc: params.rangeStartUtc,
 		rangeEndUtc: params.rangeEndUtc,
