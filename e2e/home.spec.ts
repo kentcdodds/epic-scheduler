@@ -31,3 +31,18 @@ test('create schedule link navigates to host dashboard', async ({ page }) => {
 	await expect(page.getByText('Attendee submission link')).toBeVisible()
 	await expect(page.getByText('Host dashboard link')).toBeVisible()
 })
+
+test('home desktop grid keeps page-level horizontal overflow behavior', async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 900 })
+	await page.goto('/')
+	const desktopGridScroller = page
+		.locator('[data-schedule-grid-scroller]')
+		.first()
+	await expect(desktopGridScroller).toBeVisible()
+	const overflowX = await desktopGridScroller.evaluate(
+		(element) => getComputedStyle(element).overflowX,
+	)
+	expect(overflowX).toBe('visible')
+})

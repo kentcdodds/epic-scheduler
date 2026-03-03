@@ -52,6 +52,7 @@ type ScheduleGridProps = {
 	activeSlot: string | null
 	rangeAnchor: string | null
 	readOnly?: boolean
+	desktopHorizontalOverflow?: 'page' | 'local'
 	onMobileDayChange?: (dayKey: string) => void
 	onCellPointerDown?: (slot: string, event: PointerEvent) => void
 	onCellPointerEnter?: (slot: string, event: PointerEvent) => void
@@ -285,6 +286,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		? [resolvedMobileDayKey]
 		: dayKeys
 	const desktopVisibleDayKeys = dayKeys
+	const desktopHorizontalOverflow = props.desktopHorizontalOverflow ?? 'page'
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
 		const currentTarget = event.currentTarget
@@ -341,9 +343,15 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				css={{
 					border: `1px solid ${colors.border}`,
 					borderRadius: radius.lg,
-					[mq.tablet]: {
-						overflowX: 'auto',
-					},
+					...(desktopHorizontalOverflow === 'local'
+						? {
+								overflowX: 'auto',
+							}
+						: {
+								[mq.tablet]: {
+									overflowX: 'auto',
+								},
+							}),
 					backgroundColor: colors.surface,
 					[mq.mobile]: compact
 						? {
