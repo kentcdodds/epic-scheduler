@@ -1,11 +1,6 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import {
-	computeAutoScrollStep,
-	findSlotAtPoint,
-	getGridScrollerFromPointerEvent,
-	setPointerCaptureIfAvailable,
-} from '#client/grid-drag-autoscroll.ts'
+import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
 	getRectangularSlotSelection,
 	toDayKey,
@@ -134,14 +129,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		clientY: number
 	} | null = null
 	let mobileDayKey: string | null = null
-	let hostSelectionMode: 'add' | 'remove' | null = null
-	let hostSelectionStartSlot: string | null = null
-	let hostSelectionEndSlot: string | null = null
-	let hostSelectionSlots = new Set<string>()
-	let hostSelectionScroller: HTMLElement | null = null
-	let hostPointerX = 0
-	let hostPointerY = 0
-	let hostAutoScrollRaf: number | null = null
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -192,135 +179,30 @@ export function ScheduleHostRoute(handle: Handle) {
 		reconnectTimer = null
 	}
 
-	function clearHostAutoScrollRaf() {
-		if (hostAutoScrollRaf === null) return
-		cancelAnimationFrame(hostAutoScrollRaf)
-		hostAutoScrollRaf = null
-	}
-
-	function clearHostSelection() {
-		clearHostAutoScrollRaf()
-		hostSelectionMode = null
-		hostSelectionStartSlot = null
-		hostSelectionEndSlot = null
-		hostSelectionSlots = new Set<string>()
-		hostSelectionScroller = null
-	}
-
-	function detachHostSelectionListeners() {
-		if (typeof window === 'undefined') return
-		window.removeEventListener('pointerup', handleHostGlobalPointerUp)
-		window.removeEventListener('pointermove', handleHostGlobalPointerMove)
-		window.removeEventListener('keydown', handleHostGlobalKeyDown)
-	}
-
-	function attachHostSelectionListeners() {
-		if (typeof window === 'undefined') return
-		detachHostSelectionListeners()
-		window.addEventListener('pointerup', handleHostGlobalPointerUp)
-		window.addEventListener('pointermove', handleHostGlobalPointerMove)
-		window.addEventListener('keydown', handleHostGlobalKeyDown)
-	}
-
-	function getHostSelectionSlots(startSlot: string, endSlot: string) {
-		if (!snapshot) return new Set<string>()
-		return new Set(
-			getRectangularSlotSelection({
-				slots: snapshot.slots,
-				startSlot,
-				endSlot,
-			}),
-		)
-	}
-
-	function applyPendingHostSelection() {
-		if (!hostSelectionMode || hostSelectionSlots.size === 0) return false
-		const shouldBeBlocked = hostSelectionMode === 'add'
-		let changed = false
-		for (const slot of hostSelectionSlots) {
-			const didChange = setBlockedSlotState(slot, shouldBeBlocked)
-			changed = changed || didChange
-		}
-		return changed
-	}
-
-	function updateHostSelectionToSlot(slot: string) {
-		if (
-			!hostSelectionMode ||
-			!hostSelectionStartSlot ||
-			hostSelectionEndSlot === slot
-		) {
-			return
-		}
-		hostSelectionEndSlot = slot
-		hostSelectionSlots = getHostSelectionSlots(hostSelectionStartSlot, slot)
-		handle.update()
-	}
-
-	function refreshHostSelectionAtPointerPosition() {
-		const slot = findSlotAtPoint(hostPointerX, hostPointerY, {
-			withinElement: hostSelectionScroller,
-		})
-		if (!slot) return
-		updateHostSelectionToSlot(slot)
-	}
-
-	function runHostAutoScrollStep() {
-		hostAutoScrollRaf = null
-		if (!hostSelectionMode || !hostSelectionScroller) return
-		const delta = computeAutoScrollStep({
-			clientX: hostPointerX,
-			clientY: hostPointerY,
-			rect: hostSelectionScroller.getBoundingClientRect(),
-		})
-		if (delta.left === 0 && delta.top === 0) return
-		hostSelectionScroller.scrollBy({
-			left: delta.left,
-			top: delta.top,
-		})
-		refreshHostSelectionAtPointerPosition()
-		hostAutoScrollRaf = requestAnimationFrame(runHostAutoScrollStep)
-	}
-
-	function maybeStartHostAutoScroll() {
-		if (!hostSelectionMode || !hostSelectionScroller) return
-		if (hostAutoScrollRaf !== null) return
-		const delta = computeAutoScrollStep({
-			clientX: hostPointerX,
-			clientY: hostPointerY,
-			rect: hostSelectionScroller.getBoundingClientRect(),
-		})
-		if (delta.left === 0 && delta.top === 0) return
-		hostAutoScrollRaf = requestAnimationFrame(runHostAutoScrollStep)
-	}
-
-	function finishHostSelection(cancelled = false) {
-		if (!hostSelectionMode) return
-		detachHostSelectionListeners()
-		if (!cancelled) {
-			applyPendingHostSelection()
-		}
-		clearHostSelection()
-		handle.update()
-	}
-
-	function handleHostGlobalPointerUp() {
-		finishHostSelection(false)
-	}
-
-	function handleHostGlobalPointerMove(event: PointerEvent) {
-		if (!hostSelectionMode) return
-		hostPointerX = event.clientX
-		hostPointerY = event.clientY
-		refreshHostSelectionAtPointerPosition()
-		maybeStartHostAutoScroll()
-	}
-
-	function handleHostGlobalKeyDown(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || !hostSelectionMode) return
-		event.preventDefault()
-		finishHostSelection(true)
-	}
+	const hostSelection = createPointerDragSelectionController({
+		requestRender: () => {
+			handle.update()
+		},
+		getSelectionSlots: (startSlot, endSlot) => {
+			if (!snapshot) return new Set<string>()
+			return new Set(
+				getRectangularSlotSelection({
+					slots: snapshot.slots,
+					startSlot,
+					endSlot,
+				}),
+			)
+		},
+		applySelection: ({ mode, slots }) => {
+			const shouldBeBlocked = mode === 'add'
+			let changed = false
+			for (const slot of slots) {
+				const didChange = setBlockedSlotState(slot, shouldBeBlocked)
+				changed = changed || didChange
+			}
+			return changed
+		},
+	})
 
 	function clearSocketResources() {
 		clearReconnectTimer()
@@ -338,8 +220,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	function cleanupResources() {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
-		detachHostSelectionListeners()
-		clearHostSelection()
+		hostSelection.cleanup()
 		clearSocketResources()
 		clearRefreshTimer()
 		pendingSave = false
@@ -666,25 +547,19 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handleHostUnavailablePointerUp() {
-		finishHostSelection(false)
+		hostSelection.finishSelection(false)
 	}
 
 	function handleHostUnavailablePointerDown(slot: string, event: PointerEvent) {
-		setPointerCaptureIfAvailable(event)
-		hostSelectionMode = blockedSlots.has(slot) ? 'remove' : 'add'
-		hostSelectionStartSlot = slot
-		hostSelectionEndSlot = slot
-		hostSelectionSlots = getHostSelectionSlots(slot, slot)
-		hostSelectionScroller = getGridScrollerFromPointerEvent(event)
-		hostPointerX = event.clientX
-		hostPointerY = event.clientY
-		attachHostSelectionListeners()
-		maybeStartHostAutoScroll()
-		handle.update()
+		hostSelection.startSelection({
+			slot,
+			event,
+			mode: blockedSlots.has(slot) ? 'remove' : 'add',
+		})
 	}
 
 	function handleHostUnavailablePointerEnter(slot: string) {
-		updateHostSelectionToSlot(slot)
+		hostSelection.updateSelectionToSlot(slot)
 	}
 
 	function toggleIncludedAttendee(attendeeId: string) {
@@ -715,8 +590,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		activePreviewSlot = null
 		previewTooltip = null
 		mobileDayKey = null
-		clearHostSelection()
-		detachHostSelectionListeners()
+		hostSelection.cleanup()
 		isLoading = true
 		isSaving = false
 		pendingSave = false
@@ -1432,7 +1306,7 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
-									selectionSlots: hostSelectionSlots,
+									selectionSlots: hostSelection.state.slots,
 									selectionSlotLabel: 'included in pending drag selection',
 									selectedSlotLabel: 'marked unavailable by host',
 									unselectedSlotLabel: 'available for scheduling',
@@ -1466,11 +1340,11 @@ export function ScheduleHostRoute(handle: Handle) {
 									{blockedSlots.size} blocked slot
 									{blockedSlots.size === 1 ? '' : 's'}
 								</p>
-								{hostSelectionMode ? (
+								{hostSelection.state.mode ? (
 									<p css={{ margin: 0, color: colors.textMuted }}>
-										Selecting {hostSelectionSlots.size} slot
-										{hostSelectionSlots.size === 1 ? '' : 's'} — release to
-										apply or press Escape to cancel.
+										Selecting {hostSelection.state.slots.size} slot
+										{hostSelection.state.slots.size === 1 ? '' : 's'} — release
+										to apply or press Escape to cancel.
 									</p>
 								) : null}
 							</section>

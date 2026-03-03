@@ -1,11 +1,6 @@
 import { type Handle } from 'remix/component'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import {
-	computeAutoScrollStep,
-	findSlotAtPoint,
-	getGridScrollerFromPointerEvent,
-	setPointerCaptureIfAvailable,
-} from '#client/grid-drag-autoscroll.ts'
+import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
@@ -79,14 +74,6 @@ export function ScheduleRoute(handle: Handle) {
 	let changeVersion = 0
 	let pendingSave = false
 	let snapshotRequestId = 0
-	let pointerSelectionMode: 'add' | 'remove' | null = null
-	let pointerSelectionStartSlot: string | null = null
-	let pointerSelectionEndSlot: string | null = null
-	let pointerSelectionSlots = new Set<string>()
-	let pointerSelectionScroller: HTMLElement | null = null
-	let pointerPointerX = 0
-	let pointerPointerY = 0
-	let pointerAutoScrollRaf: number | null = null
 	let lastPathname = ''
 	let initialNameLoaded = false
 	const autoSaveDelayMs = 650
@@ -162,152 +149,48 @@ export function ScheduleRoute(handle: Handle) {
 		offlinePollInFlight = false
 	}
 
-	function clearPointerAutoScrollRaf() {
-		if (pointerAutoScrollRaf === null) return
-		cancelAnimationFrame(pointerAutoScrollRaf)
-		pointerAutoScrollRaf = null
-	}
-
-	function clearPointerSelection() {
-		clearPointerAutoScrollRaf()
-		pointerSelectionMode = null
-		pointerSelectionStartSlot = null
-		pointerSelectionEndSlot = null
-		pointerSelectionSlots = new Set<string>()
-		pointerSelectionScroller = null
-	}
-
-	function detachPointerSelectionListeners() {
-		if (typeof window === 'undefined') return
-		window.removeEventListener('pointerup', handleGlobalPointerUp)
-		window.removeEventListener('pointermove', handleGlobalPointerMove)
-		window.removeEventListener('keydown', handleGlobalKeyDown)
-	}
-
-	function attachPointerSelectionListeners() {
-		if (typeof window === 'undefined') return
-		detachPointerSelectionListeners()
-		window.addEventListener('pointerup', handleGlobalPointerUp)
-		window.addEventListener('pointermove', handleGlobalPointerMove)
-		window.addEventListener('keydown', handleGlobalKeyDown)
-	}
-
-	function getPointerSelectionSlots(startSlot: string, endSlot: string) {
-		if (!snapshot) return new Set<string>()
-		const blockedSlots = getBlockedSlots()
-		return new Set(
-			getRectangularSlotSelection({
-				slots: snapshot.slots,
-				startSlot,
-				endSlot,
-			}).filter((slot) => !blockedSlots.has(slot)),
-		)
-	}
-
-	function applyPendingPointerSelection() {
-		if (!pointerSelectionMode || pointerSelectionSlots.size === 0) return false
-		const shouldSelect = pointerSelectionMode === 'add'
-		let changed = false
-		for (const slot of pointerSelectionSlots) {
-			const wasSelected = selectedSlots.has(slot)
-			if (wasSelected === shouldSelect) continue
-			setSlotSelection(slot, shouldSelect)
-			changed = true
-		}
-		return changed
-	}
-
-	function updatePointerSelectionToSlot(slot: string) {
-		if (
-			useTapRangeMode ||
-			!pointerSelectionMode ||
-			!pointerSelectionStartSlot ||
-			pointerSelectionEndSlot === slot
-		) {
-			return
-		}
-		pointerSelectionEndSlot = slot
-		pointerSelectionSlots = getPointerSelectionSlots(
-			pointerSelectionStartSlot,
-			slot,
-		)
-		activeSlot = slot
-		handle.update()
-	}
-
-	function refreshPointerSelectionAtPosition() {
-		const slot = findSlotAtPoint(pointerPointerX, pointerPointerY, {
-			withinElement: pointerSelectionScroller,
-		})
-		if (!slot) return
-		updatePointerSelectionToSlot(slot)
-	}
-
-	function runPointerAutoScrollStep() {
-		pointerAutoScrollRaf = null
-		if (!pointerSelectionMode || !pointerSelectionScroller) return
-		const delta = computeAutoScrollStep({
-			clientX: pointerPointerX,
-			clientY: pointerPointerY,
-			rect: pointerSelectionScroller.getBoundingClientRect(),
-		})
-		if (delta.left === 0 && delta.top === 0) return
-		pointerSelectionScroller.scrollBy({
-			left: delta.left,
-			top: delta.top,
-		})
-		refreshPointerSelectionAtPosition()
-		pointerAutoScrollRaf = requestAnimationFrame(runPointerAutoScrollStep)
-	}
-
-	function maybeStartPointerAutoScroll() {
-		if (!pointerSelectionMode || !pointerSelectionScroller) return
-		if (pointerAutoScrollRaf !== null) return
-		const delta = computeAutoScrollStep({
-			clientX: pointerPointerX,
-			clientY: pointerPointerY,
-			rect: pointerSelectionScroller.getBoundingClientRect(),
-		})
-		if (delta.left === 0 && delta.top === 0) return
-		pointerAutoScrollRaf = requestAnimationFrame(runPointerAutoScrollStep)
-	}
-
-	function finishPointerSelection(cancelled = false) {
-		if (!pointerSelectionMode) return
-		detachPointerSelectionListeners()
-		const changed = cancelled ? false : applyPendingPointerSelection()
-		clearPointerSelection()
-		if (changed) {
+	const pointerSelection = createPointerDragSelectionController({
+		requestRender: () => {
+			handle.update()
+		},
+		canUpdateSelection: () => !useTapRangeMode,
+		getSelectionSlots: (startSlot, endSlot) => {
+			if (!snapshot) return new Set<string>()
+			const blockedSlots = getBlockedSlots()
+			return new Set(
+				getRectangularSlotSelection({
+					slots: snapshot.slots,
+					startSlot,
+					endSlot,
+				}).filter((slot) => !blockedSlots.has(slot)),
+			)
+		},
+		applySelection: ({ mode, slots }) => {
+			const shouldSelect = mode === 'add'
+			let changed = false
+			for (const slot of slots) {
+				const wasSelected = selectedSlots.has(slot)
+				if (wasSelected === shouldSelect) continue
+				setSlotSelection(slot, shouldSelect)
+				changed = true
+			}
+			return changed
+		},
+		onSelectionPreviewSlot: (slot) => {
+			activeSlot = slot
+		},
+		onSelectionFinished: ({ changed }) => {
+			if (!changed) return true
 			markDirty()
-			return
-		}
-		handle.update()
-	}
-
-	function handleGlobalPointerUp() {
-		finishPointerSelection(false)
-	}
-
-	function handleGlobalPointerMove(event: PointerEvent) {
-		if (!pointerSelectionMode) return
-		pointerPointerX = event.clientX
-		pointerPointerY = event.clientY
-		refreshPointerSelectionAtPosition()
-		maybeStartPointerAutoScroll()
-	}
-
-	function handleGlobalKeyDown(event: KeyboardEvent) {
-		if (event.key !== 'Escape' || !pointerSelectionMode) return
-		event.preventDefault()
-		finishPointerSelection(true)
-	}
+			return false
+		},
+	})
 
 	function cleanupResources() {
 		clearSocketResources()
 		clearOfflinePollTimer()
 		clearSaveDebounceTimer()
-		detachPointerSelectionListeners()
-		clearPointerSelection()
+		pointerSelection.cleanup()
 		pendingSave = false
 	}
 
@@ -557,26 +440,19 @@ export function ScheduleRoute(handle: Handle) {
 		}
 		if (useTapRangeMode) return
 		if (!ensureSlotIsEditable(slot)) return
-		setPointerCaptureIfAvailable(event)
-		pointerSelectionMode = selectedSlots.has(slot) ? 'remove' : 'add'
-		pointerSelectionStartSlot = slot
-		pointerSelectionEndSlot = slot
-		pointerSelectionSlots = getPointerSelectionSlots(slot, slot)
-		pointerSelectionScroller = getGridScrollerFromPointerEvent(event)
-		pointerPointerX = event.clientX
-		pointerPointerY = event.clientY
-		activeSlot = slot
-		attachPointerSelectionListeners()
-		maybeStartPointerAutoScroll()
-		handle.update()
+		pointerSelection.startSelection({
+			slot,
+			event,
+			mode: selectedSlots.has(slot) ? 'remove' : 'add',
+		})
 	}
 
 	function handleCellPointerEnter(slot: string) {
-		updatePointerSelectionToSlot(slot)
+		pointerSelection.updateSelectionToSlot(slot)
 	}
 
 	function handleCellPointerUp() {
-		finishPointerSelection(false)
+		pointerSelection.finishSelection(false)
 	}
 
 	function handleCellClick(slot: string) {
@@ -658,8 +534,7 @@ export function ScheduleRoute(handle: Handle) {
 		changeVersion = 0
 		pendingSave = false
 		isSaving = false
-		clearPointerSelection()
-		detachPointerSelectionListeners()
+		pointerSelection.cleanup()
 		connectionState = 'offline'
 		isLoading = true
 		initialNameLoaded = false
@@ -843,7 +718,7 @@ export function ScheduleRoute(handle: Handle) {
 							selectedSlots,
 							disabledSlots: blockedSlots,
 							hideDisabledOnlyRowsAndColumns: true,
-							selectionSlots: pointerSelectionSlots,
+							selectionSlots: pointerSelection.state.slots,
 							selectionSlotLabel: 'included in pending drag selection',
 							mobileDayKey,
 							slotAvailability,
@@ -970,11 +845,11 @@ export function ScheduleRoute(handle: Handle) {
 							Add your name before selecting availability.
 						</p>
 					) : null}
-					{pointerSelectionMode ? (
+					{pointerSelection.state.mode ? (
 						<p css={{ margin: 0, color: colors.textMuted }}>
-							Selecting {pointerSelectionSlots.size} slot
-							{pointerSelectionSlots.size === 1 ? '' : 's'} — release to apply
-							or press Escape to cancel.
+							Selecting {pointerSelection.state.slots.size} slot
+							{pointerSelection.state.slots.size === 1 ? '' : 's'} — release to
+							apply or press Escape to cancel.
 						</p>
 					) : null}
 					{statusMessage ? (
