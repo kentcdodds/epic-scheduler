@@ -11,7 +11,11 @@ import {
 	buildScheduleGridTableModel,
 	type ScheduleGridSlotAvailability,
 } from '#client/schedule-grid-model.ts'
-import { formatSlotLabel, toDayKey } from '#client/schedule-utils.ts'
+import {
+	formatSlotLabel,
+	parseDateInputToLocalDate,
+	toDayKey,
+} from '#client/schedule-utils.ts'
 
 const gridNavigationKeys = new Set([
 	'ArrowUp',
@@ -104,24 +108,6 @@ function getCellBackground(params: {
 	})
 }
 
-function parseDayKeyToDate(dayKey: string) {
-	const [rawYear, rawMonth, rawDay] = dayKey.split('-')
-	if (!rawYear || !rawMonth || !rawDay) return null
-	const year = Number.parseInt(rawYear, 10)
-	const month = Number.parseInt(rawMonth, 10)
-	const day = Number.parseInt(rawDay, 10)
-	if (
-		!Number.isInteger(year) ||
-		!Number.isInteger(month) ||
-		!Number.isInteger(day)
-	) {
-		return null
-	}
-	const date = new Date(year, month - 1, day, 0, 0, 0, 0)
-	if (Number.isNaN(date.getTime())) return null
-	return date
-}
-
 const dayHeaderMonthDayFormatter = new Intl.DateTimeFormat(undefined, {
 	month: 'short',
 	day: 'numeric',
@@ -130,8 +116,33 @@ const dayHeaderWeekdayFormatter = new Intl.DateTimeFormat(undefined, {
 	weekday: 'short',
 })
 
+function getLocaleStartOfWeekIndex() {
+	const localeConstructor = (
+		Intl as {
+			Locale?: new (locales?: string | string[]) => {
+				weekInfo?: { firstDay: number }
+			}
+		}
+	).Locale
+	if (!localeConstructor) return 0
+	const resolvedLocale = new Intl.DateTimeFormat().resolvedOptions().locale
+	const locale = new localeConstructor(resolvedLocale)
+	const firstDay = locale.weekInfo?.firstDay
+	if (
+		typeof firstDay !== 'number' ||
+		!Number.isInteger(firstDay) ||
+		firstDay < 1 ||
+		firstDay > 7
+	) {
+		return 0
+	}
+	return firstDay % 7
+}
+
+const localeStartOfWeekIndex = getLocaleStartOfWeekIndex()
+
 function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
-	const date = parseDayKeyToDate(dayKey)
+	const date = parseDateInputToLocalDate(dayKey)
 	if (!date) {
 		return {
 			monthDay: fallbackLabel,
@@ -144,10 +155,10 @@ function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
 	}
 }
 
-function isSundayStartOfWeek(dayKey: string) {
-	const date = parseDayKeyToDate(dayKey)
+function isStartOfWeek(dayKey: string) {
+	const date = parseDateInputToLocalDate(dayKey)
 	if (!date) return false
-	return date.getDay() === 0
+	return date.getDay() === localeStartOfWeekIndex
 }
 
 function getRowCells(row: HTMLTableRowElement) {
@@ -439,7 +450,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 								const hasWeekSeparator =
 									props.showWeekSeparators &&
 									dayColumnIndex > 0 &&
-									isSundayStartOfWeek(dayKey)
+									isStartOfWeek(dayKey)
 								const stackedDayHeader = useStackedDayHeader
 									? formatStackedDayHeader(dayKey, dayLabels[dayKey] ?? dayKey)
 									: null
@@ -521,7 +532,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const hasWeekSeparator =
 										props.showWeekSeparators &&
 										dayColumnIndex > 0 &&
-										isSundayStartOfWeek(dayKey)
+										isStartOfWeek(dayKey)
 									if (!slot) {
 										const missingSlotExplanation = `No slot at ${timeLabels[timeKey]} on ${dayLabels[dayKey]}. This can happen around daylight-saving transitions or at schedule range boundaries.`
 										return (
