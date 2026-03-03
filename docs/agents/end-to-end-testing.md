@@ -29,6 +29,8 @@ on the Epic Web E2E workshop and our existing setup.
   selection can extend without manual wheel/trackpad scroll.
 - Attendee slot-detail metadata such as displayed attendee timezone and
   attendee-local time for the selected slot.
+- Daylight-saving transition gaps in the grid so missing local times are shown
+  as explicit non-interactive `N/A` cells instead of silent empty blocks.
 - Collapsed attendee/preview axes when an entire row or column is host-blocked,
   while host unavailable-slots grid still renders the full matrix.
 - Integration across the worker, client router, and API endpoints.
