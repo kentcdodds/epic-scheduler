@@ -40,6 +40,7 @@ We use bun for installing dependencies and running scripts. Do not use npm.
 - [Remix Packages](./docs/agents/remix/index.md)
 - [Testing Principles](./docs/agents/testing-principles.md)
 - [End-to-End Testing](./docs/agents/end-to-end-testing.md)
+- [UX Principles](./docs/agents/ux-principles.md)
 - [Oxlint JS Plugins](./docs/agents/oxlint-js-plugins.md)
 - [Getting Started](./docs/getting-started.md)
 - [Environment Variables](./docs/environment-variables.md)

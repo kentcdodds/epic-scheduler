@@ -138,6 +138,25 @@ function renderCopyIcon() {
 	)
 }
 
+function renderPencilIcon() {
+	return (
+		<svg
+			aria-hidden
+			viewBox="0 0 24 24"
+			width="14"
+			height="14"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+		>
+			<path d="M12 20h9" />
+			<path d="m16.5 3.5 4 4L7 21H3v-4z" />
+		</svg>
+	)
+}
+
 function copyTextWithFallback(text: string) {
 	if (typeof document === 'undefined') return false
 	const textarea = document.createElement('textarea')
@@ -171,6 +190,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	let excludedAttendeeIds = new Set<string>()
 	let submissionNameDraftById = new Map<string, string>()
 	let submissionActionById = new Map<string, 'rename' | 'delete'>()
+	let submissionErrorById = new Map<string, string>()
+	let editingSubmissionId: string | null = null
 	let previewMode: PreviewMode = 'all'
 	let focusedPreviewAttendeeId: string | null = null
 	let activePreviewSlot: string | null = null
@@ -508,6 +529,11 @@ export function ScheduleHostRoute(handle: Handle) {
 		const validAttendeeIds = new Set(
 			nextSnapshot.attendees.map((entry) => entry.id),
 		)
+		const editableAttendeeIds = new Set(
+			nextSnapshot.attendees
+				.filter((attendee) => !attendee.isHost)
+				.map((attendee) => attendee.id),
+		)
 		const nextDayKeys = Array.from(
 			new Set(
 				nextSnapshot.slots
@@ -543,6 +569,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			)
 		}
 		submissionNameDraftById = nextSubmissionNameDraftById
+		submissionErrorById = new Map(
+			Array.from(submissionErrorById).filter(([id]) =>
+				editableAttendeeIds.has(id),
+			),
+		)
+		if (editingSubmissionId && !editableAttendeeIds.has(editingSubmissionId)) {
+			editingSubmissionId = null
+		}
 		if (activePreviewSlot && !nextSnapshot.slots.includes(activePreviewSlot)) {
 			activePreviewSlot = null
 		}
@@ -819,17 +853,22 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (!requestShareToken || handle.signal.aborted) return
 		const requestHostAccessToken = hostAccessToken
 		if (!requestHostAccessToken) {
-			setStatus('Host access token missing.', true)
+			const errorText = 'Host access token missing.'
+			submissionErrorById.set(attendeeId, errorText)
+			setStatus(errorText, true)
+			handle.update()
 			return
 		}
 		const nextSubmissionName = normalizeName(
 			submissionNameDraftById.get(attendeeId) ?? '',
 		)
 		if (!nextSubmissionName) {
-			setStatus('Submission name is required.', true)
+			submissionErrorById.set(attendeeId, 'Submission name is required.')
+			handle.update()
 			return
 		}
 		if (submissionActionById.has(attendeeId)) return
+		submissionErrorById.delete(attendeeId)
 		submissionActionById.set(attendeeId, 'rename')
 		handle.update()
 		try {
@@ -855,13 +894,20 @@ export function ScheduleHostRoute(handle: Handle) {
 					typeof payload?.error === 'string'
 						? payload.error
 						: 'Unable to rename submission.'
+				submissionErrorById.set(attendeeId, errorText)
 				setStatus(errorText, true)
 				return
 			}
 			applySnapshot(payload.snapshot)
+			submissionErrorById.delete(attendeeId)
+			editingSubmissionId = null
 			setStatus('Submission name updated.')
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			submissionErrorById.set(
+				attendeeId,
+				'Network error while renaming submission.',
+			)
 			setStatus('Network error while renaming submission.', true)
 		} finally {
 			submissionActionById.delete(attendeeId)
@@ -876,10 +922,14 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (!requestShareToken || handle.signal.aborted) return
 		const requestHostAccessToken = hostAccessToken
 		if (!requestHostAccessToken) {
-			setStatus('Host access token missing.', true)
+			const errorText = 'Host access token missing.'
+			submissionErrorById.set(attendeeId, errorText)
+			setStatus(errorText, true)
+			handle.update()
 			return
 		}
 		if (submissionActionById.has(attendeeId)) return
+		submissionErrorById.delete(attendeeId)
 		submissionActionById.set(attendeeId, 'delete')
 		handle.update()
 		try {
@@ -905,13 +955,22 @@ export function ScheduleHostRoute(handle: Handle) {
 					typeof payload?.error === 'string'
 						? payload.error
 						: 'Unable to delete submission.'
+				submissionErrorById.set(attendeeId, errorText)
 				setStatus(errorText, true)
 				return
 			}
 			applySnapshot(payload.snapshot)
+			submissionErrorById.delete(attendeeId)
+			if (editingSubmissionId === attendeeId) {
+				editingSubmissionId = null
+			}
 			setStatus('Submission deleted.')
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			submissionErrorById.set(
+				attendeeId,
+				'Network error while deleting submission.',
+			)
 			setStatus('Network error while deleting submission.', true)
 		} finally {
 			submissionActionById.delete(attendeeId)
@@ -1317,6 +1376,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		excludedAttendeeIds = new Set<string>()
 		submissionNameDraftById = new Map<string, string>()
 		submissionActionById = new Map<string, 'rename' | 'delete'>()
+		submissionErrorById = new Map<string, string>()
+		editingSubmissionId = null
 		previewMode = 'all'
 		focusedPreviewAttendeeId = null
 		activePreviewSlot = null
@@ -1553,6 +1614,12 @@ export function ScheduleHostRoute(handle: Handle) {
 				}
 				return left.name.localeCompare(right.name)
 			})
+		const previewRangeSummaryById = new Map(
+			previewRangeSummaryEntries.map((entry) => [entry.id, entry]),
+		)
+		const attendeeTotalSummaryById = new Map(
+			attendeeTotalSummaryEntries.map((entry) => [entry.id, entry]),
+		)
 		const connectionLabel =
 			connectionState === 'live'
 				? 'Realtime connected'
@@ -1730,18 +1797,24 @@ export function ScheduleHostRoute(handle: Handle) {
 							</div>
 						</div>
 					</div>
-					{clipboardMessage ? (
-						<p
-							role={clipboardError ? 'alert' : 'status'}
-							aria-live="polite"
-							css={{
-								margin: 0,
-								color: clipboardError ? colors.error : colors.textMuted,
-							}}
-						>
-							{clipboardMessage}
-						</p>
-					) : null}
+					<p
+						role={
+							clipboardMessage
+								? clipboardError
+									? 'alert'
+									: 'status'
+								: undefined
+						}
+						aria-live="polite"
+						aria-hidden={clipboardMessage ? undefined : true}
+						css={{
+							margin: 0,
+							minHeight: '1.5rem',
+							color: clipboardError ? colors.error : colors.textMuted,
+						}}
+					>
+						{clipboardMessage ?? '\u00a0'}
+					</p>
 				</header>
 
 				<section
@@ -1901,19 +1974,84 @@ export function ScheduleHostRoute(handle: Handle) {
 									backgroundColor: colors.background,
 								}}
 							>
-								<h2
+								<div
 									css={{
-										margin: 0,
-										fontSize: typography.fontSize.base,
-										color: colors.text,
+										display: 'flex',
+										flexWrap: 'wrap',
+										alignItems: 'center',
+										justifyContent: 'space-between',
+										gap: spacing.sm,
 									}}
 								>
-									Respondents
-								</h2>
-								<p css={{ margin: 0, color: colors.textMuted }}>
-									Toggle each name to include or exclude it from preview
-									calculations. Use Highlight for a single attendee focus.
-								</p>
+									<div css={{ display: 'grid', gap: spacing.xs }}>
+										<h2
+											css={{
+												margin: 0,
+												fontSize: typography.fontSize.base,
+												color: colors.text,
+											}}
+										>
+											Respondents and summary
+										</h2>
+										<p css={{ margin: 0, color: colors.textMuted }}>
+											Toggle each name to include or exclude it from preview
+											calculations. Use Highlight for a single attendee focus.
+										</p>
+									</div>
+									{previewSelectionCount > 0 ? (
+										<button
+											type="button"
+											on={{ click: clearPreviewSelectedRange }}
+											css={{
+												padding: `${spacing.xs} ${spacing.sm}`,
+												borderRadius: radius.full,
+												border: `1px solid ${colors.border}`,
+												backgroundColor: colors.surface,
+												color: colors.text,
+												cursor: 'pointer',
+											}}
+										>
+											Clear selection
+										</button>
+									) : null}
+								</div>
+								{previewSelectionCount > 0 && selectedRangeLabel ? (
+									<>
+										<p css={{ margin: 0, color: colors.textMuted }}>
+											Selected window: {selectedRangeLabel} (
+											{previewSelectionCount} slot
+											{previewSelectionCount === 1 ? '' : 's'})
+										</p>
+										<p css={{ margin: 0, color: colors.textMuted }}>
+											{attendeesFullyAvailableCount}/
+											{previewRangeSummaryEntries.length} attendee
+											{previewRangeSummaryEntries.length === 1 ? '' : 's'} can
+											make the whole window.
+										</p>
+									</>
+								) : (
+									<>
+										<p css={{ margin: 0, color: colors.textMuted }}>
+											No range selected yet.
+										</p>
+										<p css={{ margin: 0, color: colors.textMuted }}>
+											Showing total available slots for currently included
+											respondents.
+										</p>
+									</>
+								)}
+								{previewSelection.state.mode ? (
+									<p css={{ margin: 0, color: colors.textMuted }}>
+										Selecting {previewSelection.state.slots.size} slot
+										{previewSelection.state.slots.size === 1 ? '' : 's'} —
+										release to apply or press Escape to cancel.
+									</p>
+								) : null}
+								{previewSelectionStatus ? (
+									<p css={{ margin: 0, color: colors.textMuted }}>
+										{previewSelectionStatus}
+									</p>
+								) : null}
 								<div
 									css={{
 										display: 'grid',
@@ -1923,16 +2061,34 @@ export function ScheduleHostRoute(handle: Handle) {
 									{attendees.map((attendee) => {
 										const isIncluded = !excludedAttendeeIds.has(attendee.id)
 										const isHostAttendee = attendee.isHost
+										const isEditableAttendee = !isHostAttendee
 										const submissionNameDraft =
 											submissionNameDraftById.get(attendee.id) ?? attendee.name
 										const pendingSubmissionAction =
 											submissionActionById.get(attendee.id) ?? null
+										const submissionErrorMessage =
+											submissionErrorById.get(attendee.id) ?? null
+										const isEditingSubmission =
+											editingSubmissionId === attendee.id
 										const isFocusedPreviewAttendee =
 											focusedPreviewAttendeeId === attendee.id
+										const rangeSummaryEntry =
+											previewRangeSummaryById.get(attendee.id) ?? null
+										const totalSummaryEntry =
+											attendeeTotalSummaryById.get(attendee.id) ?? null
 										const normalizedSubmissionName =
 											normalizeName(submissionNameDraft)
+										const hasBlankSubmissionName =
+											isEditableAttendee &&
+											isEditingSubmission &&
+											normalizedSubmissionName.length === 0
+										const inlineSubmissionErrorMessage =
+											submissionErrorMessage ??
+											(hasBlankSubmissionName
+												? 'Submission name is required.'
+												: null)
 										const canSaveSubmissionName =
-											!isHostAttendee &&
+											isEditableAttendee &&
 											!!normalizedSubmissionName &&
 											normalizedSubmissionName !==
 												normalizeName(attendee.name) &&
@@ -1949,7 +2105,6 @@ export function ScheduleHostRoute(handle: Handle) {
 													backgroundColor: isIncluded
 														? colors.surface
 														: colors.background,
-													cursor: 'pointer',
 													'&:focus-within': {
 														outline: `2px solid ${colors.primary}`,
 														outlineOffset: 2,
@@ -1958,100 +2113,220 @@ export function ScheduleHostRoute(handle: Handle) {
 											>
 												<div
 													css={{
-														display: 'flex',
-														flexWrap: 'wrap',
-														alignItems: 'center',
-														justifyContent: 'space-between',
+														display: 'grid',
 														gap: spacing.sm,
+														gridTemplateColumns: 'minmax(0, 1fr) auto',
+														alignItems: 'center',
+														[mq.mobile]: {
+															gridTemplateColumns: '1fr',
+														},
 													}}
 												>
-													<label
-														css={{
-															display: 'inline-flex',
-															alignItems: 'center',
-															gap: spacing.xs,
-															padding: `${spacing.xs} ${spacing.sm}`,
-															borderRadius: radius.full,
-															border: `1px solid ${colors.border}`,
-															backgroundColor: isIncluded
-																? colors.surface
-																: colors.background,
-															cursor: 'pointer',
-														}}
-													>
-														<input
-															type="checkbox"
-															checked={isIncluded}
-															on={{
-																change: () =>
-																	toggleIncludedAttendee(attendee.id),
-															}}
-															css={{
-																position: 'absolute',
-																width: 1,
-																height: 1,
-																padding: 0,
-																margin: -1,
-																overflow: 'hidden',
-																clip: 'rect(0, 0, 0, 0)',
-																whiteSpace: 'nowrap',
-																border: 0,
-															}}
-														/>
-														<span
-															css={{
-																color: colors.text,
-																textDecoration: isIncluded
-																	? 'none'
-																	: 'line-through',
-															}}
-														>
-															{attendee.name}
-															{isHostAttendee ? ' (host)' : ''}
-														</span>
-													</label>
 													<div
 														css={{
-															display: 'inline-flex',
-															flexWrap: 'wrap',
+															display: 'flex',
 															alignItems: 'center',
-															gap: spacing.xs,
+															gap: spacing.sm,
+															minWidth: 0,
 														}}
 													>
-														<button
-															type="button"
-															aria-pressed={isFocusedPreviewAttendee}
-															on={{
-																click: () =>
-																	toggleFocusedPreviewAttendee(attendee.id),
-															}}
+														{isEditableAttendee ? (
+															<button
+																type="button"
+																aria-label={`Edit submission for ${attendee.name}`}
+																aria-pressed={isEditingSubmission}
+																disabled={pendingSubmissionAction !== null}
+																on={{
+																	click: () => {
+																		if (pendingSubmissionAction !== null) return
+																		editingSubmissionId =
+																			editingSubmissionId === attendee.id
+																				? null
+																				: attendee.id
+																		submissionErrorById.delete(attendee.id)
+																		handle.update()
+																	},
+																}}
+																css={{
+																	display: 'inline-flex',
+																	alignItems: 'center',
+																	justifyContent: 'center',
+																	width: 30,
+																	height: 30,
+																	padding: 0,
+																	borderRadius: radius.sm,
+																	border: `1px solid ${colors.border}`,
+																	backgroundColor: isEditingSubmission
+																		? colors.primary
+																		: colors.background,
+																	color: isEditingSubmission
+																		? colors.onPrimary
+																		: colors.text,
+																	cursor:
+																		pendingSubmissionAction === null
+																			? 'pointer'
+																			: 'not-allowed',
+																}}
+															>
+																{renderPencilIcon()}
+															</button>
+														) : (
+															<span
+																aria-hidden
+																css={{
+																	display: 'inline-block',
+																	width: 30,
+																	height: 30,
+																}}
+															/>
+														)}
+														<label
 															css={{
+																display: 'inline-flex',
+																alignItems: 'center',
+																gap: spacing.xs,
 																padding: `${spacing.xs} ${spacing.sm}`,
-																borderRadius: radius.sm,
+																borderRadius: radius.full,
 																border: `1px solid ${colors.border}`,
-																backgroundColor: isFocusedPreviewAttendee
-																	? colors.primary
+																backgroundColor: isIncluded
+																	? colors.surface
 																	: colors.background,
-																color: isFocusedPreviewAttendee
-																	? colors.onPrimary
-																	: colors.text,
 																cursor: 'pointer',
 															}}
 														>
-															{isFocusedPreviewAttendee
-																? 'Highlight on'
-																: 'Highlight'}
-														</button>
-														{isHostAttendee ? (
+															<input
+																type="checkbox"
+																checked={isIncluded}
+																on={{
+																	change: () =>
+																		toggleIncludedAttendee(attendee.id),
+																}}
+																css={{
+																	position: 'absolute',
+																	width: 1,
+																	height: 1,
+																	padding: 0,
+																	margin: -1,
+																	overflow: 'hidden',
+																	clip: 'rect(0, 0, 0, 0)',
+																	whiteSpace: 'nowrap',
+																	border: 0,
+																}}
+															/>
 															<span
 																css={{
-																	color: colors.textMuted,
-																	fontSize: typography.fontSize.sm,
+																	color: colors.text,
+																	textDecoration: isIncluded
+																		? 'none'
+																		: 'line-through',
 																}}
 															>
-																Host submission
+																{attendee.name}
+																{isHostAttendee ? ' (host)' : ''}
 															</span>
-														) : (
+														</label>
+													</div>
+													<button
+														type="button"
+														aria-pressed={isFocusedPreviewAttendee}
+														on={{
+															click: () =>
+																toggleFocusedPreviewAttendee(attendee.id),
+														}}
+														css={{
+															padding: `${spacing.xs} ${spacing.sm}`,
+															borderRadius: radius.sm,
+															border: `1px solid ${colors.border}`,
+															backgroundColor: isFocusedPreviewAttendee
+																? colors.primary
+																: colors.background,
+															color: isFocusedPreviewAttendee
+																? colors.onPrimary
+																: colors.text,
+															cursor: 'pointer',
+															justifySelf: 'start',
+														}}
+													>
+														{isFocusedPreviewAttendee
+															? 'Highlight on'
+															: 'Highlight'}
+													</button>
+												</div>
+												<div
+													css={{
+														display: 'grid',
+														gap: spacing.xs,
+														minHeight: 96,
+														alignContent: 'start',
+													}}
+												>
+													{isEditableAttendee && isEditingSubmission ? (
+														<div
+															css={{
+																display: 'grid',
+																gap: spacing.xs,
+																gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+																alignItems: 'center',
+																[mq.mobile]: {
+																	gridTemplateColumns: '1fr 1fr',
+																	'& > input': {
+																		gridColumn: '1 / -1',
+																	},
+																},
+															}}
+														>
+															<input
+																type="text"
+																aria-label={`Submission name input for ${attendee.name}`}
+																value={submissionNameDraft}
+																disabled={pendingSubmissionAction === 'delete'}
+																on={{
+																	input: (event) => {
+																		submissionNameDraftById.set(
+																			attendee.id,
+																			event.currentTarget.value,
+																		)
+																		submissionErrorById.delete(attendee.id)
+																		handle.update()
+																	},
+																}}
+																css={{
+																	padding: `${spacing.sm} ${spacing.md}`,
+																	borderRadius: radius.md,
+																	border: `1px solid ${colors.border}`,
+																	backgroundColor: colors.background,
+																	color: colors.text,
+																}}
+															/>
+															<button
+																type="button"
+																aria-label={`Update submission name for ${attendee.name}`}
+																disabled={!canSaveSubmissionName}
+																on={{
+																	click: () => {
+																		void renameSubmission(attendee.id)
+																	},
+																}}
+																css={{
+																	minWidth: 88,
+																	padding: `${spacing.sm} ${spacing.md}`,
+																	borderRadius: radius.md,
+																	border: `1px solid ${colors.border}`,
+																	backgroundColor: canSaveSubmissionName
+																		? colors.primary
+																		: colors.background,
+																	color: canSaveSubmissionName
+																		? colors.onPrimary
+																		: colors.textMuted,
+																	cursor: canSaveSubmissionName
+																		? 'pointer'
+																		: 'not-allowed',
+																}}
+															>
+																{pendingSubmissionAction === 'rename'
+																	? 'Saving…'
+																	: 'Update'}
+															</button>
 															<button
 																type="button"
 																aria-label={`Delete submission for ${attendee.name}`}
@@ -2062,8 +2337,9 @@ export function ScheduleHostRoute(handle: Handle) {
 																	},
 																}}
 																css={{
-																	padding: `${spacing.xs} ${spacing.sm}`,
-																	borderRadius: radius.sm,
+																	minWidth: 88,
+																	padding: `${spacing.sm} ${spacing.md}`,
+																	borderRadius: radius.md,
 																	border: `1px solid ${colors.border}`,
 																	backgroundColor: colors.background,
 																	color: colors.error,
@@ -2072,79 +2348,86 @@ export function ScheduleHostRoute(handle: Handle) {
 																			? 'pointer'
 																			: 'not-allowed',
 																	opacity:
-																		pendingSubmissionAction === null ? 1 : 0.7,
+																		pendingSubmissionAction === null ? 1 : 0.72,
 																}}
 															>
 																{pendingSubmissionAction === 'delete'
 																	? 'Deleting…'
-																	: 'Delete submission'}
+																	: 'Delete'}
 															</button>
-														)}
-													</div>
-												</div>
-												{isHostAttendee ? null : (
-													<div
+														</div>
+													) : isIncluded ? (
+														<div css={{ display: 'grid', gap: spacing.xs }}>
+															{previewSelectionCount > 0 &&
+															selectedRangeLabel &&
+															rangeSummaryEntry ? (
+																<>
+																	<p
+																		css={{ margin: 0, color: colors.textMuted }}
+																	>
+																		{rangeSummaryEntry.availableSlotCount}/
+																		{previewSelectionCount} selected slot
+																		{previewSelectionCount === 1
+																			? ''
+																			: 's'}{' '}
+																		available.
+																	</p>
+																	<p
+																		css={{
+																			margin: 0,
+																			color:
+																				rangeSummaryEntry.canAttendEntireRange
+																					? colors.text
+																					: colors.textMuted,
+																			textDecoration:
+																				rangeSummaryEntry.canAttendEntireRange
+																					? 'none'
+																					: 'line-through',
+																			textDecorationColor: colors.error,
+																			textDecorationThickness: '2px',
+																		}}
+																	>
+																		{rangeSummaryEntry.localRangeText}{' '}
+																		{rangeSummaryEntry.timeZoneLabel}
+																	</p>
+																</>
+															) : totalSummaryEntry ? (
+																<p css={{ margin: 0, color: colors.textMuted }}>
+																	{totalSummaryEntry.totalAvailableSlots}{' '}
+																	available slot
+																	{totalSummaryEntry.totalAvailableSlots === 1
+																		? ''
+																		: 's'}{' '}
+																	— {totalSummaryEntry.timeZoneLabel}
+																</p>
+															) : (
+																<p css={{ margin: 0, color: colors.textMuted }}>
+																	No availability recorded yet.
+																</p>
+															)}
+														</div>
+													) : (
+														<p css={{ margin: 0, color: colors.textMuted }}>
+															Excluded from preview calculations.
+														</p>
+													)}
+													<p
+														role={
+															inlineSubmissionErrorMessage ? 'alert' : undefined
+														}
+														aria-live="polite"
+														aria-hidden={
+															inlineSubmissionErrorMessage ? undefined : true
+														}
 														css={{
-															display: 'grid',
-															gap: spacing.xs,
-															gridTemplateColumns: 'minmax(0, 1fr) auto',
-															[mq.mobile]: {
-																gridTemplateColumns: '1fr',
-															},
+															margin: 0,
+															minHeight: '1.5rem',
+															color: colors.error,
 														}}
 													>
-														<input
-															type="text"
-															aria-label={`Submission name input for ${attendee.name}`}
-															value={submissionNameDraft}
-															disabled={pendingSubmissionAction === 'delete'}
-															on={{
-																input: (event) => {
-																	submissionNameDraftById.set(
-																		attendee.id,
-																		event.currentTarget.value,
-																	)
-																	handle.update()
-																},
-															}}
-															css={{
-																padding: `${spacing.sm} ${spacing.md}`,
-																borderRadius: radius.md,
-																border: `1px solid ${colors.border}`,
-																backgroundColor: colors.background,
-																color: colors.text,
-															}}
-														/>
-														<button
-															type="button"
-															aria-label={`Save renamed submission for ${attendee.name}`}
-															disabled={!canSaveSubmissionName}
-															on={{
-																click: () => {
-																	void renameSubmission(attendee.id)
-																},
-															}}
-															css={{
-																padding: `${spacing.sm} ${spacing.md}`,
-																borderRadius: radius.md,
-																border: `1px solid ${colors.border}`,
-																backgroundColor: canSaveSubmissionName
-																	? colors.primary
-																	: colors.background,
-																color: canSaveSubmissionName
-																	? colors.onPrimary
-																	: colors.textMuted,
-																cursor: canSaveSubmissionName
-																	? 'pointer'
-																	: 'not-allowed',
-															}}
-														>
-															{pendingSubmissionAction === 'rename'
-																? 'Saving…'
-																: 'Save name'}
-														</button>
-													</div>
-												)}
+														{inlineSubmissionErrorMessage ?? '\u00a0'}
+													</p>
+												</div>
 											</article>
 										)
 									})}
@@ -2377,171 +2660,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										)}
 									</aside>
 								) : null}
-								<section
-									data-host-preview-attendee-summary
-									css={{
-										display: 'grid',
-										gap: spacing.xs,
-										padding: spacing.md,
-										borderRadius: radius.md,
-										border: `1px solid ${colors.border}`,
-										backgroundColor: colors.background,
-									}}
-								>
-									<div
-										css={{
-											display: 'flex',
-											flexWrap: 'wrap',
-											alignItems: 'center',
-											justifyContent: 'space-between',
-											gap: spacing.sm,
-										}}
-									>
-										<h3
-											css={{
-												margin: 0,
-												fontSize: typography.fontSize.base,
-												color: colors.text,
-											}}
-										>
-											Attendee window summary
-										</h3>
-										{previewSelectionCount > 0 ? (
-											<button
-												type="button"
-												on={{ click: clearPreviewSelectedRange }}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: `1px solid ${colors.border}`,
-													backgroundColor: colors.surface,
-													color: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												Clear selection
-											</button>
-										) : null}
-									</div>
-									{previewSelectionCount > 0 && selectedRangeLabel ? (
-										<>
-											<p css={{ margin: 0, color: colors.textMuted }}>
-												Selected window: {selectedRangeLabel} (
-												{previewSelectionCount} slot
-												{previewSelectionCount === 1 ? '' : 's'})
-											</p>
-											<p css={{ margin: 0, color: colors.textMuted }}>
-												{attendeesFullyAvailableCount}/
-												{previewRangeSummaryEntries.length} attendee
-												{previewRangeSummaryEntries.length === 1 ? '' : 's'} can
-												make the whole window.
-											</p>
-											<ul
-												css={{
-													margin: 0,
-													paddingLeft: '1rem',
-													display: 'grid',
-													gap: spacing.xs,
-												}}
-											>
-												{previewRangeSummaryEntries.map((entry) => (
-													<li
-														data-host-preview-attendee
-														data-can-attend-whole-window={
-															entry.canAttendEntireRange ? 'true' : 'false'
-														}
-														key={`preview-range-attendee-${entry.id}`}
-														css={{
-															color: entry.canAttendEntireRange
-																? colors.text
-																: colors.textMuted,
-															overflowWrap: 'anywhere',
-														}}
-													>
-														{entry.canAttendEntireRange ? (
-															<span
-																data-host-preview-attendee-name
-																css={{
-																	color: colors.text,
-																	fontWeight: typography.fontWeight.medium,
-																}}
-															>
-																{entry.name}
-															</span>
-														) : (
-															<span
-																data-host-preview-attendee-name
-																css={{
-																	color: colors.text,
-																	fontWeight: typography.fontWeight.medium,
-																	textDecoration: 'line-through',
-																	textDecorationColor: colors.error,
-																	textDecorationThickness: '2px',
-																}}
-															>
-																{entry.name}
-															</span>
-														)}{' '}
-														({entry.availableSlotCount}) -{' '}
-														{entry.localRangeText} {entry.timeZoneLabel}
-													</li>
-												))}
-											</ul>
-										</>
-									) : (
-										<>
-											<p css={{ margin: 0, color: colors.textMuted }}>
-												No range selected yet.
-											</p>
-											<p css={{ margin: 0, color: colors.textMuted }}>
-												Showing total available slots per attendee.
-											</p>
-											<ul
-												css={{
-													margin: 0,
-													paddingLeft: '1rem',
-													display: 'grid',
-													gap: spacing.xs,
-												}}
-											>
-												{attendeeTotalSummaryEntries.map((entry) => (
-													<li
-														data-host-preview-attendee
-														key={`all-slot-attendee-${entry.id}`}
-														css={{
-															color: colors.text,
-															overflowWrap: 'anywhere',
-														}}
-													>
-														<span
-															data-host-preview-attendee-name
-															css={{
-																color: colors.text,
-																fontWeight: typography.fontWeight.medium,
-															}}
-														>
-															{entry.name}
-														</span>{' '}
-														({entry.totalAvailableSlots}) -{' '}
-														{entry.timeZoneLabel}
-													</li>
-												))}
-											</ul>
-										</>
-									)}
-									{previewSelection.state.mode ? (
-										<p css={{ margin: 0, color: colors.textMuted }}>
-											Selecting {previewSelection.state.slots.size} slot
-											{previewSelection.state.slots.size === 1 ? '' : 's'} —
-											release to apply or press Escape to cancel.
-										</p>
-									) : null}
-									{previewSelectionStatus ? (
-										<p css={{ margin: 0, color: colors.textMuted }}>
-											{previewSelectionStatus}
-										</p>
-									) : null}
-								</section>
 							</section>
 
 							<section
@@ -2701,18 +2819,20 @@ export function ScheduleHostRoute(handle: Handle) {
 							Last blocked slot: {blockedSlotsSorted.at(-1) ?? 'none'}
 						</p>
 					</div>
-					{statusMessage ? (
-						<p
-							role={statusError ? 'alert' : 'status'}
-							aria-live="polite"
-							css={{
-								margin: 0,
-								color: statusError ? colors.error : colors.textMuted,
-							}}
-						>
-							{statusMessage}
-						</p>
-					) : null}
+					<p
+						role={
+							statusMessage ? (statusError ? 'alert' : 'status') : undefined
+						}
+						aria-live="polite"
+						aria-hidden={statusMessage ? undefined : true}
+						css={{
+							margin: 0,
+							minHeight: '1.5rem',
+							color: statusError ? colors.error : colors.textMuted,
+						}}
+					>
+						{statusMessage ?? '\u00a0'}
+					</p>
 				</section>
 			</section>
 		)
