@@ -7,12 +7,11 @@ import {
 } from '#client/styles/tokens.ts'
 import { visuallyHiddenCss } from '#client/styles/visually-hidden.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
-import { buildGridModel, toDayKey } from '#client/schedule-utils.ts'
-
-type SlotAvailability = {
-	count: number
-	availableNames: Array<string>
-}
+import {
+	buildScheduleGridTableModel,
+	type ScheduleGridSlotAvailability,
+} from '#client/schedule-grid-model.ts'
+import { formatSlotLabel, toDayKey } from '#client/schedule-utils.ts'
 
 const gridNavigationKeys = new Set([
 	'ArrowUp',
@@ -24,14 +23,6 @@ const gridNavigationKeys = new Set([
 	'PageUp',
 	'PageDown',
 ])
-
-const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
-	weekday: 'long',
-	month: 'long',
-	day: 'numeric',
-	hour: 'numeric',
-	minute: '2-digit',
-})
 
 type ScheduleGridProps = {
 	slots: Array<string>
@@ -47,7 +38,7 @@ type ScheduleGridProps = {
 	selectedBackground?: string
 	pending?: boolean
 	mobileDayKey?: string | null
-	slotAvailability: Record<string, SlotAvailability>
+	slotAvailability: Record<string, ScheduleGridSlotAvailability>
 	maxAvailabilityCount: number
 	activeSlot: string | null
 	rangeAnchor: string | null
@@ -223,46 +214,19 @@ function moveFocusWithinGridCellButtons(params: {
 }
 
 export function renderScheduleGrid(props: ScheduleGridProps) {
-	const grid = buildGridModel(props.slots)
+	const grid = buildScheduleGridTableModel({
+		slots: props.slots,
+		disabledSlots: props.disabledSlots,
+		hideDisabledOnlyRowsAndColumns: props.hideDisabledOnlyRowsAndColumns,
+	})
 	const {
-		dayKeys: allDayKeys,
+		dayKeys,
 		dayLabels,
-		timeKeys: allTimeKeys,
+		timeKeys,
 		timeLabels,
 		cellByDayAndTime,
+		missingSlotCellCount,
 	} = grid
-	const collapseDisabledAxes =
-		!!props.hideDisabledOnlyRowsAndColumns &&
-		(props.disabledSlots?.size ?? 0) > 0
-	const dayKeys = collapseDisabledAxes
-		? allDayKeys.filter((dayKey) =>
-				allTimeKeys.some((timeKey) => {
-					const slot = cellByDayAndTime[dayKey]?.[timeKey]
-					if (!slot) return false
-					return !(props.disabledSlots?.has(slot) ?? false)
-				}),
-			)
-		: allDayKeys
-	const timeKeys = collapseDisabledAxes
-		? allTimeKeys.filter((timeKey) =>
-				dayKeys.some((dayKey) => {
-					const slot = cellByDayAndTime[dayKey]?.[timeKey]
-					if (!slot) return false
-					return !(props.disabledSlots?.has(slot) ?? false)
-				}),
-			)
-		: allTimeKeys
-	const missingSlotCellCount = dayKeys.reduce((total, dayKey) => {
-		const dayCells = cellByDayAndTime[dayKey]
-		if (!dayCells) return total + timeKeys.length
-		let dayMissingCount = 0
-		for (const timeKey of timeKeys) {
-			if (!dayCells[timeKey]) {
-				dayMissingCount += 1
-			}
-		}
-		return total + dayMissingCount
-	}, 0)
 	const hasMissingSlots = missingSlotCellCount > 0
 	const activeDayKey = toDayKey(props.activeSlot)
 	const defaultMobileDayKey =
@@ -506,8 +470,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										isHighlighted,
 										selectedBackground: props.selectedBackground,
 									})
-									const slotDate = new Date(slot)
-									const slotLabel = slotDateFormatter.format(slotDate)
+									const slotLabel = formatSlotLabel(slot, 'long')
 									const availabilitySelectionLabel = toSelectionLabel({
 										selected: isSelected,
 										selectedSlotLabel: props.selectedSlotLabel,

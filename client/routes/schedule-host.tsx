@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
@@ -62,13 +63,6 @@ function areSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
 	return true
 }
 
-function getBrowserTimeZone() {
-	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	if (typeof value !== 'string') return 'UTC'
-	const normalized = value.trim()
-	return normalized || 'UTC'
-}
-
 function getSnapshotDateRangeInputs(snapshot: ScheduleSnapshot) {
 	const startSlot = snapshot.slots[0] ?? null
 	const endSlot = snapshot.slots.at(-1) ?? null
@@ -89,7 +83,6 @@ function getSnapshotDateRangeInputs(snapshot: ScheduleSnapshot) {
 			: formatDateInputValue(inclusiveRangeEndDate),
 	}
 }
-
 function buildEmptyAvailability(slots: Array<string>) {
 	return Object.fromEntries(
 		slots.map((slot) => [
