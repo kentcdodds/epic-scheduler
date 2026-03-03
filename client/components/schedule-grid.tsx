@@ -5,6 +5,7 @@ import {
 	spacing,
 	typography,
 } from '#client/styles/tokens.ts'
+import { visuallyHiddenCss } from '#client/styles/visually-hidden.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
 import { buildGridModel, toDayKey } from '#client/schedule-utils.ts'
 
@@ -12,18 +13,6 @@ type SlotAvailability = {
 	count: number
 	availableNames: Array<string>
 }
-
-const visuallyHiddenCss = {
-	position: 'absolute',
-	width: 1,
-	height: 1,
-	padding: 0,
-	margin: -1,
-	overflow: 'hidden',
-	clip: 'rect(0, 0, 0, 0)',
-	whiteSpace: 'nowrap',
-	border: 0,
-} as const
 
 const gridNavigationKeys = new Set([
 	'ArrowUp',
@@ -332,15 +321,15 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				currentButton: currentTarget,
 			})
 			event.preventDefault()
-			const toSlot = focusedButton?.dataset.slot ?? fromSlot
-			if (fromSlot && toSlot) {
-				props.onCellKeyboardNavigate?.({
-					fromSlot,
-					toSlot,
-					key: event.key,
-					shiftKey: event.shiftKey,
-				})
-			}
+			if (!focusedButton) return
+			const toSlot = focusedButton.dataset.slot
+			if (!fromSlot || !toSlot) return
+			props.onCellKeyboardNavigate?.({
+				fromSlot,
+				toSlot,
+				key: event.key,
+				shiftKey: event.shiftKey,
+			})
 		}
 
 		return (

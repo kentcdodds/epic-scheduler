@@ -2,18 +2,7 @@ import { type Handle } from 'remix/component'
 import { clientRoutes } from './routes/index.tsx'
 import { listenToRouterNavigation, Router } from './client-router.tsx'
 import { colors, spacing, typography } from './styles/tokens.ts'
-
-const srOnlyCss = {
-	position: 'absolute',
-	width: 1,
-	height: 1,
-	padding: 0,
-	margin: -1,
-	overflow: 'hidden',
-	clip: 'rect(0, 0, 0, 0)',
-	whiteSpace: 'nowrap',
-	border: 0,
-} as const
+import { visuallyHiddenCss } from './styles/visually-hidden.ts'
 
 function getRouteAnnouncement(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
@@ -110,7 +99,7 @@ export function App(handle: Handle) {
 				<a href="#main-content" css={skipToMainLinkCss}>
 					Skip to main content
 				</a>
-				<p role="status" aria-live="polite" css={srOnlyCss}>
+				<p role="status" aria-live="polite" css={visuallyHiddenCss}>
 					{routeAnnouncement}
 				</p>
 				<header>

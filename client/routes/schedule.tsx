@@ -325,6 +325,7 @@ export function ScheduleRoute(handle: Handle) {
 			}
 
 			snapshot = payload.snapshot
+			const currentSnapshot = payload.snapshot
 			isLoading = false
 
 			if (!initialNameLoaded) {
@@ -339,12 +340,26 @@ export function ScheduleRoute(handle: Handle) {
 			} else {
 				normalizeLocalSelectionAgainstBlockedSlots()
 			}
-			clearKeyboardRangeSelection()
-			if (rangeAnchor && !payload.snapshot.slots.includes(rangeAnchor)) {
+			if (
+				keyboardRangeAnchor &&
+				!currentSnapshot.slots.includes(keyboardRangeAnchor)
+			) {
+				clearKeyboardRangeSelection()
+			} else if (keyboardRangeSlots.size > 0) {
+				keyboardRangeSlots = new Set(
+					Array.from(keyboardRangeSlots).filter((slot) =>
+						currentSnapshot.slots.includes(slot),
+					),
+				)
+				if (keyboardRangeSlots.size === 0) {
+					clearKeyboardRangeSelection()
+				}
+			}
+			if (rangeAnchor && !currentSnapshot.slots.includes(rangeAnchor)) {
 				rangeAnchor = null
 				tapRangeAction = null
 			}
-			if (activeSlot && !payload.snapshot.slots.includes(activeSlot)) {
+			if (activeSlot && !currentSnapshot.slots.includes(activeSlot)) {
 				activeSlot = null
 			}
 
@@ -874,6 +889,7 @@ export function ScheduleRoute(handle: Handle) {
 		isDeletingSubmission = false
 		isRenamingSubmission = false
 		pendingRenameSourceName = null
+		connectionState = 'offline'
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
