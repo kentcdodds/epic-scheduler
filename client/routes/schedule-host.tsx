@@ -743,8 +743,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 		const rangeValidationError = getRangeValidationError(currentSnapshot)
 		if (rangeValidationError) {
-			clearSaveDebounceTimer()
 			setStatus(rangeValidationError, true)
+			queueHostSettingsSave()
 			return
 		}
 		changeVersion += 1
