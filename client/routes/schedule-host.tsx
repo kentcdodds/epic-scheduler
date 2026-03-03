@@ -421,8 +421,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				titleDraft.trim() !== previousSnapshot.schedule.title.trim())
 		const keepLocalBlocked =
 			preserveHostDrafts ||
-			(!!previousSnapshot &&
-				!areSetsEqual(blockedSlots, persistedBlockedSlots))
+			(!!previousSnapshot && !areSetsEqual(blockedSlots, persistedBlockedSlots))
 		const keepLocalRange =
 			preserveHostDrafts ||
 			(!!previousSnapshot && hasLocalRangeChanges(previousSnapshot))
