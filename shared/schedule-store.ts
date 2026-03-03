@@ -63,6 +63,8 @@ type UpdateScheduleHostSettingsInput = {
 	hostName?: string
 	title?: string
 	blockedSlots?: Array<string>
+	rangeStartUtc?: string
+	rangeEndUtc?: string
 }
 
 type ScheduleRow = {
@@ -553,6 +555,35 @@ export async function updateScheduleHostSettings(
 	if (!schedule) {
 		throw new Error('Schedule not found.')
 	}
+	const hasRangeStartUpdate = typeof input.rangeStartUtc === 'string'
+	const hasRangeEndUpdate = typeof input.rangeEndUtc === 'string'
+	if (hasRangeStartUpdate !== hasRangeEndUpdate) {
+		throw new Error('rangeStartUtc and rangeEndUtc must be provided together.')
+	}
+
+	let nextRangeStartUtc: string | null = null
+	let nextRangeEndUtc: string | null = null
+	let allowedSlotsForBlockedSlotUpdates: ReadonlySet<string> | null = null
+	let shouldRewriteBlockedSlots = false
+	if (hasRangeStartUpdate && hasRangeEndUpdate) {
+		const normalizedRangeStartUtc = parseUtcIso(
+			input.rangeStartUtc ?? '',
+			'rangeStartUtc',
+		)
+		const normalizedRangeEndUtc = parseUtcIso(
+			input.rangeEndUtc ?? '',
+			'rangeEndUtc',
+		)
+		const nextRangeSlots = buildSlots({
+			rangeStartUtc: normalizedRangeStartUtc,
+			rangeEndUtc: normalizedRangeEndUtc,
+			intervalMinutes: schedule.intervalMinutes,
+		})
+		nextRangeStartUtc = normalizedRangeStartUtc
+		nextRangeEndUtc = normalizedRangeEndUtc
+		allowedSlotsForBlockedSlotUpdates = new Set(nextRangeSlots)
+		shouldRewriteBlockedSlots = true
+	}
 
 	const updates: Array<PreparedStatementLike> = []
 	if (typeof input.hostName === 'string') {
@@ -599,21 +630,47 @@ export async function updateScheduleHostSettings(
 				.bind(schedule.id, normalizedTitle),
 		)
 	}
+	if (nextRangeStartUtc && nextRangeEndUtc) {
+		updates.push(
+			db
+				.prepare(
+					`UPDATE schedules
+					SET range_start_utc = ?2,
+						range_end_utc = ?3
+					WHERE id = ?1`,
+				)
+				.bind(schedule.id, nextRangeStartUtc, nextRangeEndUtc),
+		)
+	}
 
 	let normalizedBlockedSlots: Array<string> | null = null
 	if (Array.isArray(input.blockedSlots)) {
-		const allowedSlots = new Set(
-			buildSlots({
-				rangeStartUtc: schedule.rangeStartUtc,
-				rangeEndUtc: schedule.rangeEndUtc,
-				intervalMinutes: schedule.intervalMinutes,
-			}),
-		)
+		const allowedSlots =
+			allowedSlotsForBlockedSlotUpdates ??
+			new Set(
+				buildSlots({
+					rangeStartUtc: schedule.rangeStartUtc,
+					rangeEndUtc: schedule.rangeEndUtc,
+					intervalMinutes: schedule.intervalMinutes,
+				}),
+			)
 		normalizedBlockedSlots = normalizeSelectedSlots({
 			selectedSlots: input.blockedSlots,
 			allowedSlots,
 		})
-
+		shouldRewriteBlockedSlots = true
+	}
+	if (shouldRewriteBlockedSlots && normalizedBlockedSlots === null) {
+		const existingBlockedSlots = await getBlockedSlotsForScheduleId(
+			db,
+			schedule.id,
+		)
+		normalizedBlockedSlots = normalizeSelectedSlots({
+			selectedSlots: existingBlockedSlots,
+			allowedSlots: allowedSlotsForBlockedSlotUpdates ?? new Set<string>(),
+		})
+	}
+	if (shouldRewriteBlockedSlots) {
 		updates.push(
 			db
 				.prepare(
@@ -634,7 +691,18 @@ export async function updateScheduleHostSettings(
 		}
 	}
 
-	if (normalizedBlockedSlots !== null) {
+	if (nextRangeStartUtc && nextRangeEndUtc) {
+		await db
+			.prepare(
+				`DELETE FROM availability
+				WHERE schedule_id = ?1
+					AND (slot_start_utc < ?2 OR slot_start_utc >= ?3)`,
+			)
+			.bind(schedule.id, nextRangeStartUtc, nextRangeEndUtc)
+			.run()
+	}
+
+	if (shouldRewriteBlockedSlots && normalizedBlockedSlots !== null) {
 		await insertBlockedSlotRows({
 			db,
 			scheduleId: schedule.id,

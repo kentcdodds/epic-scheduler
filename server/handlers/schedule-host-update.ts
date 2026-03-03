@@ -11,6 +11,8 @@ type HostUpdateRequest = {
 	hostName?: unknown
 	title?: unknown
 	blockedSlots?: unknown
+	rangeStartUtc?: unknown
+	rangeEndUtc?: unknown
 }
 
 function getShareToken(pathname: string) {
@@ -109,6 +111,24 @@ export function createScheduleHostUpdateHandler(
 				)
 			}
 			if (
+				body.rangeStartUtc !== undefined &&
+				typeof body.rangeStartUtc !== 'string'
+			) {
+				return Response.json(
+					{ ok: false, error: 'rangeStartUtc must be a string.' },
+					{ status: 400 },
+				)
+			}
+			if (
+				body.rangeEndUtc !== undefined &&
+				typeof body.rangeEndUtc !== 'string'
+			) {
+				return Response.json(
+					{ ok: false, error: 'rangeEndUtc must be a string.' },
+					{ status: 400 },
+				)
+			}
+			if (
 				body.blockedSlots !== undefined &&
 				(!Array.isArray(body.blockedSlots) ||
 					body.blockedSlots.some((slot) => typeof slot !== 'string'))
@@ -125,6 +145,8 @@ export function createScheduleHostUpdateHandler(
 					hostName: toOptionalString(body.hostName),
 					title: toOptionalString(body.title),
 					blockedSlots: toOptionalStringArray(body.blockedSlots),
+					rangeStartUtc: toOptionalString(body.rangeStartUtc),
+					rangeEndUtc: toOptionalString(body.rangeEndUtc),
 				})
 			} catch (error) {
 				const message =

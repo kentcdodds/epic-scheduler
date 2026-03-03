@@ -3,6 +3,8 @@ import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
+	createSlotRangeFromDateInputs,
+	formatDateInputValue,
 	formatSlotLabel,
 	getRectangularSlotSelection,
 	toDayKey,
@@ -67,6 +69,27 @@ function getBrowserTimeZone() {
 	return normalized || 'UTC'
 }
 
+function getSnapshotDateRangeInputs(snapshot: ScheduleSnapshot) {
+	const startSlot = snapshot.slots[0] ?? null
+	const endSlot = snapshot.slots.at(-1) ?? null
+	const startDateInput = toDayKey(startSlot)
+	const endDateInput = toDayKey(endSlot)
+	if (startDateInput && endDateInput) {
+		return { startDateInput, endDateInput }
+	}
+	const rangeStartDate = new Date(snapshot.schedule.rangeStartUtc)
+	const rangeEndDate = new Date(snapshot.schedule.rangeEndUtc)
+	const inclusiveRangeEndDate = new Date(rangeEndDate.getTime() - 60_000)
+	return {
+		startDateInput: Number.isNaN(rangeStartDate.getTime())
+			? ''
+			: formatDateInputValue(rangeStartDate),
+		endDateInput: Number.isNaN(rangeEndDate.getTime())
+			? ''
+			: formatDateInputValue(inclusiveRangeEndDate),
+	}
+}
+
 function buildEmptyAvailability(slots: Array<string>) {
 	return Object.fromEntries(
 		slots.map((slot) => [
@@ -127,6 +150,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	let snapshot: ScheduleSnapshot | null = null
 	let hostNameDraft = ''
 	let titleDraft = ''
+	let rangeStartDateInput = ''
+	let rangeEndDateInput = ''
 	let blockedSlots = new Set<string>()
 	let persistedBlockedSlots = new Set<string>()
 	let excludedAttendeeIds = new Set<string>()
@@ -155,6 +180,31 @@ export function ScheduleHostRoute(handle: Handle) {
 	const saveDebounceMs = 600
 	const refreshIntervalMs = 5000
 	const reconnectDelayMs = 1800
+
+	function hasLocalRangeChanges(currentSnapshot: ScheduleSnapshot) {
+		const snapshotDateRange = getSnapshotDateRangeInputs(currentSnapshot)
+		return (
+			rangeStartDateInput !== snapshotDateRange.startDateInput ||
+			rangeEndDateInput !== snapshotDateRange.endDateInput
+		)
+	}
+
+	function getDraftRangeFromDateInputs(currentSnapshot: ScheduleSnapshot) {
+		return createSlotRangeFromDateInputs({
+			startDateInput: rangeStartDateInput,
+			endDateInput: rangeEndDateInput,
+			intervalMinutes: currentSnapshot.schedule.intervalMinutes,
+		})
+	}
+
+	function getRangeValidationError(currentSnapshot: ScheduleSnapshot) {
+		try {
+			getDraftRangeFromDateInputs(currentSnapshot)
+			return null
+		} catch (error) {
+			return error instanceof Error ? error.message : 'Invalid date range.'
+		}
+	}
 
 	function setStatus(message: string | null, error = false) {
 		statusMessage = message
@@ -327,7 +377,8 @@ export function ScheduleHostRoute(handle: Handle) {
 			normalizeName(getHostAttendeeName(snapshot))
 		const titleChanged = titleDraft.trim() !== snapshot.schedule.title.trim()
 		const blockedChanged = !areSetsEqual(blockedSlots, persistedBlockedSlots)
-		return hostNameChanged || titleChanged || blockedChanged
+		const rangeChanged = hasLocalRangeChanges(snapshot)
+		return hostNameChanged || titleChanged || blockedChanged || rangeChanged
 	}
 
 	function applySnapshot(nextSnapshot: ScheduleSnapshot) {
@@ -339,7 +390,9 @@ export function ScheduleHostRoute(handle: Handle) {
 			!!snapshot && titleDraft.trim() !== snapshot.schedule.title.trim()
 		const keepLocalBlocked =
 			!!snapshot && !areSetsEqual(blockedSlots, persistedBlockedSlots)
+		const keepLocalRange = !!snapshot && hasLocalRangeChanges(snapshot)
 		const nextBlockedSlots = toSet(nextSnapshot.blockedSlots)
+		const nextDateRange = getSnapshotDateRangeInputs(nextSnapshot)
 		snapshot = nextSnapshot
 		persistedBlockedSlots = new Set(nextBlockedSlots)
 		if (!keepLocalHostName) {
@@ -350,6 +403,10 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 		if (!keepLocalBlocked) {
 			blockedSlots = new Set(nextBlockedSlots)
+		}
+		if (!keepLocalRange) {
+			rangeStartDateInput = nextDateRange.startDateInput
+			rangeEndDateInput = nextDateRange.endDateInput
 		}
 		const validAttendeeIds = new Set(
 			nextSnapshot.attendees.map((entry) => entry.id),
@@ -494,6 +551,18 @@ export function ScheduleHostRoute(handle: Handle) {
 			setStatus('Host name is required.', true)
 			return
 		}
+		let nextRangeStartUtc = ''
+		let nextRangeEndUtc = ''
+		try {
+			const rangeDraft = getDraftRangeFromDateInputs(currentSnapshot)
+			nextRangeStartUtc = rangeDraft.rangeStartUtc
+			nextRangeEndUtc = rangeDraft.rangeEndUtc
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : 'Invalid date range.'
+			setStatus(errorMessage, true)
+			return
+		}
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
@@ -513,6 +582,8 @@ export function ScheduleHostRoute(handle: Handle) {
 					hostName,
 					title,
 					blockedSlots: sortedBlockedSlots,
+					rangeStartUtc: nextRangeStartUtc,
+					rangeEndUtc: nextRangeEndUtc,
 				}),
 			})
 			const payload = (await response.json().catch(() => null)) as {
@@ -532,12 +603,15 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			const hadQueuedLocalChanges = pendingSave
 			const nextBlockedSlots = toSet(payload.snapshot.blockedSlots)
+			const nextDateRange = getSnapshotDateRangeInputs(payload.snapshot)
 			snapshot = payload.snapshot
 			persistedBlockedSlots = new Set(nextBlockedSlots)
 			if (!hadQueuedLocalChanges && saveVersion === changeVersion) {
 				hostNameDraft = getHostAttendeeName(payload.snapshot)
 				titleDraft = payload.snapshot.schedule.title
 				blockedSlots = new Set(nextBlockedSlots)
+				rangeStartDateInput = nextDateRange.startDateInput
+				rangeEndDateInput = nextDateRange.endDateInput
 			}
 			setStatus('Host settings synced.')
 			handle.update()
@@ -564,7 +638,10 @@ export function ScheduleHostRoute(handle: Handle) {
 	function queueHostSettingsSave() {
 		clearSaveDebounceTimer()
 		if (handle.signal.aborted) return
-		if (!snapshot) return
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) return
+		const rangeValidationError = getRangeValidationError(currentSnapshot)
+		if (rangeValidationError) return
 		if (!hasLocalHostChanges()) return
 		if (isSaving) {
 			pendingSave = true
@@ -620,6 +697,36 @@ export function ScheduleHostRoute(handle: Handle) {
 		handle.update()
 	}
 
+	function updateRangeDraft(next: {
+		startDateInput?: string
+		endDateInput?: string
+	}) {
+		if (next.startDateInput !== undefined) {
+			rangeStartDateInput = next.startDateInput
+		}
+		if (next.endDateInput !== undefined) {
+			rangeEndDateInput = next.endDateInput
+		}
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) {
+			handle.update()
+			return
+		}
+		const rangeValidationError = getRangeValidationError(currentSnapshot)
+		if (rangeValidationError) {
+			clearSaveDebounceTimer()
+			setStatus(rangeValidationError, true)
+			return
+		}
+		changeVersion += 1
+		queueHostSettingsSave()
+		if (statusError) {
+			statusError = false
+			statusMessage = null
+		}
+		handle.update()
+	}
+
 	handle.queueTask(async () => {
 		const nextPathname = getPathname()
 		if (nextPathname === lastPathname) return
@@ -633,6 +740,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		snapshot = null
 		hostNameDraft = ''
 		titleDraft = ''
+		rangeStartDateInput = ''
+		rangeEndDateInput = ''
 		blockedSlots = new Set<string>()
 		persistedBlockedSlots = new Set<string>()
 		excludedAttendeeIds = new Set<string>()
@@ -975,63 +1084,135 @@ export function ScheduleHostRoute(handle: Handle) {
 						</p>
 					) : currentSnapshot ? (
 						<>
-							<label css={{ display: 'grid', gap: spacing.xs }}>
-								<span
-									css={{ color: colors.text, fontSize: typography.fontSize.sm }}
-								>
-									Host name
-								</span>
-								<input
-									type="text"
-									value={hostNameDraft}
-									on={{
-										input: (event) => {
-											const nextHostName = event.currentTarget.value
-											if (nextHostName === hostNameDraft) return
-											hostNameDraft = nextHostName
-											changeVersion += 1
-											queueHostSettingsSave()
-											handle.update()
-										},
-									}}
-									css={{
-										padding: `${spacing.sm} ${spacing.md}`,
-										borderRadius: radius.md,
-										border: `1px solid ${colors.border}`,
-										backgroundColor: colors.background,
-										color: colors.text,
-									}}
-								/>
-							</label>
-
-							<label css={{ display: 'grid', gap: spacing.xs }}>
-								<span
-									css={{ color: colors.text, fontSize: typography.fontSize.sm }}
-								>
-									Schedule title
-								</span>
-								<input
-									type="text"
-									value={titleDraft}
-									on={{
-										input: (event) => {
-											const nextTitle = event.currentTarget.value
-											if (nextTitle === titleDraft) return
-											titleDraft = nextTitle
-											changeVersion += 1
-											queueHostSettingsSave()
-											handle.update()
-										},
-									}}
-									css={{
-										padding: `${spacing.sm} ${spacing.md}`,
-										borderRadius: radius.md,
-										border: `1px solid ${colors.border}`,
-										backgroundColor: colors.background,
-										color: colors.text,
-									}}
-								/>
-							</label>
+							<div
+								css={{
+									display: 'grid',
+									gap: spacing.md,
+									gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+									[mq.mobile]: {
+										gridTemplateColumns: '1fr',
+									},
+								}}
+							>
+								<label css={{ display: 'grid', gap: spacing.xs }}>
+									<span
+										css={{
+											color: colors.text,
+											fontSize: typography.fontSize.sm,
+										}}
+									>
+										Host name
+									</span>
+									<input
+										type="text"
+										value={hostNameDraft}
+										on={{
+											input: (event) => {
+												const nextHostName = event.currentTarget.value
+												if (nextHostName === hostNameDraft) return
+												hostNameDraft = nextHostName
+												changeVersion += 1
+												queueHostSettingsSave()
+												handle.update()
+											},
+										}}
+										css={{
+											padding: `${spacing.sm} ${spacing.md}`,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.background,
+											color: colors.text,
+										}}
+									/>
+								</label>
+								<label css={{ display: 'grid', gap: spacing.xs }}>
+									<span
+										css={{
+											color: colors.text,
+											fontSize: typography.fontSize.sm,
+										}}
+									>
+										Schedule title
+									</span>
+									<input
+										type="text"
+										value={titleDraft}
+										on={{
+											input: (event) => {
+												const nextTitle = event.currentTarget.value
+												if (nextTitle === titleDraft) return
+												titleDraft = nextTitle
+												changeVersion += 1
+												queueHostSettingsSave()
+												handle.update()
+											},
+										}}
+										css={{
+											padding: `${spacing.sm} ${spacing.md}`,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.background,
+											color: colors.text,
+										}}
+									/>
+								</label>
+								<label css={{ display: 'grid', gap: spacing.xs }}>
+									<span
+										css={{
+											color: colors.text,
+											fontSize: typography.fontSize.sm,
+										}}
+									>
+										Start date
+									</span>
+									<input
+										type="date"
+										value={rangeStartDateInput}
+										on={{
+											change: (event) => {
+												updateRangeDraft({
+													startDateInput: event.currentTarget.value,
+												})
+											},
+										}}
+										css={{
+											padding: `${spacing.sm} ${spacing.md}`,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.background,
+											color: colors.text,
+										}}
+									/>
+								</label>
+								<label css={{ display: 'grid', gap: spacing.xs }}>
+									<span
+										css={{
+											color: colors.text,
+											fontSize: typography.fontSize.sm,
+										}}
+									>
+										End date
+									</span>
+									<input
+										type="date"
+										value={rangeEndDateInput}
+										on={{
+											change: (event) => {
+												updateRangeDraft({
+													endDateInput: event.currentTarget.value,
+												})
+											},
+										}}
+										css={{
+											padding: `${spacing.sm} ${spacing.md}`,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.background,
+											color: colors.text,
+										}}
+									/>
+								</label>
+							</div>
 
 							<section
 								css={{
