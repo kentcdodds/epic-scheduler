@@ -58,6 +58,17 @@ type UpsertAvailabilityInput = {
 	isHost?: boolean
 }
 
+type DeleteAttendeeSubmissionInput = {
+	shareToken: string
+	attendeeName: string
+}
+
+type RenameAttendeeSubmissionInput = {
+	shareToken: string
+	currentAttendeeName: string
+	nextAttendeeName: string
+}
+
 type UpdateScheduleHostSettingsInput = {
 	shareToken: string
 	hostName?: string
@@ -544,6 +555,122 @@ export async function upsertAttendeeAvailability(
 	return {
 		scheduleId: schedule.id,
 		attendeeId: attendee.id,
+	}
+}
+
+export async function deleteAttendeeSubmission(
+	db: D1DatabaseLike,
+	input: DeleteAttendeeSubmissionInput,
+) {
+	const schedule = await getScheduleByShareToken(db, input.shareToken)
+	if (!schedule) {
+		throw new Error('Schedule not found.')
+	}
+
+	const attendeeName = normalizeName(input.attendeeName)
+	if (!attendeeName) {
+		throw new Error('Attendee name is required.')
+	}
+
+	const nameNorm = normalizeNameForMatch(attendeeName)
+	const attendee = await db
+		.prepare(
+			`SELECT
+				id,
+				is_host
+			FROM attendees
+			WHERE schedule_id = ?1
+				AND name_norm = ?2
+			LIMIT 1`,
+		)
+		.bind(schedule.id, nameNorm)
+		.first<{ id: string; is_host: number }>()
+	if (!attendee) {
+		return { scheduleId: schedule.id, deleted: false }
+	}
+	if (attendee.is_host === 1) {
+		throw new Error('Host submission cannot be deleted.')
+	}
+
+	await db
+		.prepare(
+			`DELETE FROM attendees
+			WHERE id = ?1`,
+		)
+		.bind(attendee.id)
+		.run()
+
+	return { scheduleId: schedule.id, deleted: true }
+}
+
+export async function renameAttendeeSubmission(
+	db: D1DatabaseLike,
+	input: RenameAttendeeSubmissionInput,
+) {
+	const schedule = await getScheduleByShareToken(db, input.shareToken)
+	if (!schedule) {
+		throw new Error('Schedule not found.')
+	}
+
+	const currentAttendeeName = normalizeName(input.currentAttendeeName)
+	if (!currentAttendeeName) {
+		throw new Error('Current attendee name is required.')
+	}
+	const nextAttendeeName = normalizeName(input.nextAttendeeName)
+	if (!nextAttendeeName) {
+		throw new Error('Next attendee name is required.')
+	}
+
+	const currentNameNorm = normalizeNameForMatch(currentAttendeeName)
+	const nextNameNorm = normalizeNameForMatch(nextAttendeeName)
+	const attendee = await db
+		.prepare(
+			`SELECT
+				id,
+				is_host
+			FROM attendees
+			WHERE schedule_id = ?1
+				AND name_norm = ?2
+			LIMIT 1`,
+		)
+		.bind(schedule.id, currentNameNorm)
+		.first<{ id: string; is_host: number }>()
+	if (!attendee) {
+		throw new Error('Attendee submission not found.')
+	}
+	if (attendee.is_host === 1) {
+		throw new Error('Host submission cannot be renamed.')
+	}
+
+	if (currentNameNorm !== nextNameNorm) {
+		const conflict = await db
+			.prepare(
+				`SELECT id
+				FROM attendees
+				WHERE schedule_id = ?1
+					AND name_norm = ?2
+				LIMIT 1`,
+			)
+			.bind(schedule.id, nextNameNorm)
+			.first<{ id: string }>()
+		if (conflict) {
+			throw new Error('An attendee with that name already exists.')
+		}
+	}
+
+	await db
+		.prepare(
+			`UPDATE attendees
+			SET name = ?2,
+				name_norm = ?3
+			WHERE id = ?1`,
+		)
+		.bind(attendee.id, nextAttendeeName, nextNameNorm)
+		.run()
+
+	return {
+		scheduleId: schedule.id,
+		renamed: currentAttendeeName !== nextAttendeeName,
 	}
 }
 

@@ -6,7 +6,9 @@ import { createScheduleHostReadHandler } from './handlers/schedule-host-read.ts'
 import { scheduleHostPage, schedulePage } from './handlers/app-pages.ts'
 import { home } from './handlers/home.ts'
 import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
+import { createScheduleDeleteSubmissionHandler } from './handlers/schedule-delete-submission.ts'
 import { createScheduleHostUpdateHandler } from './handlers/schedule-host-update.ts'
+import { createScheduleRenameSubmissionHandler } from './handlers/schedule-rename-submission.ts'
 import { createScheduleReadHandler } from './handlers/schedule-read.ts'
 import { createScheduleSubmitAvailabilityHandler } from './handlers/schedule-submit-availability.ts'
 import {
@@ -47,6 +49,14 @@ export function createAppRouter(appEnv: AppEnv) {
 	router.map(
 		routes.scheduleSubmitAvailability,
 		createScheduleSubmitAvailabilityHandler(appEnv),
+	)
+	router.map(
+		routes.scheduleDeleteSubmission,
+		createScheduleDeleteSubmissionHandler(appEnv),
+	)
+	router.map(
+		routes.scheduleRenameSubmission,
+		createScheduleRenameSubmissionHandler(appEnv),
 	)
 	router.map(routes.scheduleHostUpdate, createScheduleHostUpdateHandler(appEnv))
 

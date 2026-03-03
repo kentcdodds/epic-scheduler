@@ -2,6 +2,7 @@ import { type BuildAction } from 'remix/fetch-router'
 import { createSchedule, getScheduleSnapshot } from '#shared/schedule-store.ts'
 import { type AppEnv } from '#types/env-schema.ts'
 import { type routes } from '#server/routes.ts'
+import { isRecordValue } from './schedule-handler-utils.ts'
 
 type CreateScheduleRequest = {
 	title?: unknown
@@ -34,10 +35,6 @@ function toIntervalMinutes(value: unknown) {
 		}
 	}
 	return 0
-}
-
-function isRecordValue(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isCreateScheduleValidationError(message: string) {

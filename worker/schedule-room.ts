@@ -1,5 +1,10 @@
 import { DurableObject } from 'cloudflare:workers'
-import { upsertAttendeeAvailability } from '#shared/schedule-store.ts'
+import {
+	deleteAttendeeSubmission,
+	renameAttendeeSubmission,
+	upsertAttendeeAvailability,
+} from '#shared/schedule-store.ts'
+import { isRecordValue } from '#shared/record-utils.ts'
 
 type BroadcastPayload = {
 	type: string
@@ -13,8 +18,35 @@ type AvailabilityUpdatePayload = {
 	selectedSlots?: unknown
 }
 
+type DeleteAvailabilityPayload = {
+	shareToken?: unknown
+	name?: unknown
+}
+
+type RenameAvailabilityPayload = {
+	shareToken?: unknown
+	currentName?: unknown
+	nextName?: unknown
+}
+
 function isAvailabilityClientError(message: string) {
 	return /(not found|required|invalid|must|range|interval)/i.test(message)
+}
+
+function isAvailabilityValidationError(message: string) {
+	return /(required|invalid|must|range|interval)/i.test(message)
+}
+
+function isAvailabilityNotFoundError(message: string) {
+	return /not found/i.test(message)
+}
+
+function isAvailabilityConflictError(message: string) {
+	return /already exists/i.test(message)
+}
+
+function isAvailabilityForbiddenError(message: string) {
+	return /host submission/i.test(message)
 }
 
 export class ScheduleRoom extends DurableObject<Env> {
@@ -70,6 +102,12 @@ export class ScheduleRoom extends DurableObject<Env> {
 					{ status: 400 },
 				)
 			}
+			if (!isRecordValue(payload)) {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
 
 			const shareToken =
 				typeof payload.shareToken === 'string' ? payload.shareToken : ''
@@ -109,6 +147,127 @@ export class ScheduleRoom extends DurableObject<Env> {
 				console.error('schedule room availability update failed:', error)
 				return Response.json(
 					{ ok: false, error: 'Unable to save availability.' },
+					{ status: 500 },
+				)
+			}
+		}
+
+		if (url.pathname === '/availability/delete' && request.method === 'POST') {
+			let payload: DeleteAvailabilityPayload
+			try {
+				payload = (await request.json()) as DeleteAvailabilityPayload
+			} catch {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+			if (!isRecordValue(payload)) {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+
+			const shareToken =
+				typeof payload.shareToken === 'string' ? payload.shareToken : ''
+			const name = typeof payload.name === 'string' ? payload.name : ''
+
+			try {
+				const result = await deleteAttendeeSubmission(this.env.APP_DB, {
+					shareToken,
+					attendeeName: name,
+				})
+				if (result.deleted) {
+					this.broadcast({
+						type: 'schedule-updated',
+						shareToken,
+						updatedAt: new Date().toISOString(),
+					})
+				}
+				return Response.json({ ok: true, deleted: result.deleted })
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: 'Unable to delete availability.'
+				if (isAvailabilityNotFoundError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 404 })
+				}
+				if (isAvailabilityForbiddenError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 403 })
+				}
+				if (isAvailabilityValidationError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 400 })
+				}
+
+				console.error('schedule room availability delete failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to delete availability.' },
+					{ status: 500 },
+				)
+			}
+		}
+
+		if (url.pathname === '/availability/rename' && request.method === 'POST') {
+			let payload: RenameAvailabilityPayload
+			try {
+				payload = (await request.json()) as RenameAvailabilityPayload
+			} catch {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+			if (!isRecordValue(payload)) {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+
+			const shareToken =
+				typeof payload.shareToken === 'string' ? payload.shareToken : ''
+			const currentName =
+				typeof payload.currentName === 'string' ? payload.currentName : ''
+			const nextName =
+				typeof payload.nextName === 'string' ? payload.nextName : ''
+
+			try {
+				const result = await renameAttendeeSubmission(this.env.APP_DB, {
+					shareToken,
+					currentAttendeeName: currentName,
+					nextAttendeeName: nextName,
+				})
+				if (result.renamed) {
+					this.broadcast({
+						type: 'schedule-updated',
+						shareToken,
+						updatedAt: new Date().toISOString(),
+					})
+				}
+				return Response.json({ ok: true, renamed: result.renamed })
+			} catch (error) {
+				const message =
+					error instanceof Error
+						? error.message
+						: 'Unable to rename availability submission.'
+				if (isAvailabilityNotFoundError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 404 })
+				}
+				if (isAvailabilityForbiddenError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 403 })
+				}
+				if (isAvailabilityConflictError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 409 })
+				}
+				if (isAvailabilityValidationError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 400 })
+				}
+
+				console.error('schedule room availability rename failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to rename availability submission.' },
 					{ status: 500 },
 				)
 			}
