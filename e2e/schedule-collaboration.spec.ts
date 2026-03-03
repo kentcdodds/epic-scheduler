@@ -20,6 +20,7 @@ test('attendee update appears in host schedule view', async ({
 	const attendeeUrl = `${hostDashboardUrl.origin}/s/${shareToken}`
 	await page.goto(`${attendeeUrl}?name=Host`)
 	await expect(page).toHaveURL(new RegExp(`/s/${shareToken}`))
+	// Both desktop and mobile tables are rendered; only one is visible.
 	const hostChosenSlot = page
 		.locator('[data-schedule-grid-shell] table:visible')
 		.first()
@@ -40,6 +41,7 @@ test('attendee update appears in host schedule view', async ({
 		await attendeePage.goto(`${attendeeUrl}?name=Alex`)
 		await attendeePage.getByLabel('Your name').fill('Alex')
 
+		// Scope to the visible table so this test is viewport-agnostic.
 		const candidateSlot = attendeePage
 			.locator('[data-schedule-grid-shell] table:visible')
 			.first()
