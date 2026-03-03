@@ -21,7 +21,7 @@ test('host blocked slots propagate to attendee in realtime', async ({
 	try {
 		await attendeePage.goto(`/s/${shareToken}?name=Alex`)
 		await attendeePage.getByLabel('Your name').fill('Alex')
-		await expect(attendeePage.getByText('Realtime connected')).toBeVisible({
+		await expect(attendeePage.getByText('Hosted by Host')).toBeVisible({
 			timeout: 12_000,
 		})
 

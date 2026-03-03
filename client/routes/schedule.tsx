@@ -64,7 +64,6 @@ export function ScheduleRoute(handle: Handle) {
 	let statusError = false
 	let isSaving = false
 	let isLoading = true
-	let connectionState: ConnectionState = 'connecting'
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let offlinePollTimer: ReturnType<typeof setInterval> | null = null
@@ -201,7 +200,6 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function setConnectionState(nextState: ConnectionState) {
-		connectionState = nextState
 		if (nextState === 'offline') {
 			if (!offlinePollTimer) {
 				offlinePollTimer = setInterval(() => {
@@ -535,7 +533,6 @@ export function ScheduleRoute(handle: Handle) {
 		pendingSave = false
 		isSaving = false
 		pointerSelection.cleanup()
-		connectionState = 'offline'
 		isLoading = true
 		initialNameLoaded = false
 		setStatus(null, false)
@@ -585,12 +582,9 @@ export function ScheduleRoute(handle: Handle) {
 					}))
 		const activeSlotBlocked =
 			activeSlotValue !== null && blockedSlots.has(activeSlotValue)
-		const connectionLabel =
-			connectionState === 'live'
-				? 'Realtime connected'
-				: connectionState === 'connecting'
-					? 'Connecting realtime…'
-					: `Realtime unavailable; polling every ${Math.floor(offlinePollIntervalMs / 1000)}s`
+		const hostName =
+			currentSnapshot?.attendees.find((entry) => entry.isHost)?.name ??
+			'the organizer'
 
 		if (!shareToken) {
 			return (
@@ -628,11 +622,33 @@ export function ScheduleRoute(handle: Handle) {
 						{currentSnapshot?.schedule.title ?? 'Schedule'}
 					</h1>
 					<p css={{ margin: 0, color: colors.textMuted }}>
-						Share token: <code>{shareToken}</code>
+						Hosted by {hostName}
 					</p>
-					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>
-						Need host controls? Ask the organizer for their host dashboard link.
+						Enter your name, then mark every time that works for you.
+					</p>
+					<p
+						css={{
+							margin: 0,
+							color: colors.textMuted,
+							[mq.mobile]: {
+								display: 'none',
+							},
+						}}
+					>
+						Desktop: click and drag across slots to add or remove availability.
+					</p>
+					<p
+						css={{
+							margin: 0,
+							color: colors.textMuted,
+							display: 'none',
+							[mq.mobile]: {
+								display: 'block',
+							},
+						}}
+					>
+						Mobile: tap one slot to start a range, then tap another to apply it.
 					</p>
 				</header>
 
