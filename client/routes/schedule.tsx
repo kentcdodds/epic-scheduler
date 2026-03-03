@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
@@ -38,13 +39,6 @@ function parseShareToken(pathname: string) {
 	if (segments.length < 2) return ''
 	if (segments[0] !== 's') return ''
 	return segments[1] ?? ''
-}
-
-function getBrowserTimeZone() {
-	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	if (typeof value !== 'string') return 'UTC'
-	const normalized = value.trim()
-	return normalized || 'UTC'
 }
 
 function toWebSocketUrl(path: string) {

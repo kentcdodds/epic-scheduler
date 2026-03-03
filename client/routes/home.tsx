@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { navigate } from '#client/client-router.tsx'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { setDocumentTitle } from '#client/document-title.ts'
@@ -39,13 +40,6 @@ function buildDefaultSelection(slots: Array<string>) {
 		}
 	}
 	return selected
-}
-
-function getBrowserTimeZone() {
-	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	if (typeof value !== 'string') return 'UTC'
-	const normalized = value.trim()
-	return normalized || 'UTC'
 }
 
 export function HomeRoute(handle: Handle) {

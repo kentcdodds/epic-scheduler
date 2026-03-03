@@ -1,11 +1,15 @@
+import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { getScheduleCellBackgroundColor } from '#client/schedule-grid-colors.ts'
+import {
+	buildScheduleGridTableModel,
+	formatScheduleGridSlotLabel,
+} from '#client/schedule-grid-model.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
 	getMaxAvailabilityCount,
 } from '#client/schedule-snapshot-utils.ts'
 import {
-	buildGridModel,
 	findSelectionForAttendee,
 	formatSlotForAttendeeTimeZone,
 } from '#client/schedule-utils.ts'
@@ -20,24 +24,10 @@ import {
 } from './schedule-widget-shared.js'
 import { createWidgetHostBridge } from './widget-host-bridge.js'
 
-const slotDateFormatter = new Intl.DateTimeFormat(undefined, {
-	weekday: 'long',
-	month: 'long',
-	day: 'numeric',
-	hour: 'numeric',
-	minute: '2-digit',
-})
-
 function getApiBaseUrl(rootElement: HTMLElement) {
 	const configuredBaseUrl = readNonEmptyString(rootElement.dataset.apiBaseUrl)
 	if (configuredBaseUrl) return new URL('/', configuredBaseUrl)
 	return new URL('/', window.location.href)
-}
-function getBrowserTimeZone() {
-	const value = Intl.DateTimeFormat().resolvedOptions().timeZone
-	if (typeof value !== 'string') return 'UTC'
-	const normalized = value.trim()
-	return normalized || 'UTC'
 }
 
 function escapeHtml(value: string) {
@@ -199,7 +189,7 @@ function setupScheduleWidget() {
 						})
 						.join('')}</ul>`
 				: '<p class="scheduler-muted">None</p>'
-		const formattedSlot = slotDateFormatter.format(new Date(activeSlotValue))
+		const formattedSlot = formatScheduleGridSlotLabel(activeSlotValue)
 
 		slotDetailsElement.hidden = false
 		slotDetailsElement.innerHTML = `
@@ -234,7 +224,7 @@ function setupScheduleWidget() {
 		})
 		const slotAvailability = createSlotAvailability(snapshot)
 		const maxAvailabilityCount = getMaxAvailabilityCount(slotAvailability)
-		const grid = buildGridModel(snapshot.slots)
+		const grid = buildScheduleGridTableModel({ slots: snapshot.slots })
 		const { dayKeys, dayLabels, timeKeys, timeLabels, cellByDayAndTime } = grid
 		if (dayKeys.length === 0 || timeKeys.length === 0) {
 			gridHostElement.innerHTML = `
@@ -280,7 +270,7 @@ function setupScheduleWidget() {
 							maxCount: maxAvailabilityCount,
 							isSelected,
 						})
-						const slotLabel = slotDateFormatter.format(new Date(slot))
+						const slotLabel = formatScheduleGridSlotLabel(slot)
 						const attendeeLabel =
 							availability.count > 0
 								? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
