@@ -146,7 +146,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				css={{
 					border: `1px solid ${colors.border}`,
 					borderRadius: radius.lg,
-					overflow: 'auto',
+					overflowX: 'auto',
 					backgroundColor: colors.surface,
 					[mq.mobile]: compact
 						? {
