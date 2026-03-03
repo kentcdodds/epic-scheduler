@@ -2135,10 +2135,21 @@ export function ScheduleHostRoute(handle: Handle) {
 																on={{
 																	click: () => {
 																		if (pendingSubmissionAction !== null) return
+																		const previousEditingSubmissionId =
+																			editingSubmissionId
 																		editingSubmissionId =
 																			editingSubmissionId === attendee.id
 																				? null
 																				: attendee.id
+																		if (
+																			previousEditingSubmissionId &&
+																			previousEditingSubmissionId !==
+																				attendee.id
+																		) {
+																			submissionErrorById.delete(
+																				previousEditingSubmissionId,
+																			)
+																		}
 																		submissionErrorById.delete(attendee.id)
 																		handle.update()
 																	},
