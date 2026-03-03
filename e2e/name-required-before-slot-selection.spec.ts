@@ -6,12 +6,14 @@ function readSelectedCount(text: string | null) {
 	return Number.parseInt(match[1] ?? '-1', 10)
 }
 
-test('home slot selection requires a name and focuses the name input', async ({
+test('home slot selection requires title and host in order', async ({
 	page,
 }) => {
 	await page.goto('/')
 
+	const scheduleTitleInput = page.getByLabel('Schedule title')
 	const nameInput = page.getByLabel('Your name')
+	await expect(scheduleTitleInput).toHaveValue('')
 	await expect(nameInput).toHaveValue('')
 
 	const selectedCountLabel = page.getByText(/selected slot/)
@@ -25,14 +27,36 @@ test('home slot selection requires a name and focuses the name input', async ({
 			'[data-schedule-grid-shell] table:visible button[data-slot]:visible',
 		)
 		.first()
+	const scheduleTitleError = page.locator('#schedule-title-error')
+	const hostNameError = page.locator('#host-name-error')
 	await expect(firstSlot).toBeVisible()
 	await firstSlot.click()
 
-	await expect(page.getByRole('alert')).toContainText(
-		'Name is required before making a submission.',
+	await expect(scheduleTitleError).toContainText(
+		'Schedule name is required before making a submission.',
+	)
+	await expect(hostNameError).toHaveCount(0)
+	await expect(scheduleTitleInput).toBeFocused()
+	expect(readSelectedCount(await selectedCountLabel.textContent())).toBe(
+		initialSelectedCount,
+	)
+
+	await page.keyboard.type('Team sync')
+	await expect(scheduleTitleInput).toHaveValue('Team sync')
+
+	await firstSlot.click()
+	await expect(hostNameError).toContainText(
+		'Host name is required before making a submission.',
 	)
 	await expect(nameInput).toBeFocused()
 	expect(readSelectedCount(await selectedCountLabel.textContent())).toBe(
+		initialSelectedCount,
+	)
+
+	await page.keyboard.type('Host')
+	await expect(nameInput).toHaveValue('Host')
+	await firstSlot.click()
+	expect(readSelectedCount(await selectedCountLabel.textContent())).not.toBe(
 		initialSelectedCount,
 	)
 })
@@ -41,6 +65,7 @@ test('attendee slot selection requires a name and focuses the name input', async
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
@@ -66,7 +91,7 @@ test('attendee slot selection requires a name and focuses the name input', async
 	await expect(firstEditableSlot).toBeVisible()
 	await firstEditableSlot.click()
 
-	await expect(page.getByRole('alert')).toContainText(
+	await expect(page.locator('#attendee-name-error')).toContainText(
 		'Name is required before making a submission.',
 	)
 	await expect(nameInput).toBeFocused()

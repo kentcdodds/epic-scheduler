@@ -10,6 +10,7 @@ test('home drag selection applies on release and Escape cancels', async ({
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 
 	const selectedCountLabel = page.getByText(/selected slot/)

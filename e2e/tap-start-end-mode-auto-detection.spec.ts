@@ -29,6 +29,7 @@ test('home grid auto-switches between touch tap mode and mouse drag mode', async
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 
 	const selectedSlot = page.locator('button[aria-pressed="true"]').first()
@@ -68,6 +69,7 @@ test('shared schedule grid auto-switches between touch tap mode and mouse drag m
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)

@@ -13,6 +13,7 @@ test('home mobile tap-range mode can deselect a selected slot', async ({
 }) => {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 
 	const selectedCountLabel = page.getByText(/selected slot/)

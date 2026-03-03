@@ -72,6 +72,7 @@ export function ScheduleRoute(handle: Handle) {
 	let useTapRangeMode = detectTapRangeMode()
 	let statusMessage: string | null = null
 	let statusError = false
+	let attendeeNameError: string | null = null
 	let isSaving = false
 	let isDeletingSubmission = false
 	let isRenamingSubmission = false
@@ -108,6 +109,20 @@ export function ScheduleRoute(handle: Handle) {
 			)
 			nameInput?.focus()
 		}, 0)
+	}
+
+	function ensureAttendeeNameProvided() {
+		const normalizedName = normalizeName(attendeeName)
+		if (normalizedName) {
+			if (attendeeNameError) {
+				attendeeNameError = null
+			}
+			return normalizedName
+		}
+		attendeeNameError = nameRequiredMessage
+		focusAttendeeNameInput()
+		handle.update()
+		return null
 	}
 
 	function getPathname() {
@@ -400,10 +415,8 @@ export function ScheduleRoute(handle: Handle) {
 			pendingSave = true
 			return
 		}
-		const normalizedName = normalizeName(attendeeName)
+		const normalizedName = ensureAttendeeNameProvided()
 		if (!normalizedName) {
-			setStatus(nameRequiredMessage, true)
-			focusAttendeeNameInput()
 			return
 		}
 
@@ -752,10 +765,8 @@ export function ScheduleRoute(handle: Handle) {
 			handle.update()
 			return false
 		}
-		const normalizedName = normalizeName(attendeeName)
+		const normalizedName = ensureAttendeeNameProvided()
 		if (!normalizedName) {
-			setStatus(nameRequiredMessage, true)
-			focusAttendeeNameInput()
 			return false
 		}
 		return true
@@ -906,6 +917,7 @@ export function ScheduleRoute(handle: Handle) {
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
+		attendeeNameError = null
 		setStatus(null, false)
 		await loadSnapshot()
 		connectSocket()
@@ -1136,6 +1148,10 @@ export function ScheduleRoute(handle: Handle) {
 								name="attendeeName"
 								value={attendeeName}
 								placeholder="Add your name"
+								aria-invalid={attendeeNameError ? 'true' : undefined}
+								aria-describedby={
+									attendeeNameError ? 'attendee-name-error' : undefined
+								}
 								on={{
 									input: (event) => {
 										const nextName = event.currentTarget.value
@@ -1158,6 +1174,9 @@ export function ScheduleRoute(handle: Handle) {
 										) {
 											pendingRenameSourceName = previousPersistedName
 										}
+										if (normalizeName(attendeeName)) {
+											attendeeNameError = null
+										}
 										persistedSelectedSlots =
 											getPersistedSelectionForName(attendeeName)
 										if (!hasDirtyChanges) {
@@ -1175,11 +1194,24 @@ export function ScheduleRoute(handle: Handle) {
 								css={{
 									padding: `${spacing.sm} ${spacing.md}`,
 									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
+									border: `1px solid ${attendeeNameError ? colors.error : colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
 								}}
 							/>
+							{attendeeNameError ? (
+								<p
+									id="attendee-name-error"
+									role="alert"
+									css={{
+										margin: 0,
+										color: colors.error,
+										fontSize: typography.fontSize.xs,
+									}}
+								>
+									{attendeeNameError}
+								</p>
+							) : null}
 						</label>
 						<div
 							css={{
