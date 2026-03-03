@@ -286,16 +286,8 @@ export function ScheduleHostRoute(handle: Handle) {
 			handle.update()
 		},
 		canUpdateSelection: () => !usePreviewTapRangeMode,
-		getSelectionSlots: (startSlot, endSlot) => {
-			if (!snapshot) return new Set<string>()
-			return new Set(
-				getRectangularSlotSelection({
-					slots: snapshot.slots,
-					startSlot,
-					endSlot,
-				}).filter((slot) => !blockedSlots.has(slot)),
-			)
-		},
+		getSelectionSlots: (startSlot, endSlot) =>
+			getPreviewSelectionSlots(startSlot, endSlot),
 		applySelection: ({ slots }) => {
 			const nextSelection = new Set(slots)
 			if (areSetsEqual(previewSelectedSlots, nextSelection)) return false
@@ -1020,6 +1012,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handlePreviewSelectionClick(slot: string, event: MouseEvent) {
+		// In non-tap mode, pointer drag handles selection and clicks (`event.detail > 0`)
+		// should be ignored. Keep keyboard activation (`event.detail === 0`) working.
 		if (!usePreviewTapRangeMode && event.detail > 0) return
 		if (blockedSlots.has(slot)) return
 		if (usePreviewTapRangeMode) {
@@ -1217,9 +1211,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			? 'included in pending drag selection'
 			: 'included in pending keyboard range selection'
 		const hostRangeAnchor = keyboardRangeAnchor
-		const previewSelectedSlotsForSummary = previewSelection.state.mode
+		const previewSelectionSource = previewSelection.state.mode
 			? previewSelection.state.slots
 			: previewSelectedSlots
+		const previewSelectedSlotsForSummary = new Set(
+			Array.from(previewSelectionSource).filter(
+				(slot) => !blockedSlots.has(slot),
+			),
+		)
 		const previewSelectionSlotsSorted = Array.from(
 			previewSelectedSlotsForSummary,
 		).sort((left, right) => left.localeCompare(right))
@@ -1280,10 +1279,16 @@ export function ScheduleHostRoute(handle: Handle) {
 			.map((attendee) => {
 				const availableSlotsForAttendee =
 					includedAvailabilityById.get(attendee.id) ?? new Set<string>()
+				let totalAvailableSlots = 0
+				for (const slot of availableSlotsForAttendee) {
+					if (!blockedSlots.has(slot)) {
+						totalAvailableSlots += 1
+					}
+				}
 				return {
 					id: attendee.id,
 					name: attendee.name,
-					totalAvailableSlots: availableSlotsForAttendee.size,
+					totalAvailableSlots,
 					timeZoneLabel: attendee.timeZone ?? 'timezone unknown',
 				}
 			})
@@ -2067,6 +2072,9 @@ export function ScheduleHostRoute(handle: Handle) {
 												{previewRangeSummaryEntries.map((entry) => (
 													<li
 														data-host-preview-attendee
+														data-can-attend-whole-window={
+															entry.canAttendEntireRange ? 'true' : 'false'
+														}
 														key={`preview-range-attendee-${entry.id}`}
 														css={{
 															color: entry.canAttendEntireRange
@@ -2091,8 +2099,9 @@ export function ScheduleHostRoute(handle: Handle) {
 																css={{
 																	color: colors.text,
 																	fontWeight: typography.fontWeight.medium,
-																	display: 'inline-block',
-																	backgroundImage: `linear-gradient(to top, transparent 46%, ${colors.error} 46%, ${colors.error} 58%, transparent 58%)`,
+																	textDecoration: 'line-through',
+																	textDecorationColor: colors.error,
+																	textDecorationThickness: '2px',
 																}}
 															>
 																{entry.name}

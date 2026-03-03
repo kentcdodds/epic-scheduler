@@ -487,7 +487,9 @@ test('host preview attendee summary sorts by selected window coverage', async ({
 		throw new Error('Expected host dashboard snapshot.')
 	}
 	const blockedSlots = new Set(snapshot.blockedSlots ?? [])
-	const availableSlots = snapshot.slots.filter((slot) => !blockedSlots.has(slot))
+	const availableSlots = snapshot.slots.filter(
+		(slot) => !blockedSlots.has(slot),
+	)
 	const firstPreviewSlot = availableSlots[0]
 	const secondPreviewSlot = availableSlots[1]
 	if (!firstPreviewSlot || !secondPreviewSlot) {
@@ -545,33 +547,18 @@ test('host preview attendee summary sorts by selected window coverage', async ({
 	await expect(summary).toContainText(
 		'2/3 attendees can make the whole window.',
 	)
-	await expect(
-		summary.locator('[data-host-preview-attendee]').last(),
-	).toContainText('Alex (1) -')
-
-	const hostName = summary
-		.locator('[data-host-preview-attendee]')
-		.filter({ hasText: 'Host (2)' })
-		.locator('[data-host-preview-attendee-name]')
-		.first()
-	const alexName = summary
-		.locator('[data-host-preview-attendee]')
-		.filter({ hasText: 'Alex (1)' })
-		.locator('[data-host-preview-attendee-name]')
-		.first()
-	const hostBackgroundImage = await hostName.evaluate(
-		(element) => getComputedStyle(element).backgroundImage,
+	const attendeeRows = summary.locator('[data-host-preview-attendee]')
+	await expect(attendeeRows.first()).toContainText('Host (2) -')
+	await expect(attendeeRows.first()).toHaveAttribute(
+		'data-can-attend-whole-window',
+		'true',
 	)
-	const alexBackgroundImage = await alexName.evaluate(
-		(element) => getComputedStyle(element).backgroundImage,
+	await expect(attendeeRows.last()).toContainText('Alex (1) -')
+	await expect(attendeeRows.last()).toContainText('UTC')
+	await expect(attendeeRows.last()).toHaveAttribute(
+		'data-can-attend-whole-window',
+		'false',
 	)
-	expect(hostBackgroundImage).toBe('none')
-	expect(alexBackgroundImage).toContain('linear-gradient')
-	await expect(
-		summary.locator('[data-host-preview-attendee]').filter({
-			hasText: 'Alex (1) -',
-		}),
-	).toContainText('UTC')
 })
 
 test('host preview supports touch tap start/end range selection', async ({
