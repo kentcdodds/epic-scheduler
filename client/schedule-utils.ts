@@ -20,6 +20,33 @@ function formatTimeKey(date: Date) {
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function formatTimeRowKey(wallTimeKey: string, occurrence: number) {
+	if (occurrence <= 1) return wallTimeKey
+	return `${wallTimeKey}#${occurrence}`
+}
+
+function parseTimeRowKey(timeRowKey: string) {
+	const [wallTimeKey = timeRowKey, rawOccurrence] = timeRowKey.split('#')
+	const [rawHour, rawMinute] = wallTimeKey.split(':')
+	const hour = Number.parseInt(rawHour ?? '', 10)
+	const minute = Number.parseInt(rawMinute ?? '', 10)
+	const minutesFromMidnight =
+		Number.isInteger(hour) &&
+		Number.isInteger(minute) &&
+		hour >= 0 &&
+		hour <= 23 &&
+		minute >= 0 &&
+		minute <= 59
+			? hour * 60 + minute
+			: Number.POSITIVE_INFINITY
+	const occurrence = Number.parseInt(rawOccurrence ?? '1', 10)
+	return {
+		wallTimeKey,
+		minutesFromMidnight,
+		occurrence: Number.isInteger(occurrence) && occurrence > 0 ? occurrence : 1,
+	}
+}
+
 function parseDateInputToLocalDate(dateInput: string) {
 	const [rawYear, rawMonth, rawDay] = dateInput.split('-')
 	if (!rawYear || !rawMonth || !rawDay) return null
@@ -111,37 +138,104 @@ export function buildGridModel(slots: Array<string>): GridModel {
 	const timeLabels: Record<string, string> = {}
 	const cellByDayAndTime: Record<string, Record<string, string>> = {}
 	const timeSeen = new Set<string>()
+	const dayWallTimeCounts: Record<string, Record<string, number>> = {}
+	const duplicatedWallTimeKeys = new Set<string>()
+	const wallTimeOffsetOccurrences = new Map<string, Map<number, number>>()
+	const slotEntries: Array<{
+		slot: string
+		date: Date
+		dayKey: string
+		wallTimeKey: string
+		offsetMinutes: number
+	}> = []
+	const rowMetadataByTimeKey: Record<
+		string,
+		{ wallTimeKey: string; sampleDate: Date }
+	> = {}
+	const dayFormatter = new Intl.DateTimeFormat(undefined, {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+	})
+	const timeFormatter = new Intl.DateTimeFormat(undefined, {
+		hour: 'numeric',
+		minute: '2-digit',
+	})
+	const duplicatedTimeFormatter = new Intl.DateTimeFormat(undefined, {
+		hour: 'numeric',
+		minute: '2-digit',
+		timeZoneName: 'short',
+	})
 
 	for (const slot of slots) {
 		const date = new Date(slot)
 		if (Number.isNaN(date.getTime())) continue
 
 		const dayKey = formatDayKey(date)
-		const timeKey = formatTimeKey(date)
+		const wallTimeKey = formatTimeKey(date)
+		const dayCounts = (dayWallTimeCounts[dayKey] ??= {})
+		const nextOccurrence = (dayCounts[wallTimeKey] ?? 0) + 1
+		dayCounts[wallTimeKey] = nextOccurrence
+		if (nextOccurrence > 1) {
+			duplicatedWallTimeKeys.add(wallTimeKey)
+		}
+		slotEntries.push({
+			slot,
+			date,
+			dayKey,
+			wallTimeKey,
+			offsetMinutes: date.getTimezoneOffset(),
+		})
+	}
 
+	for (const entry of slotEntries) {
+		const { slot, date, dayKey, wallTimeKey, offsetMinutes } = entry
+		let occurrence = 1
+		if (duplicatedWallTimeKeys.has(wallTimeKey)) {
+			let offsetOccurrences = wallTimeOffsetOccurrences.get(wallTimeKey)
+			if (!offsetOccurrences) {
+				offsetOccurrences = new Map()
+				wallTimeOffsetOccurrences.set(wallTimeKey, offsetOccurrences)
+			}
+			const existingOccurrence = offsetOccurrences.get(offsetMinutes)
+			if (existingOccurrence === undefined) {
+				occurrence = offsetOccurrences.size + 1
+				offsetOccurrences.set(offsetMinutes, occurrence)
+			} else {
+				occurrence = existingOccurrence
+			}
+		}
+		const timeKey = formatTimeRowKey(wallTimeKey, occurrence)
 		if (!cellByDayAndTime[dayKey]) {
 			cellByDayAndTime[dayKey] = {}
 			dayKeys.push(dayKey)
-			dayLabels[dayKey] = new Intl.DateTimeFormat(undefined, {
-				weekday: 'short',
-				month: 'short',
-				day: 'numeric',
-			}).format(date)
+			dayLabels[dayKey] = dayFormatter.format(date)
 		}
 
 		if (!timeSeen.has(timeKey)) {
 			timeSeen.add(timeKey)
 			timeKeys.push(timeKey)
-			timeLabels[timeKey] = new Intl.DateTimeFormat(undefined, {
-				hour: 'numeric',
-				minute: '2-digit',
-			}).format(date)
+			rowMetadataByTimeKey[timeKey] = { wallTimeKey, sampleDate: date }
 		}
 
 		cellByDayAndTime[dayKey]![timeKey] = slot
 	}
 
-	timeKeys.sort((left, right) => left.localeCompare(right))
+	for (const timeKey of timeKeys) {
+		const metadata = rowMetadataByTimeKey[timeKey]
+		if (!metadata) continue
+		timeLabels[timeKey] = duplicatedWallTimeKeys.has(metadata.wallTimeKey)
+			? duplicatedTimeFormatter.format(metadata.sampleDate)
+			: timeFormatter.format(metadata.sampleDate)
+	}
+	timeKeys.sort((left, right) => {
+		const leftParts = parseTimeRowKey(left)
+		const rightParts = parseTimeRowKey(right)
+		if (leftParts.minutesFromMidnight !== rightParts.minutesFromMidnight) {
+			return leftParts.minutesFromMidnight - rightParts.minutesFromMidnight
+		}
+		return leftParts.occurrence - rightParts.occurrence
+	})
 	dayKeys.sort((left, right) => left.localeCompare(right))
 
 	return {

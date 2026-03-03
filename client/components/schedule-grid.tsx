@@ -115,6 +115,18 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				}),
 			)
 		: allTimeKeys
+	const missingSlotCellCount = dayKeys.reduce((total, dayKey) => {
+		const dayCells = cellByDayAndTime[dayKey]
+		if (!dayCells) return total + timeKeys.length
+		let dayMissingCount = 0
+		for (const timeKey of timeKeys) {
+			if (!dayCells[timeKey]) {
+				dayMissingCount += 1
+			}
+		}
+		return total + dayMissingCount
+	}, 0)
+	const hasMissingSlots = missingSlotCellCount > 0
 	const activeDayKey = toDayKey(props.activeSlot)
 	const defaultMobileDayKey =
 		activeDayKey && dayKeys.includes(activeDayKey)
@@ -239,11 +251,15 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 								{visibleDayKeys.map((dayKey) => {
 									const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
 									if (!slot) {
+										const missingSlotExplanation = `No slot at ${timeLabels[timeKey]} on ${dayLabels[dayKey]}. This can happen around daylight-saving transitions or at schedule range boundaries.`
 										return (
 											<td
 												key={`${dayKey}:${timeKey}:empty`}
+												data-missing-slot-cell="true"
+												title={missingSlotExplanation}
 												css={{
 													borderBottom: `1px solid ${colors.border}`,
+													borderRight: `1px solid ${colors.border}`,
 													backgroundColor:
 														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
 													height: '2.25rem',
@@ -253,7 +269,28 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															}
 														: {},
 												}}
-											/>
+											>
+												<span
+													aria-label={missingSlotExplanation}
+													css={{
+														display: 'grid',
+														placeItems: 'center',
+														minHeight: '2.25rem',
+														color: colors.textMuted,
+														fontSize: typography.fontSize.xs,
+														fontWeight: typography.fontWeight.medium,
+														letterSpacing: '0.04em',
+														userSelect: 'none',
+														[mq.mobile]: compact
+															? {
+																	minHeight: '2.65rem',
+																}
+															: {},
+													}}
+												>
+													N/A
+												</span>
+											</td>
 										)
 									}
 
@@ -441,6 +478,19 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				},
 			}}
 		>
+			{hasMissingSlots ? (
+				<p
+					css={{
+						margin: 0,
+						color: colors.textMuted,
+						fontSize: typography.fontSize.xs,
+					}}
+				>
+					{missingSlotCellCount} cell{missingSlotCellCount === 1 ? '' : 's'}{' '}
+					marked N/A because those local times have no slot in this schedule
+					(for example daylight-saving transitions).
+				</p>
+			) : null}
 			<div
 				css={{
 					display: 'none',
