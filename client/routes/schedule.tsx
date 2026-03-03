@@ -64,6 +64,8 @@ export function ScheduleRoute(handle: Handle) {
 	let statusMessage: string | null = null
 	let statusError = false
 	let isSaving = false
+	let isDeletingSubmission = false
+	let isRenamingSubmission = false
 	let isLoading = true
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -76,6 +78,7 @@ export function ScheduleRoute(handle: Handle) {
 	let snapshotRequestId = 0
 	let lastPathname = ''
 	let initialNameLoaded = false
+	let pendingRenameSourceName: string | null = null
 	const autoSaveDelayMs = 650
 	const reconnectDelayMs = 1200
 	const offlinePollIntervalMs = 4000
@@ -110,6 +113,30 @@ export function ScheduleRoute(handle: Handle) {
 				attendees: snapshot.attendees,
 				availabilityByAttendee: snapshot.availabilityByAttendee,
 			}).filter((slot) => !blockedSlots.has(slot)),
+		)
+	}
+
+	function normalizeNameForLookup(name: string) {
+		return normalizeName(name).toLowerCase()
+	}
+
+	function hasPersistedSubmissionForName(name: string) {
+		if (!snapshot) return false
+		const normalizedName = normalizeNameForLookup(name)
+		if (!normalizedName) return false
+		return snapshot.attendees.some(
+			(attendee) => normalizeNameForLookup(attendee.name) === normalizedName,
+		)
+	}
+
+	function getPersistedAttendeeName(name: string) {
+		if (!snapshot) return null
+		const normalizedName = normalizeNameForLookup(name)
+		if (!normalizedName) return null
+		return (
+			snapshot.attendees.find(
+				(attendee) => normalizeNameForLookup(attendee.name) === normalizedName,
+			)?.name ?? null
 		)
 	}
 
@@ -286,6 +313,10 @@ export function ScheduleRoute(handle: Handle) {
 			pendingSave = true
 			return
 		}
+		if (isDeletingSubmission || isRenamingSubmission) {
+			pendingSave = true
+			return
+		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
 			setStatus('Enter your name before selecting availability.', true)
@@ -362,6 +393,7 @@ export function ScheduleRoute(handle: Handle) {
 	function scheduleAutoSave() {
 		clearSaveDebounceTimer()
 		if (handle.signal.aborted) return
+		if (isDeletingSubmission || isRenamingSubmission) return
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) return
 		if (isSaving) {
@@ -378,6 +410,147 @@ export function ScheduleRoute(handle: Handle) {
 		changeVersion += 1
 		scheduleAutoSave()
 		handle.update()
+	}
+
+	async function deleteSubmission() {
+		const requestShareToken = shareToken
+		if (!snapshot || !requestShareToken) return
+		if (handle.signal.aborted || isDeletingSubmission || isRenamingSubmission) {
+			return
+		}
+		const normalizedName = normalizeName(attendeeName)
+		if (!normalizedName) {
+			setStatus('Enter your name before deleting your submission.', true)
+			return
+		}
+
+		clearSaveDebounceTimer()
+		hasDirtyChanges = false
+		pendingSave = false
+		isDeletingSubmission = true
+		handle.update()
+
+		try {
+			const response = await fetch(
+				`/api/schedules/${requestShareToken}/submission-delete`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ name: normalizedName }),
+				},
+			)
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				snapshot?: ScheduleSnapshot
+				deleted?: boolean
+				error?: string
+			} | null
+
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				const errorMessage =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to delete submission.'
+				setStatus(errorMessage, true)
+				return
+			}
+
+			snapshot = payload.snapshot
+			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
+			selectedSlots = new Set(persistedSelectedSlots)
+			rangeAnchor = null
+			tapRangeAction = null
+			pendingRenameSourceName = null
+			hasDirtyChanges = false
+			pendingSave = false
+			setStatus(
+				payload.deleted
+					? 'Submission deleted.'
+					: 'No saved submission to delete.',
+			)
+		} catch {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			setStatus('Network error while deleting submission.', true)
+		} finally {
+			if (requestShareToken === shareToken && !handle.signal.aborted) {
+				isDeletingSubmission = false
+				handle.update()
+			}
+		}
+	}
+
+	async function renameSubmission() {
+		const requestShareToken = shareToken
+		if (!snapshot || !requestShareToken) return
+		if (handle.signal.aborted || isRenamingSubmission || isDeletingSubmission) {
+			return
+		}
+		const renameSourceName = pendingRenameSourceName
+		const currentName = normalizeName(renameSourceName ?? '')
+		const nextName = normalizeName(attendeeName)
+		if (!currentName) {
+			setStatus('No saved submission to rename.', true)
+			return
+		}
+		if (!nextName) {
+			setStatus('Enter your updated name before renaming.', true)
+			return
+		}
+
+		clearSaveDebounceTimer()
+		hasDirtyChanges = false
+		pendingSave = false
+		isRenamingSubmission = true
+		handle.update()
+
+		try {
+			const response = await fetch(
+				`/api/schedules/${requestShareToken}/submission-rename`,
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						currentName,
+						nextName,
+					}),
+				},
+			)
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				snapshot?: ScheduleSnapshot
+				renamed?: boolean
+				error?: string
+			} | null
+
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				const errorMessage =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to update attendee name.'
+				setStatus(errorMessage, true)
+				return
+			}
+
+			snapshot = payload.snapshot
+			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
+			selectedSlots = new Set(persistedSelectedSlots)
+			rangeAnchor = null
+			tapRangeAction = null
+			pendingRenameSourceName = null
+			hasDirtyChanges = false
+			pendingSave = false
+			setStatus(payload.renamed ? 'Name updated.' : 'Name already up to date.')
+		} catch {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			setStatus('Network error while updating attendee name.', true)
+		} finally {
+			if (requestShareToken === shareToken && !handle.signal.aborted) {
+				isRenamingSubmission = false
+				handle.update()
+			}
+		}
 	}
 
 	function setSlotSelection(slot: string, shouldSelect: boolean) {
@@ -533,6 +706,9 @@ export function ScheduleRoute(handle: Handle) {
 		changeVersion = 0
 		pendingSave = false
 		isSaving = false
+		isDeletingSubmission = false
+		isRenamingSubmission = false
+		pendingRenameSourceName = null
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
@@ -553,8 +729,24 @@ export function ScheduleRoute(handle: Handle) {
 		})
 		const pendingChangeCount =
 			pendingDiff.pendingAdded.size + pendingDiff.pendingRemoved.size
-		const pendingSync = pendingChangeCount > 0 || isSaving
+		const pendingSync =
+			pendingChangeCount > 0 ||
+			isSaving ||
+			isDeletingSubmission ||
+			isRenamingSubmission
 		const normalizedAttendeeName = normalizeName(attendeeName)
+		const hasPersistedSubmission = hasPersistedSubmissionForName(attendeeName)
+		const canRenameSubmission =
+			typeof pendingRenameSourceName === 'string' &&
+			normalizedAttendeeName.length > 0 &&
+			normalizeNameForLookup(pendingRenameSourceName) !==
+				normalizeNameForLookup(attendeeName)
+		const showRenameSubmissionButton =
+			canRenameSubmission || isRenamingSubmission
+		const showDeleteSubmissionButton =
+			normalizedAttendeeName.length > 0 &&
+			(hasPersistedSubmission || isDeletingSubmission) &&
+			!showRenameSubmissionButton
 		const attendeeEntries = currentSnapshot?.attendees ?? []
 		const activeSlotAvailableNames = activeSlot
 			? (currentSnapshot?.availableNamesBySlot[activeSlot] ?? [])
@@ -702,7 +894,21 @@ export function ScheduleRoute(handle: Handle) {
 								placeholder="Add your name"
 								on={{
 									input: (event) => {
-										attendeeName = event.currentTarget.value
+										const nextName = event.currentTarget.value
+										const previousPersistedName =
+											getPersistedAttendeeName(attendeeName)
+										attendeeName = nextName
+										const nextPersistedName =
+											getPersistedAttendeeName(attendeeName)
+										if (nextPersistedName) {
+											pendingRenameSourceName = null
+										} else if (
+											previousPersistedName &&
+											normalizeNameForLookup(previousPersistedName) !==
+												normalizeNameForLookup(attendeeName)
+										) {
+											pendingRenameSourceName = previousPersistedName
+										}
 										persistedSelectedSlots =
 											getPersistedSelectionForName(attendeeName)
 										if (!hasDirtyChanges) {
@@ -877,6 +1083,59 @@ export function ScheduleRoute(handle: Handle) {
 						<p css={{ margin: 0, color: colors.textMuted }}>
 							Add your name before selecting availability.
 						</p>
+					) : null}
+					{showRenameSubmissionButton ? (
+						<button
+							type="button"
+							on={{ click: () => void renameSubmission() }}
+							disabled={
+								isSaving || isDeletingSubmission || isRenamingSubmission
+							}
+							css={{
+								justifySelf: 'start',
+								padding: `${spacing.sm} ${spacing.lg}`,
+								borderRadius: radius.full,
+								border: `1px solid ${colors.primary}`,
+								backgroundColor: 'transparent',
+								color: colors.primary,
+								fontWeight: typography.fontWeight.medium,
+								cursor:
+									isSaving || isDeletingSubmission || isRenamingSubmission
+										? 'not-allowed'
+										: 'pointer',
+								opacity:
+									isSaving || isDeletingSubmission || isRenamingSubmission
+										? 0.72
+										: 1,
+							}}
+						>
+							{isRenamingSubmission ? 'Updating name…' : 'Change my name'}
+						</button>
+					) : null}
+					{showDeleteSubmissionButton ? (
+						<button
+							type="button"
+							on={{ click: () => void deleteSubmission() }}
+							disabled={
+								isSaving || isDeletingSubmission || isRenamingSubmission
+							}
+							css={{
+								justifySelf: 'start',
+								padding: `${spacing.sm} ${spacing.lg}`,
+								borderRadius: radius.full,
+								border: `1px solid ${colors.error}`,
+								backgroundColor: 'transparent',
+								color: colors.error,
+								fontWeight: typography.fontWeight.medium,
+								cursor:
+									isSaving || isDeletingSubmission ? 'not-allowed' : 'pointer',
+								opacity: isSaving || isDeletingSubmission ? 0.72 : 1,
+							}}
+						>
+							{isDeletingSubmission
+								? 'Deleting submission…'
+								: 'Delete my submission'}
+						</button>
 					) : null}
 					{pointerSelection.state.mode ? (
 						<p css={{ margin: 0, color: colors.textMuted }}>

@@ -17,5 +17,11 @@ export const routes = route({
 	scheduleRead: '/api/schedules/:shareToken',
 	scheduleHostRead: '/api/schedules/:shareToken/host-snapshot',
 	scheduleSubmitAvailability: post('/api/schedules/:shareToken/availability'),
+	scheduleDeleteSubmission: post(
+		'/api/schedules/:shareToken/submission-delete',
+	),
+	scheduleRenameSubmission: post(
+		'/api/schedules/:shareToken/submission-rename',
+	),
 	scheduleHostUpdate: post('/api/schedules/:shareToken/host'),
 })

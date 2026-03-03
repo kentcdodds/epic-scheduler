@@ -13,6 +13,10 @@ on the Epic Web E2E workshop and our existing setup.
 
 - Primary routes and flows (navigation, schedule creation, availability
   updates).
+- Attendee submission deletion flow (`Delete my submission`) and confirmation
+  that the respondent disappears from schedule snapshots/host views.
+- Attendee submission rename flow (`Change my name`) and confirmation that the
+  old attendee name no longer appears in snapshots/host views.
 - User-visible sync states for optimistic flows (for example
   pending/saving/saved availability indicators).
 - Mobile layout stability for interactive flows so status updates do not shift
