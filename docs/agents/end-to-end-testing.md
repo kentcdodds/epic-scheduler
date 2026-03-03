@@ -31,6 +31,16 @@ worker and client together.
 - When a locator needs special scoping, explain it with a short inline comment
   in the test file instead of expanding global docs.
 
+## Locators
+
+Prefer stable, user-facing selectors:
+
+- `getByRole` for buttons, links, headings, and inputs.
+- `getByLabel` for form fields.
+- `getByText` only for brief, stable copy.
+
+Avoid `page.locator('css')` unless no accessible alternative exists.
+
 ## Running tests
 
 - `bun run test:e2e`
