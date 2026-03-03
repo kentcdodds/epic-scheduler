@@ -64,6 +64,9 @@ type ScheduleGridProps = {
 	showWeekSeparators?: boolean
 	outlinedSlots?: ReadonlySet<string>
 	outlinedSlotLabel?: string
+	accentedSlots?: ReadonlySet<string>
+	accentedSlotLabel?: string
+	fitToContentWidth?: boolean
 }
 
 function toSelectionLabel(params: {
@@ -305,6 +308,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const useStackedDayHeader = props.dayHeaderLayout === 'stacked'
 	const useNarrowDayColumns = props.dayColumnWidth === 'narrow'
 	const dayColumnWidthRem = useNarrowDayColumns ? 6.2 : 8
+	const timeColumnWidthRem = useNarrowDayColumns ? 5 : 5.6
 	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
@@ -318,6 +322,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	}
 
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
+		const fitToContent = !!props.fitToContentWidth && !compact
 		const tableCaption = props.readOnly
 			? 'Availability grid. Use arrow keys to move between time slots. Press Enter or Space to focus slot details.'
 			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range.'
@@ -362,6 +367,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				css={{
 					border: `1px solid ${colors.border}`,
 					borderRadius: radius.lg,
+					width: fitToContent ? 'fit-content' : undefined,
+					maxWidth: fitToContent ? '100%' : undefined,
+					marginInline: fitToContent ? 'auto' : undefined,
 					...(desktopHorizontalOverflow === 'local'
 						? {
 								overflowX: 'auto',
@@ -385,10 +393,13 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 					css={{
 						borderCollapse: 'separate',
 						borderSpacing: 0,
-						minWidth: compact
-							? '100%'
-							: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
-						width: '100%',
+						minWidth: fitToContent
+							? `${timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem}rem`
+							: compact
+								? '100%'
+								: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
+						width: fitToContent ? 'max-content' : '100%',
+						maxWidth: '100%',
 						tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
 					}}
 				>
@@ -409,10 +420,14 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									color: colors.textMuted,
 									borderBottom: `1px solid ${colors.border}`,
 									borderRight: `1px solid ${colors.border}`,
-									minWidth: '5rem',
+									width: `${timeColumnWidthRem}rem`,
+									minWidth: `${timeColumnWidthRem}rem`,
+									maxWidth: `${timeColumnWidthRem}rem`,
 									[mq.mobile]: compact
 										? {
 												minWidth: '4.8rem',
+												maxWidth: '4.8rem',
+												width: '4.8rem',
 												paddingInline: spacing.xs,
 											}
 										: {},
@@ -494,6 +509,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										borderBottom: `1px solid ${colors.border}`,
 										textAlign: 'left',
 										fontWeight: typography.fontWeight.medium,
+										width: `${timeColumnWidthRem}rem`,
+										minWidth: `${timeColumnWidthRem}rem`,
+										maxWidth: `${timeColumnWidthRem}rem`,
 									}}
 								>
 									{timeLabels[timeKey]}
@@ -562,6 +580,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const isPendingSelection =
 										props.selectionSlots?.has(slot) ?? false
 									const isOutlined = props.outlinedSlots?.has(slot) ?? false
+									const isAccented = props.accentedSlots?.has(slot) ?? false
 									const isRangeAnchor = props.rangeAnchor === slot
 									const isActive = props.activeSlot === slot
 									const background = getCellBackground({
@@ -611,10 +630,19 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											: isOutlined
 												? ', selected range'
 												: ''
-									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${outlinedSelectionLabel}${disabledLabel}`
+									const accentedSelectionLabel =
+										isAccented && props.accentedSlotLabel
+											? `, ${props.accentedSlotLabel}`
+											: isAccented
+												? ', highlighted for focused attendee'
+												: ''
+									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${outlinedSelectionLabel}${accentedSelectionLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
 									const pendingSelectionOverlay = isPendingSelection
 										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
+										: null
+									const accentedSlotOverlay = isAccented
+										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 20%, transparent)`
 										: null
 									const outlinedSlotRing = isOutlined
 										? `inset 0 0 0 2px ${colors.primary}`
@@ -625,6 +653,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											: null
 									const combinedBoxShadow = [
 										pendingSelectionOverlay,
+										accentedSlotOverlay,
 										outlinedSlotRing,
 										activeSlotRing,
 									]
