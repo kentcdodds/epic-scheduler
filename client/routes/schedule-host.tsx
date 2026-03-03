@@ -372,13 +372,18 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function hasLocalHostChanges() {
 		if (!snapshot) return false
+		const rangeChanged = hasLocalRangeChanges(snapshot)
+		return hasLocalNonRangeChanges(snapshot) || rangeChanged
+	}
+
+	function hasLocalNonRangeChanges(currentSnapshot: ScheduleSnapshot) {
 		const hostNameChanged =
 			normalizeName(hostNameDraft) !==
-			normalizeName(getHostAttendeeName(snapshot))
-		const titleChanged = titleDraft.trim() !== snapshot.schedule.title.trim()
+			normalizeName(getHostAttendeeName(currentSnapshot))
+		const titleChanged =
+			titleDraft.trim() !== currentSnapshot.schedule.title.trim()
 		const blockedChanged = !areSetsEqual(blockedSlots, persistedBlockedSlots)
-		const rangeChanged = hasLocalRangeChanges(snapshot)
-		return hostNameChanged || titleChanged || blockedChanged || rangeChanged
+		return hostNameChanged || titleChanged || blockedChanged
 	}
 
 	function applySnapshot(nextSnapshot: ScheduleSnapshot) {
@@ -552,18 +557,24 @@ export function ScheduleHostRoute(handle: Handle) {
 			return
 		}
 		const shouldUpdateRange = hasLocalRangeChanges(currentSnapshot)
+		const hasNonRangeChanges = hasLocalNonRangeChanges(currentSnapshot)
 		let nextRangeStartUtc = ''
 		let nextRangeEndUtc = ''
+		let rangeValidationError: string | null = null
+		let shouldIncludeRange = false
 		if (shouldUpdateRange) {
 			try {
 				const rangeDraft = getDraftRangeFromDateInputs(currentSnapshot)
 				nextRangeStartUtc = rangeDraft.rangeStartUtc
 				nextRangeEndUtc = rangeDraft.rangeEndUtc
+				shouldIncludeRange = true
 			} catch (error) {
-				const errorMessage =
+				rangeValidationError =
 					error instanceof Error ? error.message : 'Invalid date range.'
-				setStatus(errorMessage, true)
-				return
+				setStatus(rangeValidationError, true)
+				if (!hasNonRangeChanges) {
+					return
+				}
 			}
 		}
 		const title = titleDraft.trim() || 'New schedule'
@@ -586,7 +597,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				title,
 				blockedSlots: sortedBlockedSlots,
 			}
-			if (shouldUpdateRange) {
+			if (shouldIncludeRange) {
 				body.rangeStartUtc = nextRangeStartUtc
 				body.rangeEndUtc = nextRangeEndUtc
 			}
@@ -625,7 +636,9 @@ export function ScheduleHostRoute(handle: Handle) {
 				rangeStartDateInput = nextDateRange.startDateInput
 				rangeEndDateInput = nextDateRange.endDateInput
 			}
-			setStatus('Host settings synced.')
+			if (!rangeValidationError) {
+				setStatus('Host settings synced.')
+			}
 			handle.update()
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
@@ -652,9 +665,13 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (handle.signal.aborted) return
 		const currentSnapshot = snapshot
 		if (!currentSnapshot) return
-		const rangeValidationError = getRangeValidationError(currentSnapshot)
-		if (rangeValidationError) return
-		if (!hasLocalHostChanges()) return
+		const hasRangeChanges = hasLocalRangeChanges(currentSnapshot)
+		const hasNonRangeChanges = hasLocalNonRangeChanges(currentSnapshot)
+		const rangeValidationError = hasRangeChanges
+			? getRangeValidationError(currentSnapshot)
+			: null
+		if (!hasRangeChanges && !hasNonRangeChanges) return
+		if (rangeValidationError && !hasNonRangeChanges) return
 		if (isSaving) {
 			pendingSave = true
 			return
