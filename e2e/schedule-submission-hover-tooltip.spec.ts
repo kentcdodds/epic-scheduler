@@ -4,6 +4,7 @@ test('submission schedule shows hover tooltip attendee details', async ({
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
