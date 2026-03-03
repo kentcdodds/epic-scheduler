@@ -519,7 +519,9 @@ test('host preview attendee summary sorts by selected window coverage', async ({
 	await expect(
 		page.locator('label').filter({ hasText: 'Jordan' }).first(),
 	).toBeVisible({ timeout: 4_000 })
-	await expect(page.locator('label').filter({ hasText: 'Alex' }).first()).toBeVisible({
+	await expect(
+		page.locator('label').filter({ hasText: 'Alex' }).first(),
+	).toBeVisible({
 		timeout: 4_000,
 	})
 

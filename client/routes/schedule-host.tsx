@@ -2124,7 +2124,10 @@ export function ScheduleHostRoute(handle: Handle) {
 													<li
 														data-host-preview-attendee
 														key={`all-slot-attendee-${entry.id}`}
-														css={{ color: colors.text, overflowWrap: 'anywhere' }}
+														css={{
+															color: colors.text,
+															overflowWrap: 'anywhere',
+														}}
 													>
 														<span
 															data-host-preview-attendee-name
@@ -2135,7 +2138,8 @@ export function ScheduleHostRoute(handle: Handle) {
 														>
 															{entry.name}
 														</span>{' '}
-														({entry.totalAvailableSlots}) - {entry.timeZoneLabel}
+														({entry.totalAvailableSlots}) -{' '}
+														{entry.timeZoneLabel}
 													</li>
 												))}
 											</ul>
