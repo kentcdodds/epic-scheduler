@@ -163,6 +163,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	let previewTooltipPointerX: number | null = null
 	let previewTooltipPointerY: number | null = null
 	let mobileDayKey: string | null = null
+	let keyboardRangeAnchor: string | null = null
+	let keyboardRangeAction: 'add' | 'remove' | null = null
+	let keyboardRangeSlots = new Set<string>()
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -262,6 +265,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		rootStyle.removeProperty(hostHoverTooltipPointerYVar)
 	}
 
+	function clearKeyboardRangeSelection() {
+		keyboardRangeAnchor = null
+		keyboardRangeAction = null
+		keyboardRangeSlots = new Set<string>()
+	}
+
 	const hostSelection = createPointerDragSelectionController({
 		requestRender: () => {
 			handle.update()
@@ -303,6 +312,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	function cleanupResources() {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
+		clearKeyboardRangeSelection()
 		hostSelection.cleanup()
 		clearSocketResources()
 		clearRefreshTimer()
@@ -411,8 +421,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				titleDraft.trim() !== previousSnapshot.schedule.title.trim())
 		const keepLocalBlocked =
 			preserveHostDrafts ||
-			(!!previousSnapshot &&
-				!areSetsEqual(blockedSlots, persistedBlockedSlots))
+			(!!previousSnapshot && !areSetsEqual(blockedSlots, persistedBlockedSlots))
 		const keepLocalRange =
 			preserveHostDrafts ||
 			(!!previousSnapshot && hasLocalRangeChanges(previousSnapshot))
@@ -467,6 +476,21 @@ export function ScheduleHostRoute(handle: Handle) {
 		submissionNameDraftById = nextSubmissionNameDraftById
 		if (activePreviewSlot && !nextSnapshot.slots.includes(activePreviewSlot)) {
 			activePreviewSlot = null
+		}
+		if (
+			keyboardRangeAnchor &&
+			!nextSnapshot.slots.includes(keyboardRangeAnchor)
+		) {
+			clearKeyboardRangeSelection()
+		} else if (keyboardRangeSlots.size > 0) {
+			keyboardRangeSlots = new Set(
+				Array.from(keyboardRangeSlots).filter((slot) =>
+					nextSnapshot.slots.includes(slot),
+				),
+			)
+			if (keyboardRangeSlots.size === 0) {
+				clearKeyboardRangeSelection()
+			}
 		}
 		handle.update()
 	}
@@ -838,11 +862,60 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 	}
 
+	function updateKeyboardRangePreview(params: {
+		fromSlot: string
+		toSlot: string
+		shiftKey: boolean
+	}) {
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) return
+		if (!params.shiftKey) {
+			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
+				clearKeyboardRangeSelection()
+				handle.update()
+			}
+			return
+		}
+		if (!currentSnapshot.slots.includes(params.fromSlot)) return
+		if (!currentSnapshot.slots.includes(params.toSlot)) return
+		if (!keyboardRangeAnchor) {
+			keyboardRangeAnchor = params.fromSlot
+			keyboardRangeAction = blockedSlots.has(params.fromSlot) ? 'remove' : 'add'
+		}
+		if (!keyboardRangeAnchor) return
+		keyboardRangeSlots = new Set(
+			getRectangularSlotSelection({
+				slots: currentSnapshot.slots,
+				startSlot: keyboardRangeAnchor,
+				endSlot: params.toSlot,
+			}),
+		)
+		handle.update()
+	}
+
+	function applyKeyboardRangeSelection() {
+		if (!keyboardRangeAnchor || !keyboardRangeAction) return false
+		if (keyboardRangeSlots.size === 0) return false
+		const shouldBeBlocked = keyboardRangeAction === 'add'
+		for (const slot of keyboardRangeSlots) {
+			setBlockedSlotState(slot, shouldBeBlocked)
+		}
+		clearKeyboardRangeSelection()
+		handle.update()
+		return true
+	}
+
+	function handleHostUnavailableKeyboardActivate(slot: string) {
+		if (applyKeyboardRangeSelection()) return
+		toggleBlockedSlot(slot)
+	}
+
 	function handleHostUnavailablePointerUp() {
 		hostSelection.finishSelection(false)
 	}
 
 	function handleHostUnavailablePointerDown(slot: string, event: PointerEvent) {
+		clearKeyboardRangeSelection()
 		hostSelection.startSelection({
 			slot,
 			event,
@@ -918,6 +991,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		previewTooltipSlot = null
 		clearPreviewTooltipPointerPosition()
 		mobileDayKey = null
+		clearKeyboardRangeSelection()
 		hostSelection.cleanup()
 		isLoading = true
 		isSaving = false
@@ -1017,6 +1091,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			? buildEmptyAvailability(currentSnapshot.slots)
 			: {}
 		const hasPendingLocalChanges = hasLocalHostChanges() || isSaving
+		const isPointerRangePending = hostSelection.state.mode !== null
+		const pendingBlockedSelectionSlots = isPointerRangePending
+			? hostSelection.state.slots
+			: keyboardRangeSlots
+		const pendingBlockedSelectionLabel = isPointerRangePending
+			? 'included in pending drag selection'
+			: 'included in pending keyboard range selection'
+		const hostRangeAnchor = keyboardRangeAnchor
 		const activePreviewSlotValue = activePreviewSlot
 		const activeSlotDetails = activePreviewSlotValue
 			? {
@@ -1103,7 +1185,13 @@ export function ScheduleHostRoute(handle: Handle) {
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Manage schedule settings and choose the best meeting slot.
 					</p>
-					<p css={{ margin: 0, color: colors.textMuted }}>{connectionLabel}</p>
+					<p
+						role="status"
+						aria-live="polite"
+						css={{ margin: 0, color: colors.textMuted }}
+					>
+						{connectionLabel}
+					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Times are shown in your browser timezone: {browserTimeZone}
 					</p>
@@ -1223,7 +1311,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					</div>
 					{clipboardMessage ? (
 						<p
-							role={clipboardError ? 'alert' : undefined}
+							role={clipboardError ? 'alert' : 'status'}
 							aria-live="polite"
 							css={{
 								margin: 0,
@@ -1402,8 +1490,8 @@ export function ScheduleHostRoute(handle: Handle) {
 									Respondents
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Toggle inclusion for preview, then rename or delete non-host
-									submissions.
+									Toggle each name to include or exclude it from preview
+									calculations.
 								</p>
 								<div
 									css={{
@@ -1435,7 +1523,14 @@ export function ScheduleHostRoute(handle: Handle) {
 													padding: spacing.sm,
 													borderRadius: radius.md,
 													border: `1px solid ${colors.border}`,
-													backgroundColor: colors.surface,
+													backgroundColor: isIncluded
+														? colors.surface
+														: colors.background,
+													cursor: 'pointer',
+													'&:focus-within': {
+														outline: `2px solid ${colors.primary}`,
+														outlineOffset: 2,
+													},
 												}}
 											>
 												<div
@@ -1625,6 +1720,8 @@ export function ScheduleHostRoute(handle: Handle) {
 										Best-time preview
 									</h2>
 									<div
+										role="group"
+										aria-label="Preview mode"
 										css={{
 											display: 'inline-flex',
 											gap: spacing.xs,
@@ -1636,6 +1733,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									>
 										<button
 											type="button"
+											aria-pressed={previewMode === 'all'}
 											on={{
 												click: () => {
 													previewMode = 'all'
@@ -1661,6 +1759,7 @@ export function ScheduleHostRoute(handle: Handle) {
 										</button>
 										<button
 											type="button"
+											aria-pressed={previewMode === 'count'}
 											on={{
 												click: () => {
 													previewMode = 'count'
@@ -1871,14 +1970,15 @@ export function ScheduleHostRoute(handle: Handle) {
 									Host unavailable slots
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Click and drag to select a range, then release to apply. Press
-									Escape to cancel an in-progress selection.
+									Click and drag to select a range, then release to apply. Use
+									arrow keys to move between slots and press Enter or Space to
+									toggle one slot. Press Escape to cancel an in-progress drag.
 								</p>
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
-									selectionSlots: hostSelection.state.slots,
-									selectionSlotLabel: 'included in pending drag selection',
+									selectionSlots: pendingBlockedSelectionSlots,
+									selectionSlotLabel: pendingBlockedSelectionLabel,
 									selectedSlotLabel: 'marked unavailable by host',
 									unselectedSlotLabel: 'available for scheduling',
 									selectedBackground:
@@ -1886,7 +1986,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									slotAvailability: blockedAvailability,
 									maxAvailabilityCount: 1,
 									activeSlot: null,
-									rangeAnchor: null,
+									rangeAnchor: hostRangeAnchor,
 									mobileDayKey,
 									pending: hasPendingLocalChanges,
 									onMobileDayChange: (dayKey) => {
@@ -1902,20 +2002,31 @@ export function ScheduleHostRoute(handle: Handle) {
 									onCellPointerUp: (_slot, _event) => {
 										handleHostUnavailablePointerUp()
 									},
-									onCellClick: (slot, event) => {
-										if (event.detail > 0) return
-										toggleBlockedSlot(slot)
+									onCellKeyboardActivate: handleHostUnavailableKeyboardActivate,
+									onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
+										updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
 									},
 								})}
 								<p css={{ margin: 0, color: colors.textMuted }}>
 									{blockedSlots.size} blocked slot
 									{blockedSlots.size === 1 ? '' : 's'}
 								</p>
-								{hostSelection.state.mode ? (
+								{isPointerRangePending || keyboardRangeSlots.size > 0 ? (
 									<p css={{ margin: 0, color: colors.textMuted }}>
-										Selecting {hostSelection.state.slots.size} slot
-										{hostSelection.state.slots.size === 1 ? '' : 's'} — release
-										to apply or press Escape to cancel.
+										Selecting{' '}
+										{isPointerRangePending
+											? hostSelection.state.slots.size
+											: keyboardRangeSlots.size}{' '}
+										slot
+										{(isPointerRangePending
+											? hostSelection.state.slots.size
+											: keyboardRangeSlots.size) === 1
+											? ''
+											: 's'}{' '}
+										—{' '}
+										{isPointerRangePending
+											? 'release to apply or press Escape to cancel.'
+											: 'press Enter or Space to apply.'}
 									</p>
 								) : null}
 							</section>
@@ -1987,7 +2098,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					</div>
 					{statusMessage ? (
 						<p
-							role={statusError ? 'alert' : undefined}
+							role={statusError ? 'alert' : 'status'}
 							aria-live="polite"
 							css={{
 								margin: 0,

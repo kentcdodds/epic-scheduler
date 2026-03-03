@@ -31,6 +31,9 @@ on the Epic Web E2E workshop and our existing setup.
   removing ranges when users tap an already selected slot as the range start.
 - Desktop drag selection behavior where dragging creates a pending range that
   applies on pointer release and can be canceled with Escape.
+- Keyboard-only slot selection behavior on editable grids, including arrow-key
+  movement, Shift+arrow range preview, and Enter/Space apply behavior based on
+  the first selected range cell.
 - Drag autoscroll behavior when pointer nears or exits table edges, so range
   selection can extend without manual wheel/trackpad scroll.
 - Attendee slot-detail metadata such as displayed attendee timezone and

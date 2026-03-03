@@ -65,6 +65,9 @@ export function ScheduleRoute(handle: Handle) {
 	let hoverTooltipPointerY: number | null = null
 	let rangeAnchor: string | null = null
 	let tapRangeAction: 'add' | 'remove' | null = null
+	let keyboardRangeAnchor: string | null = null
+	let keyboardRangeAction: 'add' | 'remove' | null = null
+	let keyboardRangeSlots = new Set<string>()
 	let mobileDayKey: string | null = null
 	let useTapRangeMode = detectTapRangeMode()
 	let statusMessage: string | null = null
@@ -73,6 +76,7 @@ export function ScheduleRoute(handle: Handle) {
 	let isDeletingSubmission = false
 	let isRenamingSubmission = false
 	let isLoading = true
+	let connectionState: ConnectionState = 'connecting'
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let offlinePollTimer: ReturnType<typeof setInterval> | null = null
@@ -150,6 +154,12 @@ export function ScheduleRoute(handle: Handle) {
 		selectedSlots = new Set(
 			Array.from(selectedSlots).filter((slot) => !blockedSlots.has(slot)),
 		)
+	}
+
+	function clearKeyboardRangeSelection() {
+		keyboardRangeAnchor = null
+		keyboardRangeAction = null
+		keyboardRangeSlots = new Set<string>()
 	}
 
 	function clearSaveDebounceTimer() {
@@ -254,6 +264,7 @@ export function ScheduleRoute(handle: Handle) {
 		clearOfflinePollTimer()
 		clearSaveDebounceTimer()
 		clearSubmissionHoverTooltip()
+		clearKeyboardRangeSelection()
 		pointerSelection.cleanup()
 		pendingSave = false
 	}
@@ -265,6 +276,7 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function setConnectionState(nextState: ConnectionState) {
+		connectionState = nextState
 		if (nextState === 'offline') {
 			if (!offlinePollTimer) {
 				offlinePollTimer = setInterval(() => {
@@ -313,6 +325,7 @@ export function ScheduleRoute(handle: Handle) {
 			}
 
 			snapshot = payload.snapshot
+			const currentSnapshot = payload.snapshot
 			isLoading = false
 
 			if (!initialNameLoaded) {
@@ -326,6 +339,28 @@ export function ScheduleRoute(handle: Handle) {
 				selectedSlots = new Set(persistedSelectedSlots)
 			} else {
 				normalizeLocalSelectionAgainstBlockedSlots()
+			}
+			if (
+				keyboardRangeAnchor &&
+				!currentSnapshot.slots.includes(keyboardRangeAnchor)
+			) {
+				clearKeyboardRangeSelection()
+			} else if (keyboardRangeSlots.size > 0) {
+				keyboardRangeSlots = new Set(
+					Array.from(keyboardRangeSlots).filter((slot) =>
+						currentSnapshot.slots.includes(slot),
+					),
+				)
+				if (keyboardRangeSlots.size === 0) {
+					clearKeyboardRangeSelection()
+				}
+			}
+			if (rangeAnchor && !currentSnapshot.slots.includes(rangeAnchor)) {
+				rangeAnchor = null
+				tapRangeAction = null
+			}
+			if (activeSlot && !currentSnapshot.slots.includes(activeSlot)) {
+				activeSlot = null
 			}
 
 			handle.update()
@@ -631,6 +666,73 @@ export function ScheduleRoute(handle: Handle) {
 		}
 	}
 
+	function updateKeyboardRangePreview(params: {
+		fromSlot: string
+		toSlot: string
+		shiftKey: boolean
+	}) {
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) return
+		if (!params.shiftKey) {
+			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
+				clearKeyboardRangeSelection()
+				handle.update()
+			}
+			return
+		}
+		if (!currentSnapshot.slots.includes(params.fromSlot)) return
+		if (!currentSnapshot.slots.includes(params.toSlot)) return
+		const blockedSlots = getBlockedSlots()
+		const baseAnchor = keyboardRangeAnchor ?? params.fromSlot
+		if (!ensureSlotIsEditable(baseAnchor)) {
+			clearKeyboardRangeSelection()
+			return
+		}
+		if (!keyboardRangeAnchor) {
+			keyboardRangeAnchor = baseAnchor
+			keyboardRangeAction = selectedSlots.has(baseAnchor) ? 'remove' : 'add'
+		}
+		if (!keyboardRangeAnchor) return
+		keyboardRangeSlots = new Set(
+			getRectangularSlotSelection({
+				slots: currentSnapshot.slots,
+				startSlot: keyboardRangeAnchor,
+				endSlot: params.toSlot,
+			}).filter((slot) => !blockedSlots.has(slot)),
+		)
+		activeSlot = params.toSlot
+		handle.update()
+	}
+
+	function applyKeyboardRangeSelection() {
+		if (!keyboardRangeAnchor || !keyboardRangeAction) return false
+		if (keyboardRangeSlots.size === 0) return false
+		if (!ensureSlotIsEditable(keyboardRangeAnchor)) {
+			clearKeyboardRangeSelection()
+			return false
+		}
+		const shouldSelect = keyboardRangeAction === 'add'
+		for (const slot of keyboardRangeSlots) {
+			setSlotSelection(slot, shouldSelect)
+		}
+		clearKeyboardRangeSelection()
+		setStatus(null, false)
+		markDirty()
+		return true
+	}
+
+	function toggleSingleSlot(slot: string) {
+		if (!ensureSlotIsEditable(slot)) return
+		const shouldSelect = !selectedSlots.has(slot)
+		setSlotSelection(slot, shouldSelect)
+		rangeAnchor = null
+		tapRangeAction = null
+		clearKeyboardRangeSelection()
+		activeSlot = slot
+		setStatus(null, false)
+		markDirty()
+	}
+
 	function ensureSlotIsEditable(slot: string) {
 		activeSlot = slot
 		const blockedSlots = getBlockedSlots()
@@ -650,6 +752,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (clearSubmissionHoverTooltip()) {
 			handle.update()
 		}
+		clearKeyboardRangeSelection()
 		const nextMode = resolveTapRangeModeFromPointer({
 			currentMode: useTapRangeMode,
 			pointerType: event.pointerType,
@@ -715,6 +818,11 @@ export function ScheduleRoute(handle: Handle) {
 		markDirty()
 	}
 
+	function handleCellKeyboardActivate(slot: string) {
+		if (applyKeyboardRangeSelection()) return
+		toggleSingleSlot(slot)
+	}
+
 	function connectSocket() {
 		if (!shareToken || handle.signal.aborted) return
 		clearSocketResources()
@@ -772,6 +880,7 @@ export function ScheduleRoute(handle: Handle) {
 		clearHoverTooltipPointerPosition()
 		rangeAnchor = null
 		tapRangeAction = null
+		clearKeyboardRangeSelection()
 		mobileDayKey = null
 		hasDirtyChanges = false
 		changeVersion = 0
@@ -780,6 +889,7 @@ export function ScheduleRoute(handle: Handle) {
 		isDeletingSubmission = false
 		isRenamingSubmission = false
 		pendingRenameSourceName = null
+		connectionState = 'offline'
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
@@ -803,6 +913,14 @@ export function ScheduleRoute(handle: Handle) {
 		const submissionActionInFlight =
 			isSaving || isDeletingSubmission || isRenamingSubmission
 		const pendingSync = pendingChangeCount > 0 || submissionActionInFlight
+		const isPointerRangePending = pointerSelection.state.mode !== null
+		const pendingSelectionSlots = isPointerRangePending
+			? pointerSelection.state.slots
+			: keyboardRangeSlots
+		const pendingSelectionLabel = isPointerRangePending
+			? 'included in pending drag selection'
+			: 'included in pending keyboard range selection'
+		const gridRangeAnchor = keyboardRangeAnchor ?? rangeAnchor
 		const normalizedAttendeeName = normalizeName(attendeeName)
 		const persistedAttendee = getPersistedAttendee(attendeeName)
 		const hasPersistedSubmission = hasPersistedSubmissionForName(attendeeName)
@@ -877,6 +995,12 @@ export function ScheduleRoute(handle: Handle) {
 		const hostName =
 			currentSnapshot?.attendees.find((entry) => entry.isHost)?.name ??
 			'the organizer'
+		const connectionLabel =
+			connectionState === 'live'
+				? 'Realtime connected'
+				: connectionState === 'connecting'
+					? 'Connecting realtime…'
+					: `Realtime unavailable; polling every ${Math.floor(offlinePollIntervalMs / 1000)}s`
 
 		if (!shareToken) {
 			setDocumentTitle(toAppTitle('Schedule not found'))
@@ -931,6 +1055,13 @@ export function ScheduleRoute(handle: Handle) {
 					</h1>
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Hosted by {hostName}
+					</p>
+					<p
+						role="status"
+						aria-live="polite"
+						css={{ margin: 0, color: colors.textMuted }}
+					>
+						{connectionLabel}
 					</p>
 					<p css={{ margin: 0, color: colors.textMuted }}>
 						Enter your name, then mark every time that works for you.
@@ -1043,7 +1174,11 @@ export function ScheduleRoute(handle: Handle) {
 								gap: spacing.xs,
 							}}
 						>
-							<p css={{ margin: 0, color: colors.textMuted }}>
+							<p
+								role="status"
+								aria-live="polite"
+								css={{ margin: 0, color: colors.textMuted }}
+							>
 								{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 							</p>
 							<p css={{ margin: 0, color: colors.textMuted }}>
@@ -1062,13 +1197,13 @@ export function ScheduleRoute(handle: Handle) {
 							selectedSlots,
 							disabledSlots: blockedSlots,
 							hideDisabledOnlyRowsAndColumns: true,
-							selectionSlots: pointerSelection.state.slots,
-							selectionSlotLabel: 'included in pending drag selection',
+							selectionSlots: pendingSelectionSlots,
+							selectionSlotLabel: pendingSelectionLabel,
 							mobileDayKey,
 							slotAvailability,
 							maxAvailabilityCount,
 							activeSlot,
-							rangeAnchor,
+							rangeAnchor: gridRangeAnchor,
 							pending: pendingSync,
 							onMobileDayChange: (dayKey) => {
 								mobileDayKey = dayKey
@@ -1096,6 +1231,10 @@ export function ScheduleRoute(handle: Handle) {
 									return
 								}
 								handleCellClick(slot)
+							},
+							onCellKeyboardActivate: handleCellKeyboardActivate,
+							onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
+								updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
 							},
 							onCellFocus: (slot) => {
 								clearSubmissionHoverTooltip()
@@ -1298,16 +1437,27 @@ export function ScheduleRoute(handle: Handle) {
 								: 'Delete my submission'}
 						</button>
 					) : null}
-					{pointerSelection.state.mode ? (
+					{isPointerRangePending || keyboardRangeSlots.size > 0 ? (
 						<p css={{ margin: 0, color: colors.textMuted }}>
-							Selecting {pointerSelection.state.slots.size} slot
-							{pointerSelection.state.slots.size === 1 ? '' : 's'} — release to
-							apply or press Escape to cancel.
+							Selecting{' '}
+							{isPointerRangePending
+								? pointerSelection.state.slots.size
+								: keyboardRangeSlots.size}{' '}
+							slot
+							{(isPointerRangePending
+								? pointerSelection.state.slots.size
+								: keyboardRangeSlots.size) === 1
+								? ''
+								: 's'}{' '}
+							—{' '}
+							{isPointerRangePending
+								? 'release to apply or press Escape to cancel.'
+								: 'press Enter or Space to apply.'}
 						</p>
 					) : null}
 					{statusMessage ? (
 						<p
-							role={statusError ? 'alert' : undefined}
+							role={statusError ? 'alert' : 'status'}
 							aria-live="polite"
 							css={{
 								margin: 0,
