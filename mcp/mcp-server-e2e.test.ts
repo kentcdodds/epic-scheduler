@@ -289,8 +289,7 @@ test(
 		await using mcpClient = await createMcpClient(server.origin)
 
 		const start = new Date('2026-03-02T00:00:00.000Z')
-		const end = new Date(start.getTime())
-		end.setDate(end.getDate() + 7)
+		const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
 
 		const createResult = await mcpClient.client.callTool({
 			name: 'create_schedule',
