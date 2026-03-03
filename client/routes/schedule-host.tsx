@@ -1407,18 +1407,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			if (allIncludedCanAttend) {
 				allAvailableSlots.add(slot)
 			}
-			previewAvailability[slot] =
-				previewMode === 'all'
-					? {
-							count: allIncludedCanAttend ? includedAttendeeCount : 0,
-							availableNames,
-						}
-					: {
-							count,
-							availableNames,
-						}
+			previewAvailability[slot] = {
+				count,
+				availableNames,
+			}
 		}
 		const previewMaxCount = Math.max(1, includedAttendeeCount)
+		const previewHighlightedSlots =
+			previewMode === 'all' ? allAvailableSlots : undefined
 		const bestSlots = slots
 			.filter((slot) => !blockedSlots.has(slot))
 			.map((slot) => ({
@@ -2242,9 +2238,11 @@ export function ScheduleHostRoute(handle: Handle) {
 									</div>
 								</div>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Green slots mean everyone currently included can attend. Drag
-									to select a window, or on touch devices tap one slot for the
-									start and another for the end.
+									{previewMode === 'all'
+										? 'Green slots mean everyone currently included can attend. '
+										: null}
+									Drag to select a window, or on touch devices tap one slot for
+									the start and another for the end.
 								</p>
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
@@ -2268,8 +2266,11 @@ export function ScheduleHostRoute(handle: Handle) {
 									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
 									hideDisabledOnlyRowsAndColumns: true,
-									highlightedSlots: allAvailableSlots,
-									highlightedSlotLabel: 'all selected attendees can attend',
+									highlightedSlots: previewHighlightedSlots,
+									highlightedSlotLabel:
+										previewMode === 'all'
+											? 'all selected attendees can attend'
+											: undefined,
 									slotAvailability: previewAvailability,
 									maxAvailabilityCount: previewMaxCount,
 									activeSlot: activePreviewSlot,

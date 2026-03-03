@@ -58,3 +58,81 @@ test('host dashboard can update host name', async ({ page }) => {
 	await page.reload()
 	await expect(page.getByLabel('Host name')).toHaveValue('Host Renamed')
 })
+
+test('all-attendees preview mode shows partial slot availability counts', async ({
+	page,
+	request,
+}) => {
+	const hourMs = 3_600_000
+	const rangeStart = new Date(Math.ceil(Date.now() / hourMs) * hourMs + hourMs)
+	const firstSlot = rangeStart.toISOString()
+	const secondSlot = new Date(rangeStart.getTime() + hourMs).toISOString()
+	const rangeEnd = new Date(rangeStart.getTime() + hourMs * 2)
+
+	const createResponse = await request.post('/api/schedules', {
+		data: {
+			title: 'Preview availability schedule',
+			hostName: 'Host',
+			hostTimeZone: 'UTC',
+			intervalMinutes: 60,
+			rangeStartUtc: rangeStart.toISOString(),
+			rangeEndUtc: rangeEnd.toISOString(),
+			selectedSlots: [firstSlot, secondSlot],
+		},
+	})
+	expect(createResponse.ok()).toBe(true)
+	const createPayload = (await createResponse.json()) as {
+		ok?: boolean
+		shareToken?: string
+		hostAccessToken?: string
+	}
+	expect(createPayload.ok).toBe(true)
+	if (
+		typeof createPayload.shareToken !== 'string' ||
+		createPayload.shareToken.trim().length === 0 ||
+		typeof createPayload.hostAccessToken !== 'string' ||
+		createPayload.hostAccessToken.trim().length === 0
+	) {
+		throw new Error(
+			'Expected /api/schedules to return non-empty share and host access tokens.',
+		)
+	}
+	const shareToken = createPayload.shareToken
+	const hostAccessToken = createPayload.hostAccessToken
+
+	const attendeeResponse = await request.post(
+		`/api/schedules/${shareToken}/availability`,
+		{
+			data: {
+				name: 'Alex',
+				attendeeTimeZone: 'UTC',
+				selectedSlots: [firstSlot],
+			},
+		},
+	)
+	expect(attendeeResponse.ok()).toBe(true)
+
+	await page.goto(`/s/${shareToken}/${hostAccessToken}`)
+	const previewSection = page
+		.locator('section')
+		.filter({
+			has: page.getByRole('heading', { name: 'Best-time preview' }),
+		})
+		.first()
+	await expect(
+		previewSection.getByRole('button', {
+			name: 'All selected attendees',
+			exact: true,
+		}),
+	).toHaveAttribute('aria-pressed', 'true')
+	const hostOnlySlotCell = previewSection
+		.locator('[data-schedule-grid-shell] table:visible')
+		.first()
+		.locator(`button[data-slot="${secondSlot}"]`)
+	await expect(hostOnlySlotCell).toBeVisible()
+	await expect(hostOnlySlotCell).toHaveText('1')
+	await expect(hostOnlySlotCell).toHaveAttribute(
+		'aria-label',
+		/1 attendee available/,
+	)
+})
