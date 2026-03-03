@@ -968,15 +968,27 @@ export function ScheduleHostRoute(handle: Handle) {
 		shouldBeBlocked: boolean,
 	) {
 		const currentSnapshot = snapshot
-		if (!currentSnapshot) return
+		if (!currentSnapshot) return false
 		const slotsInRange = getRectangularSlotSelection({
 			slots: currentSnapshot.slots,
 			startSlot,
 			endSlot,
 		})
+		let changed = false
 		for (const slot of slotsInRange) {
-			setBlockedSlotState(slot, shouldBeBlocked)
+			const currentlyBlocked = blockedSlots.has(slot)
+			if (currentlyBlocked === shouldBeBlocked) continue
+			changed = true
+			if (shouldBeBlocked) {
+				blockedSlots.add(slot)
+			} else {
+				blockedSlots.delete(slot)
+			}
 		}
+		if (!changed) return false
+		changeVersion += 1
+		queueHostSettingsSave()
+		return true
 	}
 
 	function updateKeyboardRangePreview(params: {
@@ -1114,25 +1126,26 @@ export function ScheduleHostRoute(handle: Handle) {
 			currentMode: usePreviewTapRangeMode,
 			pointerType,
 		})
-		if (nextMode === usePreviewTapRangeMode) return
+		if (nextMode === usePreviewTapRangeMode) return false
 		usePreviewTapRangeMode = nextMode
 		previewRangeAnchor = null
 		if (isPreviewTapRangeStartMessage(previewSelectionStatus)) {
 			previewSelectionStatus = null
 		}
+		return true
 	}
 
 	function handlePreviewPointerDown(slot: string, event: PointerEvent) {
 		const didClearTooltip = clearPreviewHoverTooltip()
-		updatePreviewTapMode(event.pointerType)
+		const didChangeTapMode = updatePreviewTapMode(event.pointerType)
 		if (usePreviewTapRangeMode) {
-			if (didClearTooltip) {
+			if (didClearTooltip || didChangeTapMode) {
 				handle.update()
 			}
 			return
 		}
 		if (blockedSlots.has(slot)) {
-			if (didClearTooltip) {
+			if (didClearTooltip || didChangeTapMode) {
 				handle.update()
 			}
 			return
