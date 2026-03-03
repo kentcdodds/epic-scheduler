@@ -1407,18 +1407,14 @@ export function ScheduleHostRoute(handle: Handle) {
 			if (allIncludedCanAttend) {
 				allAvailableSlots.add(slot)
 			}
-			previewAvailability[slot] =
-				previewMode === 'all'
-					? {
-							count: allIncludedCanAttend ? includedAttendeeCount : 0,
-							availableNames,
-						}
-					: {
-							count,
-							availableNames,
-						}
+			previewAvailability[slot] = {
+				count,
+				availableNames,
+			}
 		}
 		const previewMaxCount = Math.max(1, includedAttendeeCount)
+		const previewHighlightedSlots =
+			previewMode === 'all' ? allAvailableSlots : undefined
 		const bestSlots = slots
 			.filter((slot) => !blockedSlots.has(slot))
 			.map((slot) => ({
@@ -2268,8 +2264,11 @@ export function ScheduleHostRoute(handle: Handle) {
 									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
 									hideDisabledOnlyRowsAndColumns: true,
-									highlightedSlots: allAvailableSlots,
-									highlightedSlotLabel: 'all selected attendees can attend',
+									highlightedSlots: previewHighlightedSlots,
+									highlightedSlotLabel:
+										previewMode === 'all'
+											? 'all selected attendees can attend'
+											: undefined,
 									slotAvailability: previewAvailability,
 									maxAvailabilityCount: previewMaxCount,
 									activeSlot: activePreviewSlot,
