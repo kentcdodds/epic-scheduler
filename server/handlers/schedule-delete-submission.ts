@@ -48,17 +48,26 @@ export function createScheduleDeleteSubmissionHandler(
 			const name = typeof body.name === 'string' ? body.name : ''
 			const roomId = appEnv.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = appEnv.SCHEDULE_ROOM.get(roomId)
-			const roomResponse = await room.fetch(
-				'https://schedule-room/availability/delete',
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						shareToken,
-						name,
-					}),
-				},
-			)
+			let roomResponse: Response
+			try {
+				roomResponse = await room.fetch(
+					'https://schedule-room/availability/delete',
+					{
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							shareToken,
+							name,
+						}),
+					},
+				)
+			} catch (error) {
+				console.error('schedule delete submission room call failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to delete submission.' },
+					{ status: 502 },
+				)
+			}
 			const roomPayload = (await roomResponse
 				.json()
 				.catch(() => null)) as DeleteSubmissionRoomPayload | null
@@ -75,7 +84,16 @@ export function createScheduleDeleteSubmissionHandler(
 				)
 			}
 
-			const snapshot = await getScheduleSnapshot(appEnv.APP_DB, shareToken)
+			let snapshot: Awaited<ReturnType<typeof getScheduleSnapshot>>
+			try {
+				snapshot = await getScheduleSnapshot(appEnv.APP_DB, shareToken)
+			} catch (error) {
+				console.error('schedule delete submission snapshot load failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to load schedule snapshot.' },
+					{ status: 500 },
+				)
+			}
 			if (!snapshot) {
 				return Response.json(
 					{ ok: false, error: 'Schedule not found.' },

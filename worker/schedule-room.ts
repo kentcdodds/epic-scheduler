@@ -28,6 +28,10 @@ type RenameAvailabilityPayload = {
 	nextName?: unknown
 }
 
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
 function isAvailabilityClientError(message: string) {
 	return /(not found|required|invalid|must|range|interval)/i.test(message)
 }
@@ -42,6 +46,10 @@ function isAvailabilityNotFoundError(message: string) {
 
 function isAvailabilityConflictError(message: string) {
 	return /already exists/i.test(message)
+}
+
+function isAvailabilityForbiddenError(message: string) {
+	return /host submission/i.test(message)
 }
 
 export class ScheduleRoom extends DurableObject<Env> {
@@ -92,6 +100,12 @@ export class ScheduleRoom extends DurableObject<Env> {
 			try {
 				payload = (await request.json()) as AvailabilityUpdatePayload
 			} catch {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+			if (!isRecordValue(payload)) {
 				return Response.json(
 					{ ok: false, error: 'Invalid JSON payload.' },
 					{ status: 400 },
@@ -151,6 +165,12 @@ export class ScheduleRoom extends DurableObject<Env> {
 					{ status: 400 },
 				)
 			}
+			if (!isRecordValue(payload)) {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
 
 			const shareToken =
 				typeof payload.shareToken === 'string' ? payload.shareToken : ''
@@ -177,6 +197,9 @@ export class ScheduleRoom extends DurableObject<Env> {
 				if (isAvailabilityNotFoundError(message)) {
 					return Response.json({ ok: false, error: message }, { status: 404 })
 				}
+				if (isAvailabilityForbiddenError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 403 })
+				}
 				if (isAvailabilityValidationError(message)) {
 					return Response.json({ ok: false, error: message }, { status: 400 })
 				}
@@ -194,6 +217,12 @@ export class ScheduleRoom extends DurableObject<Env> {
 			try {
 				payload = (await request.json()) as RenameAvailabilityPayload
 			} catch {
+				return Response.json(
+					{ ok: false, error: 'Invalid JSON payload.' },
+					{ status: 400 },
+				)
+			}
+			if (!isRecordValue(payload)) {
 				return Response.json(
 					{ ok: false, error: 'Invalid JSON payload.' },
 					{ status: 400 },
@@ -228,6 +257,9 @@ export class ScheduleRoom extends DurableObject<Env> {
 						: 'Unable to rename availability submission.'
 				if (isAvailabilityNotFoundError(message)) {
 					return Response.json({ ok: false, error: message }, { status: 404 })
+				}
+				if (isAvailabilityForbiddenError(message)) {
+					return Response.json({ ok: false, error: message }, { status: 403 })
 				}
 				if (isAvailabilityConflictError(message)) {
 					return Response.json({ ok: false, error: message }, { status: 409 })

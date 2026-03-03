@@ -120,28 +120,23 @@ export function ScheduleRoute(handle: Handle) {
 		return normalizeName(name).toLowerCase()
 	}
 
-	function hasPersistedSubmissionForName(name: string) {
-		if (!snapshot) return false
-		const normalizedName = normalizeNameForLookup(name)
-		if (!normalizedName) return false
-		return snapshot.attendees.some(
-			(attendee) =>
-				!attendee.isHost &&
-				normalizeNameForLookup(attendee.name) === normalizedName,
-		)
-	}
-
-	function getPersistedAttendeeName(name: string) {
+	function getPersistedAttendee(name: string) {
 		if (!snapshot) return null
 		const normalizedName = normalizeNameForLookup(name)
 		if (!normalizedName) return null
 		return (
 			snapshot.attendees.find(
-				(attendee) =>
-					!attendee.isHost &&
-					normalizeNameForLookup(attendee.name) === normalizedName,
-			)?.name ?? null
+				(attendee) => normalizeNameForLookup(attendee.name) === normalizedName,
+			) ?? null
 		)
+	}
+
+	function hasPersistedSubmissionForName(name: string) {
+		return getPersistedAttendee(name) !== null
+	}
+
+	function getPersistedAttendeeName(name: string) {
+		return getPersistedAttendee(name)?.name ?? null
 	}
 
 	function normalizeLocalSelectionAgainstBlockedSlots() {
@@ -432,14 +427,10 @@ export function ScheduleRoute(handle: Handle) {
 			return
 		}
 
-		const previousDirtyChanges = hasDirtyChanges
-		const previousPendingSave = pendingSave
 		clearSaveDebounceTimer()
-		hasDirtyChanges = false
-		pendingSave = false
 		isDeletingSubmission = true
 		handle.update()
-		let shouldRestoreDirtyState = false
+		let completedSuccessfully = false
 
 		try {
 			const response = await fetch(
@@ -464,7 +455,6 @@ export function ScheduleRoute(handle: Handle) {
 						? payload.error
 						: 'Unable to delete submission.'
 				setStatus(errorMessage, true)
-				shouldRestoreDirtyState = true
 				return
 			}
 
@@ -481,19 +471,15 @@ export function ScheduleRoute(handle: Handle) {
 					? 'Submission deleted.'
 					: 'No saved submission to delete.',
 			)
+			completedSuccessfully = true
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatus('Network error while deleting submission.', true)
-			shouldRestoreDirtyState = true
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isDeletingSubmission = false
-				if (shouldRestoreDirtyState) {
-					hasDirtyChanges = previousDirtyChanges
-					pendingSave = previousPendingSave
-					if (hasDirtyChanges) {
-						scheduleAutoSave()
-					}
+				if (!completedSuccessfully && (hasDirtyChanges || pendingSave)) {
+					scheduleAutoSave()
 				}
 				handle.update()
 			}
@@ -522,14 +508,10 @@ export function ScheduleRoute(handle: Handle) {
 			return
 		}
 
-		const previousDirtyChanges = hasDirtyChanges
-		const previousPendingSave = pendingSave
 		clearSaveDebounceTimer()
-		hasDirtyChanges = false
-		pendingSave = false
 		isRenamingSubmission = true
 		handle.update()
-		let shouldRestoreDirtyState = false
+		let completedSuccessfully = false
 
 		try {
 			const response = await fetch(
@@ -557,7 +539,6 @@ export function ScheduleRoute(handle: Handle) {
 						? payload.error
 						: 'Unable to update attendee name.'
 				setStatus(errorMessage, true)
-				shouldRestoreDirtyState = true
 				return
 			}
 
@@ -570,19 +551,15 @@ export function ScheduleRoute(handle: Handle) {
 			hasDirtyChanges = false
 			pendingSave = false
 			setStatus(payload.renamed ? 'Name updated.' : 'Name already up to date.')
+			completedSuccessfully = true
 		} catch {
 			if (requestShareToken !== shareToken || handle.signal.aborted) return
 			setStatus('Network error while updating attendee name.', true)
-			shouldRestoreDirtyState = true
 		} finally {
 			if (requestShareToken === shareToken && !handle.signal.aborted) {
 				isRenamingSubmission = false
-				if (shouldRestoreDirtyState) {
-					hasDirtyChanges = previousDirtyChanges
-					pendingSave = previousPendingSave
-					if (hasDirtyChanges) {
-						scheduleAutoSave()
-					}
+				if (!completedSuccessfully && (hasDirtyChanges || pendingSave)) {
+					scheduleAutoSave()
 				}
 				handle.update()
 			}
@@ -765,16 +742,20 @@ export function ScheduleRoute(handle: Handle) {
 		})
 		const pendingChangeCount =
 			pendingDiff.pendingAdded.size + pendingDiff.pendingRemoved.size
-		const pendingSync =
-			pendingChangeCount > 0 ||
-			isSaving ||
-			isDeletingSubmission ||
-			isRenamingSubmission
+		const submissionActionInFlight =
+			isSaving || isDeletingSubmission || isRenamingSubmission
+		const pendingSync = pendingChangeCount > 0 || submissionActionInFlight
 		const normalizedAttendeeName = normalizeName(attendeeName)
+		const persistedAttendee = getPersistedAttendee(attendeeName)
 		const hasPersistedSubmission = hasPersistedSubmissionForName(attendeeName)
+		const persistedSubmissionIsHost = persistedAttendee?.isHost === true
+		const renameSourceIsHost = pendingRenameSourceName
+			? getPersistedAttendee(pendingRenameSourceName)?.isHost === true
+			: false
 		const canRenameSubmission =
 			typeof pendingRenameSourceName === 'string' &&
 			normalizedAttendeeName.length > 0 &&
+			!renameSourceIsHost &&
 			normalizeNameForLookup(pendingRenameSourceName) !==
 				normalizeNameForLookup(attendeeName)
 		const showRenameSubmissionButton =
@@ -782,6 +763,7 @@ export function ScheduleRoute(handle: Handle) {
 		const showDeleteSubmissionButton =
 			normalizedAttendeeName.length > 0 &&
 			(hasPersistedSubmission || isDeletingSubmission) &&
+			!persistedSubmissionIsHost &&
 			!showRenameSubmissionButton
 		const attendeeEntries = currentSnapshot?.attendees ?? []
 		const activeSlotAvailableNames = activeSlot
@@ -931,15 +913,20 @@ export function ScheduleRoute(handle: Handle) {
 								on={{
 									input: (event) => {
 										const nextName = event.currentTarget.value
+										const previousPersistedAttendee =
+											getPersistedAttendee(attendeeName)
 										const previousPersistedName =
-											getPersistedAttendeeName(attendeeName)
+											previousPersistedAttendee?.name ?? null
 										attendeeName = nextName
 										const nextPersistedName =
 											getPersistedAttendeeName(attendeeName)
-										if (nextPersistedName) {
+										if (!normalizeName(attendeeName)) {
+											pendingRenameSourceName = null
+										} else if (nextPersistedName) {
 											pendingRenameSourceName = null
 										} else if (
 											previousPersistedName &&
+											!previousPersistedAttendee?.isHost &&
 											normalizeNameForLookup(previousPersistedName) !==
 												normalizeNameForLookup(attendeeName)
 										) {
@@ -1125,9 +1112,7 @@ export function ScheduleRoute(handle: Handle) {
 						<button
 							type="button"
 							on={{ click: () => void renameSubmission() }}
-							disabled={
-								isSaving || isDeletingSubmission || isRenamingSubmission
-							}
+							disabled={submissionActionInFlight}
 							css={{
 								justifySelf: 'start',
 								padding: `${spacing.sm} ${spacing.lg}`,
@@ -1136,14 +1121,8 @@ export function ScheduleRoute(handle: Handle) {
 								backgroundColor: 'transparent',
 								color: colors.primary,
 								fontWeight: typography.fontWeight.medium,
-								cursor:
-									isSaving || isDeletingSubmission || isRenamingSubmission
-										? 'not-allowed'
-										: 'pointer',
-								opacity:
-									isSaving || isDeletingSubmission || isRenamingSubmission
-										? 0.72
-										: 1,
+								cursor: submissionActionInFlight ? 'not-allowed' : 'pointer',
+								opacity: submissionActionInFlight ? 0.72 : 1,
 							}}
 						>
 							{isRenamingSubmission ? 'Updating name…' : 'Change my name'}
@@ -1153,9 +1132,7 @@ export function ScheduleRoute(handle: Handle) {
 						<button
 							type="button"
 							on={{ click: () => void deleteSubmission() }}
-							disabled={
-								isSaving || isDeletingSubmission || isRenamingSubmission
-							}
+							disabled={submissionActionInFlight}
 							css={{
 								justifySelf: 'start',
 								padding: `${spacing.sm} ${spacing.lg}`,
@@ -1164,9 +1141,8 @@ export function ScheduleRoute(handle: Handle) {
 								backgroundColor: 'transparent',
 								color: colors.error,
 								fontWeight: typography.fontWeight.medium,
-								cursor:
-									isSaving || isDeletingSubmission ? 'not-allowed' : 'pointer',
-								opacity: isSaving || isDeletingSubmission ? 0.72 : 1,
+								cursor: submissionActionInFlight ? 'not-allowed' : 'pointer',
+								opacity: submissionActionInFlight ? 0.72 : 1,
 							}}
 						>
 							{isDeletingSubmission

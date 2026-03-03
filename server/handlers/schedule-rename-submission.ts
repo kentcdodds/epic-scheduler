@@ -51,18 +51,27 @@ export function createScheduleRenameSubmissionHandler(
 			const nextName = typeof body.nextName === 'string' ? body.nextName : ''
 			const roomId = appEnv.SCHEDULE_ROOM.idFromName(shareToken)
 			const room = appEnv.SCHEDULE_ROOM.get(roomId)
-			const roomResponse = await room.fetch(
-				'https://schedule-room/availability/rename',
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						shareToken,
-						currentName,
-						nextName,
-					}),
-				},
-			)
+			let roomResponse: Response
+			try {
+				roomResponse = await room.fetch(
+					'https://schedule-room/availability/rename',
+					{
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							shareToken,
+							currentName,
+							nextName,
+						}),
+					},
+				)
+			} catch (error) {
+				console.error('schedule rename submission room call failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to rename submission.' },
+					{ status: 502 },
+				)
+			}
 			const roomPayload = (await roomResponse
 				.json()
 				.catch(() => null)) as RenameSubmissionRoomPayload | null
@@ -79,7 +88,16 @@ export function createScheduleRenameSubmissionHandler(
 				)
 			}
 
-			const snapshot = await getScheduleSnapshot(appEnv.APP_DB, shareToken)
+			let snapshot: Awaited<ReturnType<typeof getScheduleSnapshot>>
+			try {
+				snapshot = await getScheduleSnapshot(appEnv.APP_DB, shareToken)
+			} catch (error) {
+				console.error('schedule rename submission snapshot load failed:', error)
+				return Response.json(
+					{ ok: false, error: 'Unable to load schedule snapshot.' },
+					{ status: 500 },
+				)
+			}
 			if (!snapshot) {
 				return Response.json(
 					{ ok: false, error: 'Schedule not found.' },

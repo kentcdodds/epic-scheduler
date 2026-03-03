@@ -17,6 +17,8 @@ on the Epic Web E2E workshop and our existing setup.
   that the respondent disappears from schedule snapshots/host views.
 - Attendee submission rename flow (`Change my name`) and confirmation that the
   old attendee name no longer appears in snapshots/host views.
+- Host submission protection (host attendee cannot be deleted or renamed via
+  attendee self-service APIs, and host-facing buttons stay hidden).
 - User-visible sync states for optimistic flows (for example
   pending/saving/saved availability indicators).
 - Mobile layout stability for interactive flows so status updates do not shift
