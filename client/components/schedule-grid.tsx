@@ -301,10 +301,20 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		const currentTarget = event.currentTarget
 		const relatedTarget = event.relatedTarget
 		if (!(currentTarget instanceof Element)) return true
-		if (!(relatedTarget instanceof Node)) return true
-		const scroller = currentTarget.closest('[data-schedule-grid-scroller]')
-		if (!scroller) return true
-		return !scroller.contains(relatedTarget)
+		if (!(relatedTarget instanceof Element)) return true
+		const currentScroller = currentTarget.closest(
+			'[data-schedule-grid-scroller]',
+		)
+		if (!currentScroller) return true
+		const relatedSlotButton =
+			relatedTarget.closest('button[data-slot]') ??
+			relatedTarget.closest('td')?.querySelector('button[data-slot]')
+		if (!relatedSlotButton) return true
+		const relatedScroller = relatedSlotButton.closest(
+			'[data-schedule-grid-scroller]',
+		)
+		if (!relatedScroller) return true
+		return currentScroller !== relatedScroller
 	}
 
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
@@ -350,6 +360,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		return (
 			<div
 				data-schedule-grid-scroller
+				on={{
+					pointerleave: props.onCellHover
+						? () => props.onCellHover?.(null)
+						: undefined,
+				}}
 				css={{
 					border: `1px solid ${colors.border}`,
 					borderRadius: radius.lg,
