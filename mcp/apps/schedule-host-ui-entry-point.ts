@@ -175,7 +175,7 @@ export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 					Share token: <code data-share-token>Not provided</code>
 				</p>
 				<p class="host-muted">
-					Host key: <code data-host-access-token>Not provided</code>
+					Host access token: <code data-host-access-token>Not provided</code>
 				</p>
 				<div class="host-row">
 					<button
@@ -191,11 +191,11 @@ export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 					<input name="shareToken" type="text" placeholder="Paste share token" />
 				</label>
 				<label class="host-field">
-					<span>Host key</span>
+					<span>Host access token</span>
 					<input
 						name="hostAccessToken"
 						type="text"
-						placeholder="Paste host key"
+						placeholder="Paste host access token"
 					/>
 				</label>
 				<div class="host-row">
@@ -205,7 +205,7 @@ export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 					<a data-attendee-link href="#" class="host-muted">Open attendee view</a>
 				</div>
 				<p class="host-status" data-status aria-live="polite">
-					Waiting for share token and host key input.
+					Waiting for share token and host access token input.
 				</p>
 			</section>
 			<section class="host-iframe-wrap">

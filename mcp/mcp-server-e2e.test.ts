@@ -288,10 +288,8 @@ test(
 		await using server = await startDevServer(database.persistDir)
 		await using mcpClient = await createMcpClient(server.origin)
 
-		const start = new Date()
-		start.setMinutes(0, 0, 0)
-		const end = new Date(start.getTime())
-		end.setDate(end.getDate() + 3)
+		const start = new Date('2026-03-02T00:00:00.000Z')
+		const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
 
 		const createResult = await mcpClient.client.callTool({
 			name: 'create_schedule',
@@ -302,6 +300,7 @@ test(
 				rangeStartUtc: start.toISOString(),
 				rangeEndUtc: end.toISOString(),
 				selectedSlots: [start.toISOString()],
+				disabledDays: ['saturday', 'sunday'],
 			},
 		})
 		const createStructured = (createResult as CallToolResult)
@@ -316,6 +315,31 @@ test(
 				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
 		expect(hostAccessToken.length).toBeGreaterThan(8)
+
+		const createdSnapshotResult = await mcpClient.client.callTool({
+			name: 'get_schedule_snapshot',
+			arguments: {
+				shareToken,
+			},
+		})
+		const createdSnapshotStructured = (createdSnapshotResult as CallToolResult)
+			.structuredContent as Record<string, unknown> | undefined
+		expect(createdSnapshotStructured?.ok).toBe(true)
+		const createdSnapshot = createdSnapshotStructured?.snapshot as
+			| {
+					blockedSlots?: Array<string>
+			  }
+			| undefined
+		const createdBlockedSlots = Array.isArray(createdSnapshot?.blockedSlots)
+			? createdSnapshot.blockedSlots
+			: []
+		expect(createdBlockedSlots.length).toBe(48)
+		expect(
+			createdBlockedSlots.every((slot) => {
+				const day = new Date(slot).getUTCDay()
+				return day === 0 || day === 6
+			}),
+		).toBe(true)
 
 		const submitResult = await mcpClient.client.callTool({
 			name: 'submit_schedule_availability',
@@ -521,7 +545,7 @@ test(
 			name: 'open_schedule_host_ui',
 			arguments: {
 				shareToken: 'demo-host-token',
-				hostAccessToken: 'demo-host-key',
+				hostAccessToken: 'demo-host-access-token',
 			},
 		})
 		const structuredResult = (result as CallToolResult).structuredContent as
@@ -530,7 +554,7 @@ test(
 		expect(structuredResult?.widget).toBe('schedule_host')
 		expect(structuredResult?.resourceUri).toBe(scheduleHostUiResourceUri)
 		expect(structuredResult?.shareToken).toBe('demo-host-token')
-		expect(structuredResult?.hostAccessToken).toBe('demo-host-key')
+		expect(structuredResult?.hostAccessToken).toBe('demo-host-access-token')
 
 		const resourceResult = await mcpClient.client.readResource({
 			uri: scheduleHostUiResourceUri,
@@ -546,7 +570,7 @@ test(
 		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
 		expect(hostResource?.text).toContain('data-api-base-url="')
 		expect(hostResource?.text).toContain(
-			'Waiting for share token and host key input',
+			'Waiting for share token and host access token input',
 		)
 	},
 	{ timeout: defaultTimeoutMs },

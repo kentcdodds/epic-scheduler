@@ -128,7 +128,7 @@ function parseUtcIso(value: string, fieldName: string) {
 	return date.toISOString()
 }
 
-function normalizeTimeZone(
+export function normalizeTimeZone(
 	value: string | null | undefined,
 	fieldName: string,
 ) {

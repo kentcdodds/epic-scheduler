@@ -16,7 +16,7 @@ const serverMetadata = {
 	},
 	instructions: `
 Quick start
-- Use 'create_schedule' to create a new scheduling link and host access token.
+- Use 'create_schedule' to create a new scheduling link, return a generated host access token, and optionally disable weekdays on creation.
 - Use 'submit_schedule_availability' to save attendee selections (attendee-side only).
 - Use 'update_schedule_host_settings' to edit host-managed schedule configuration (title and blocked slots) with the host access token.
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.

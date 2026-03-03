@@ -67,8 +67,6 @@ export function extractScheduleToolInput(source: unknown): ScheduleToolInput {
 			findNestedStringByKey({ source, key: 'name' }),
 		hostAccessToken:
 			findNestedStringByKey({ source, key: 'hostAccessToken' }) ??
-			findNestedStringByKey({ source, key: 'host_access_token' }) ??
-			findNestedStringByKey({ source, key: 'hostKey' }) ??
-			findNestedStringByKey({ source, key: 'host_key' }),
+			findNestedStringByKey({ source, key: 'host_access_token' }),
 	}
 }

@@ -121,16 +121,18 @@ const blogPosts: Array<BlogPost> = [
 			</div>
 			<h2>Validate host app routing and input propagation</h2>
 			<p>
-				Use <code>open_schedule_host_ui</code> with a share token and host key,
-				then verify the host app receives both values and loads the embedded
-				dashboard route.
+				Use <code>open_schedule_host_ui</code> with a share token and host
+				access token, then verify the host app receives both values and loads
+				the embedded dashboard route.
 			</p>
 			<ol>
 				<li>
 					Call <code>open_schedule_host_ui</code> with
 					<code>shareToken</code> and <code>hostAccessToken</code>.
 				</li>
-				<li>Confirm the host widget shows the same token and host key.</li>
+				<li>
+					Confirm the host widget shows the same token and host access token.
+				</li>
 				<li>
 					Confirm the iframe loads
 					<code>/s/{shareToken}/{hostAccessToken}</code>.
