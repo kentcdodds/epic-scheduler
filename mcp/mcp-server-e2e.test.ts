@@ -314,13 +314,8 @@ test(
 			typeof createStructured?.hostAccessToken === 'string'
 				? createStructured.hostAccessToken
 				: ''
-		const createdHostKey =
-			typeof createStructured?.hostKey === 'string'
-				? createStructured.hostKey
-				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
 		expect(hostAccessToken.length).toBeGreaterThan(8)
-		expect(createdHostKey).toBe(hostAccessToken)
 
 		const createdSnapshotResult = await mcpClient.client.callTool({
 			name: 'get_schedule_snapshot',
@@ -551,7 +546,7 @@ test(
 			name: 'open_schedule_host_ui',
 			arguments: {
 				shareToken: 'demo-host-token',
-				hostAccessToken: 'demo-host-key',
+				hostAccessToken: 'demo-host-access-token',
 			},
 		})
 		const structuredResult = (result as CallToolResult).structuredContent as
@@ -560,7 +555,7 @@ test(
 		expect(structuredResult?.widget).toBe('schedule_host')
 		expect(structuredResult?.resourceUri).toBe(scheduleHostUiResourceUri)
 		expect(structuredResult?.shareToken).toBe('demo-host-token')
-		expect(structuredResult?.hostAccessToken).toBe('demo-host-key')
+		expect(structuredResult?.hostAccessToken).toBe('demo-host-access-token')
 
 		const resourceResult = await mcpClient.client.readResource({
 			uri: scheduleHostUiResourceUri,
@@ -576,7 +571,7 @@ test(
 		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
 		expect(hostResource?.text).toContain('data-api-base-url="')
 		expect(hostResource?.text).toContain(
-			'Waiting for share token and host key input',
+			'Waiting for share token and host access token input',
 		)
 	},
 	{ timeout: defaultTimeoutMs },

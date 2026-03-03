@@ -8,7 +8,7 @@ const createScheduleTool = {
 	name: 'create_schedule',
 	title: 'Create Schedule',
 	description:
-		'Create a new link-based schedule with interval, date range, host name, and initial availability. Returns a generated host key for host dashboard access.',
+		'Create a new link-based schedule with interval, date range, host name, and initial availability. Returns a generated host access token for host dashboard access.',
 	annotations: {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -205,7 +205,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			},
 			outputSchema: {
 				shareToken: z.string(),
-				hostKey: z.string(),
 				hostAccessToken: z.string(),
 				schedulePath: z.string(),
 				scheduleUrl: z.string(),
@@ -282,12 +281,11 @@ export async function registerCreateScheduleTool(agent: MCP) {
 					content: [
 						{
 							type: 'text',
-							text: `Created schedule: ${scheduleUrl}. Host key: ${created.hostAccessToken}. Host dashboard: ${hostUrl}`,
+							text: `Created schedule: ${scheduleUrl}. Host access token: ${created.hostAccessToken}. Host dashboard: ${hostUrl}`,
 						},
 					],
 					structuredContent: {
 						shareToken: created.shareToken,
-						hostKey: created.hostAccessToken,
 						hostAccessToken: created.hostAccessToken,
 						schedulePath,
 						scheduleUrl,

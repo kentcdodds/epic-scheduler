@@ -83,7 +83,8 @@ handled by the static asset fetcher in `worker/index.ts`.
   should navigate to `/s/{shareToken}` after extracting the share token.
 - Host dashboard data loading now calls
   `/api/schedules/{shareToken}/host-snapshot` and must include `X-Host-Token`;
-  add a negative-path check for invalid host keys when host-route auth changes.
+  add a negative-path check for invalid host access tokens when host-route auth
+  changes.
 - Host dashboard tests should cover realtime status updates
   (`Realtime connected`) and preview-grid tooltip behavior when attendee
   availability changes.

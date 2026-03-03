@@ -148,7 +148,7 @@ test('host settings auto-save retries after transient failure', async ({
 	expect(hostUpdatePostRequestCount).toBeGreaterThanOrEqual(2)
 })
 
-test('host dashboard shows auth error for invalid host key', async ({
+test('host dashboard shows auth error for invalid host access token', async ({
 	page,
 }) => {
 	const rangeStart = new Date(Date.UTC(2026, 3, 1, 14, 0, 0))
@@ -169,7 +169,7 @@ test('host dashboard shows auth error for invalid host key', async ({
 	const shareToken = createPayload.shareToken ?? ''
 	expect(shareToken).not.toBe('')
 
-	await page.goto(`/s/${shareToken}/invalid-host-key`)
+	await page.goto(`/s/${shareToken}/invalid-host-access-token`)
 	await expect(
 		page.getByText('Schedule not found or unavailable.'),
 	).toBeVisible()

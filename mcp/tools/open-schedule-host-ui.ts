@@ -35,7 +35,7 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 					.string()
 					.optional()
 					.describe(
-						'Optional host key paired with shareToken for opening the host dashboard route.',
+						'Optional host access token paired with shareToken for opening the host dashboard route.',
 					),
 			},
 			outputSchema: {
@@ -66,8 +66,8 @@ export async function registerOpenScheduleHostUiTool(agent: MCP) {
 						type: 'text',
 						text: normalizedShareToken
 							? normalizedHostAccessToken
-								? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken} with host key preloaded. Use this for schedule configuration, not attendee availability submission.`
-								: `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}. Provide a host key to load the host dashboard route.`
+								? `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken} with host access token preloaded. Use this for schedule configuration, not attendee availability submission.`
+								: `Epic Scheduler host dashboard UI is attached for share token ${normalizedShareToken}. Provide a host access token to load the host dashboard route.`
 							: 'Epic Scheduler host dashboard UI is attached. Use this for link management and availability limits, not attendee submission.',
 					},
 				],

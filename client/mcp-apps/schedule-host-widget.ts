@@ -90,7 +90,10 @@ function setupScheduleHostWidget() {
 		if (!normalizedHostAccessToken) {
 			hostAccessTokenElement.textContent = 'Not provided'
 			hostIframe.removeAttribute('src')
-			setStatus('Host key is required to load the host dashboard.', true)
+			setStatus(
+				'Host access token is required to load the host dashboard.',
+				true,
+			)
 			return false
 		}
 		hostAccessTokenInput.value = normalizedHostAccessToken
@@ -169,11 +172,11 @@ function setupScheduleHostWidget() {
 
 	loadHostButton.addEventListener('click', () => {
 		const token = shareTokenInput.value.trim()
-		const hostToken = hostAccessTokenInput.value.trim()
+		const hostAccessToken = hostAccessTokenInput.value.trim()
 		if (
 			!setHostDashboardTarget({
 				shareToken: token,
-				hostAccessToken: hostToken,
+				hostAccessToken,
 			})
 		) {
 			return
@@ -230,7 +233,7 @@ function setupScheduleHostWidget() {
 	})
 	hostBridge.requestRenderData()
 	fullscreenManager?.updateFullscreenButton()
-	setStatus('Waiting for share token and host key input.')
+	setStatus('Waiting for share token and host access token input.')
 	const openAiBridge = (
 		window as Window & {
 			openai?: unknown
@@ -240,9 +243,9 @@ function setupScheduleHostWidget() {
 	const widgetUrl = new URL(window.location.href)
 	maybeApplyToolInput({
 		shareToken: readNonEmptyString(widgetUrl.searchParams.get('shareToken')),
-		hostAccessToken:
-			readNonEmptyString(widgetUrl.searchParams.get('hostAccessToken')) ??
-			readNonEmptyString(widgetUrl.searchParams.get('hostKey')),
+		hostAccessToken: readNonEmptyString(
+			widgetUrl.searchParams.get('hostAccessToken'),
+		),
 	})
 }
 
