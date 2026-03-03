@@ -42,6 +42,12 @@ on the Epic Web E2E workshop and our existing setup.
   as explicit non-interactive `N/A` cells instead of silent empty blocks.
 - Collapsed attendee/preview axes when an entire row or column is host-blocked,
   while host unavailable-slots grid still renders the full matrix.
+- Desktop home/attendee grids keep page-level horizontal overflow behavior so
+  sticky headers track viewport scrolling instead of being scoped to an inner
+  table scroller.
+- Wide date-range desktop host dashboards so schedule tables keep horizontal
+  scrolling within their local scrollers and do not force whole-page horizontal
+  overflow.
 - Integration across the worker, client router, and API endpoints.
 - Route-specific document titles for primary pages (`/`, `/s/:shareToken`,
   `/s/:shareToken/:hostAccessToken`, and key marketing pages) so browser-tab

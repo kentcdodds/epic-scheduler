@@ -375,3 +375,65 @@ test('host dashboard can rename and delete a submission', async ({ page }) => {
 		0,
 	)
 })
+
+test('host dashboard keeps wide tables within local horizontal scrollers', async ({
+	page,
+}) => {
+	await page.goto('/')
+	const startDateInput = await page.getByLabel('Start date').inputValue()
+	const extendedEndDate = addDateInputDays(startDateInput, 20)
+	await page.getByLabel('End date').fill(extendedEndDate)
+	await page.getByLabel('Your name').fill('Host')
+	await page.getByRole('button', { name: 'Create share link' }).click()
+	await expect(
+		page.getByRole('heading', { name: 'Host dashboard' }),
+	).toBeVisible()
+	await expect(
+		page.getByRole('heading', { name: 'Host unavailable slots' }),
+	).toBeVisible()
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					Array.from(
+						document.querySelectorAll('[data-schedule-grid-scroller]'),
+					).filter((scroller) => (scroller as HTMLElement).clientWidth > 0)
+						.length,
+			),
+		)
+		.toBeGreaterThan(0)
+
+	const overflowSnapshot = await page.evaluate(() => {
+		const documentWidth =
+			document.documentElement.scrollWidth -
+			document.documentElement.clientWidth
+		const scrollers = Array.from(
+			document.querySelectorAll('[data-schedule-grid-scroller]'),
+		)
+			.map((scroller) => {
+				const element = scroller as HTMLElement
+				const computedStyle = getComputedStyle(element)
+				return {
+					clientWidth: element.clientWidth,
+					scrollWidth: element.scrollWidth,
+					overflowX: computedStyle.overflowX,
+				}
+			})
+			.filter((entry) => entry.clientWidth > 0)
+		return {
+			documentWidth,
+			scrollers,
+		}
+	})
+
+	expect(overflowSnapshot.documentWidth).toBeLessThanOrEqual(1)
+	expect(overflowSnapshot.scrollers.length).toBeGreaterThan(0)
+	expect(
+		overflowSnapshot.scrollers.some(
+			(entry) => entry.scrollWidth > entry.clientWidth,
+		),
+	).toBe(true)
+	for (const scroller of overflowSnapshot.scrollers) {
+		expect(scroller.overflowX).not.toBe('visible')
+	}
+})

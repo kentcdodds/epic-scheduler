@@ -1792,6 +1792,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									slots: currentSnapshot.slots,
 									selectedSlots: new Set<string>(),
 									readOnly: true,
+									desktopHorizontalOverflow: 'local',
 									selectedSlotLabel: 'selected in host preview',
 									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
@@ -1977,6 +1978,7 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
+									desktopHorizontalOverflow: 'local',
 									selectionSlots: pendingBlockedSelectionSlots,
 									selectionSlotLabel: pendingBlockedSelectionLabel,
 									selectedSlotLabel: 'marked unavailable by host',
