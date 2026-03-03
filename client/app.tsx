@@ -1,7 +1,7 @@
 import { type Handle } from 'remix/component'
 import { clientRoutes } from './routes/index.tsx'
 import { listenToRouterNavigation, Router } from './client-router.tsx'
-import { colors, spacing, typography } from './styles/tokens.ts'
+import { colors, mq, spacing, typography } from './styles/tokens.ts'
 import { visuallyHiddenCss } from './styles/visually-hidden.ts'
 
 function getRouteAnnouncement(pathname: string) {
@@ -94,6 +94,9 @@ export function App(handle: Handle) {
 					margin: '0 auto',
 					padding: spacing['2xl'],
 					fontFamily: typography.fontFamily,
+					[mq.mobile]: {
+						padding: `calc(${spacing['2xl']} / 2)`,
+					},
 				}}
 			>
 				<a href="#main-content" css={skipToMainLinkCss}>

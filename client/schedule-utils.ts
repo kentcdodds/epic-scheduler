@@ -49,7 +49,7 @@ function parseTimeRowKey(timeRowKey: string) {
 	}
 }
 
-function parseDateInputToLocalDate(dateInput: string) {
+export function parseDateInputToLocalDate(dateInput: string) {
 	const [rawYear, rawMonth, rawDay] = dateInput.split('-')
 	if (!rawYear || !rawMonth || !rawDay) return null
 	const year = Number.parseInt(rawYear, 10)
