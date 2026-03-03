@@ -19,6 +19,9 @@ on the Epic Web E2E workshop and our existing setup.
   old attendee name no longer appears in snapshots/host views.
 - Host submission protection (host attendee cannot be deleted or renamed via
   attendee self-service APIs, and host-facing buttons stay hidden).
+- Required-field slot-selection guard behavior: selecting a slot without
+  entering required fields should show inline input-local errors and focus the
+  first missing field (home: schedule title then host name; attendee: name).
 - User-visible sync states for optimistic flows (for example
   pending/saving/saved availability indicators).
 - Mobile layout stability for interactive flows so status updates do not shift

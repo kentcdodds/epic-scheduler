@@ -55,6 +55,7 @@ test('host dashboard can block slots from attendee selection', async ({
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
@@ -199,6 +200,7 @@ test('host dashboard can block slots from attendee selection', async ({
 
 test('host dashboard can update host name', async ({ page }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host Original')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
@@ -247,6 +249,7 @@ test('host dashboard can update host name', async ({ page }) => {
 
 test('host dashboard can rename and delete a submission', async ({ page }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)

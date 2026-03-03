@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('home unselected slots become blocked on create', async ({ page }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 
 	const unselectedSlotButton = page

@@ -65,6 +65,12 @@ export function HomeRoute(handle: Handle) {
 	let message: string | null = null
 	let useTapRangeMode = detectTapRangeMode()
 	let didInitializeSelection = false
+	let scheduleTitleError: string | null = null
+	let hostNameError: string | null = null
+	const scheduleTitleRequiredMessage =
+		'Schedule name is required before making a submission.'
+	const hostNameRequiredMessage =
+		'Host name is required before making a submission.'
 
 	function syncSlots() {
 		const nextRange = createSlotRangeFromDateInputs({
@@ -112,6 +118,53 @@ export function HomeRoute(handle: Handle) {
 		status = nextStatus
 		message = text
 		handle.update()
+	}
+
+	function focusScheduleTitleInput() {
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		window.setTimeout(() => {
+			const titleInput = document.querySelector<HTMLInputElement>(
+				'input[name="title"]',
+			)
+			titleInput?.focus()
+		}, 0)
+	}
+
+	function focusHostNameInput() {
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		window.setTimeout(() => {
+			const nameInput = document.querySelector<HTMLInputElement>(
+				'input[name="hostName"]',
+			)
+			nameInput?.focus()
+		}, 0)
+	}
+
+	function validateRequiredSubmissionFields() {
+		const normalizedTitle = title.trim()
+		if (!normalizedTitle) {
+			scheduleTitleError = scheduleTitleRequiredMessage
+			hostNameError = null
+			focusScheduleTitleInput()
+			handle.update()
+			return null
+		}
+		const normalizedHostName = hostName.trim()
+		if (!normalizedHostName) {
+			scheduleTitleError = null
+			hostNameError = hostNameRequiredMessage
+			focusHostNameInput()
+			handle.update()
+			return null
+		}
+		if (scheduleTitleError || hostNameError) {
+			scheduleTitleError = null
+			hostNameError = null
+		}
+		return {
+			normalizedTitle,
+			normalizedHostName,
+		}
 	}
 
 	function updateDateRange(next: {
@@ -273,11 +326,9 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	async function createScheduleRequest() {
-		const normalizedHostName = hostName.trim()
-		if (!normalizedHostName) {
-			setMessage('error', 'Host name is required.')
-			return
-		}
+		const requiredFields = validateRequiredSubmissionFields()
+		if (!requiredFields) return
+		const { normalizedTitle, normalizedHostName } = requiredFields
 
 		if (selectedSlots.size === 0) {
 			setMessage(
@@ -302,7 +353,7 @@ export function HomeRoute(handle: Handle) {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					title,
+					title: normalizedTitle,
 					hostName: normalizedHostName,
 					hostTimeZone: browserTimeZone,
 					intervalMinutes,
@@ -365,6 +416,7 @@ export function HomeRoute(handle: Handle) {
 			}
 		}
 		if (useTapRangeMode) return
+		if (!validateRequiredSubmissionFields()) return
 		pointerSelection.startSelection({
 			slot,
 			event,
@@ -382,6 +434,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellClick(slot: string) {
 		if (!useTapRangeMode) return
+		if (!validateRequiredSubmissionFields()) return
 
 		if (!rangeAnchor) {
 			rangeAnchor = slot
@@ -596,16 +649,23 @@ export function HomeRoute(handle: Handle) {
 								name="title"
 								value={title}
 								placeholder="Planning session"
+								aria-invalid={scheduleTitleError ? 'true' : undefined}
+								aria-describedby={
+									scheduleTitleError ? 'schedule-title-error' : undefined
+								}
 								on={{
 									input: (event) => {
 										title = event.currentTarget.value
+										if (title.trim()) {
+											scheduleTitleError = null
+										}
 										handle.update()
 									},
 								}}
 								css={{
 									padding: `${spacing.sm} ${spacing.md}`,
 									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
+									border: `1px solid ${scheduleTitleError ? colors.error : colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
 									'&::placeholder': {
@@ -614,6 +674,20 @@ export function HomeRoute(handle: Handle) {
 									},
 								}}
 							/>
+							<p
+								id="schedule-title-error"
+								role={scheduleTitleError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={scheduleTitleError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{scheduleTitleError ?? ''}
+							</p>
 						</label>
 						<label css={{ display: 'grid', gap: spacing.xs }}>
 							<span
@@ -630,16 +704,21 @@ export function HomeRoute(handle: Handle) {
 								name="hostName"
 								value={hostName}
 								placeholder="Your name"
+								aria-invalid={hostNameError ? 'true' : undefined}
+								aria-describedby={hostNameError ? 'host-name-error' : undefined}
 								on={{
 									input: (event) => {
 										hostName = event.currentTarget.value
+										if (hostName.trim()) {
+											hostNameError = null
+										}
 										handle.update()
 									},
 								}}
 								css={{
 									padding: `${spacing.sm} ${spacing.md}`,
 									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
+									border: `1px solid ${hostNameError ? colors.error : colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
 									'&::placeholder': {
@@ -648,6 +727,20 @@ export function HomeRoute(handle: Handle) {
 									},
 								}}
 							/>
+							<p
+								id="host-name-error"
+								role={hostNameError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={hostNameError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{hostNameError ?? ''}
+							</p>
 						</label>
 					</div>
 

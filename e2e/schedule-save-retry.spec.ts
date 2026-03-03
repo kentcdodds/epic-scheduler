@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('attendee auto-save retries after transient failure', async ({ page }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
@@ -82,6 +83,7 @@ test('host settings auto-save retries after transient failure', async ({
 	page,
 }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 	await page.getByRole('button', { name: 'Create share link' }).click()
 	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)

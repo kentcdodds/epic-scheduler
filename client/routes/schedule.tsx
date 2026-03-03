@@ -66,6 +66,7 @@ export function ScheduleRoute(handle: Handle) {
 	let useTapRangeMode = detectTapRangeMode()
 	let statusMessage: string | null = null
 	let statusError = false
+	let attendeeNameError: string | null = null
 	let isSaving = false
 	let isDeletingSubmission = false
 	let isRenamingSubmission = false
@@ -83,6 +84,7 @@ export function ScheduleRoute(handle: Handle) {
 	let lastPathname = ''
 	let initialNameLoaded = false
 	let pendingRenameSourceName: string | null = null
+	const nameRequiredMessage = 'Name is required before making a submission.'
 	const autoSaveDelayMs = 650
 	const reconnectDelayMs = 1200
 	const offlinePollIntervalMs = 4000
@@ -91,6 +93,30 @@ export function ScheduleRoute(handle: Handle) {
 		statusMessage = nextMessage
 		statusError = error
 		handle.update()
+	}
+
+	function focusAttendeeNameInput() {
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		window.setTimeout(() => {
+			const nameInput = document.querySelector<HTMLInputElement>(
+				'input[name="attendeeName"]',
+			)
+			nameInput?.focus()
+		}, 0)
+	}
+
+	function ensureAttendeeNameProvided() {
+		const normalizedName = normalizeName(attendeeName)
+		if (normalizedName) {
+			if (attendeeNameError) {
+				attendeeNameError = null
+			}
+			return normalizedName
+		}
+		attendeeNameError = nameRequiredMessage
+		focusAttendeeNameInput()
+		handle.update()
+		return null
 	}
 
 	function getPathname() {
@@ -383,9 +409,8 @@ export function ScheduleRoute(handle: Handle) {
 			pendingSave = true
 			return
 		}
-		const normalizedName = normalizeName(attendeeName)
+		const normalizedName = ensureAttendeeNameProvided()
 		if (!normalizedName) {
-			setStatus('Enter your name before selecting availability.', true)
 			return
 		}
 
@@ -734,9 +759,8 @@ export function ScheduleRoute(handle: Handle) {
 			handle.update()
 			return false
 		}
-		const normalizedName = normalizeName(attendeeName)
+		const normalizedName = ensureAttendeeNameProvided()
 		if (!normalizedName) {
-			setStatus('Enter your name before selecting availability.', true)
 			return false
 		}
 		return true
@@ -887,6 +911,7 @@ export function ScheduleRoute(handle: Handle) {
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
+		attendeeNameError = null
 		setStatus(null, false)
 		await loadSnapshot()
 		connectSocket()
@@ -1114,8 +1139,13 @@ export function ScheduleRoute(handle: Handle) {
 							</span>
 							<input
 								type="text"
+								name="attendeeName"
 								value={attendeeName}
 								placeholder="Add your name"
+								aria-invalid={attendeeNameError ? 'true' : undefined}
+								aria-describedby={
+									attendeeNameError ? 'attendee-name-error' : undefined
+								}
 								on={{
 									input: (event) => {
 										const nextName = event.currentTarget.value
@@ -1138,6 +1168,9 @@ export function ScheduleRoute(handle: Handle) {
 										) {
 											pendingRenameSourceName = previousPersistedName
 										}
+										if (normalizeName(attendeeName)) {
+											attendeeNameError = null
+										}
 										persistedSelectedSlots =
 											getPersistedSelectionForName(attendeeName)
 										if (!hasDirtyChanges) {
@@ -1155,11 +1188,25 @@ export function ScheduleRoute(handle: Handle) {
 								css={{
 									padding: `${spacing.sm} ${spacing.md}`,
 									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
+									border: `1px solid ${attendeeNameError ? colors.error : colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
 								}}
 							/>
+							<p
+								id="attendee-name-error"
+								role={attendeeNameError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={attendeeNameError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{attendeeNameError ?? ''}
+							</p>
 						</label>
 						<div
 							css={{

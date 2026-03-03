@@ -8,6 +8,7 @@ function readSelectedCount(text: string | null) {
 
 test('desktop drag can paint across day columns', async ({ page }) => {
 	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
 	await page.getByLabel('Your name').fill('Host')
 
 	const selectedCountLabel = page.getByText(/selected slot/)
