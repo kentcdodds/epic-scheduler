@@ -93,6 +93,9 @@ handled by the static asset fetcher in `worker/index.ts`.
 - Host dashboard tests should cover realtime status updates
   (`Realtime connected`) and preview-grid tooltip behavior when attendee
   availability changes.
+- Attendee submission tests should cover hover tooltip behavior
+  (`aside[data-submission-hover-tooltip]`) including attendee timezone labels
+  and availability strike-through styling.
 - Host dashboard tests should cover host profile edits (`Host name`) to ensure
   host settings autosave persists after reload.
 - Avoid hidden fixtures or global state in the Playwright tests.

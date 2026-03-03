@@ -3,6 +3,7 @@ import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
+	formatSlotLabel,
 	getRectangularSlotSelection,
 	toDayKey,
 } from '#client/schedule-utils.ts'
@@ -57,16 +58,6 @@ function areSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>) {
 		if (!right.has(value)) return false
 	}
 	return true
-}
-
-function formatSlotLabel(slot: string) {
-	return new Intl.DateTimeFormat(undefined, {
-		weekday: 'short',
-		month: 'short',
-		day: 'numeric',
-		hour: 'numeric',
-		minute: '2-digit',
-	}).format(new Date(slot))
 }
 
 function getBrowserTimeZone() {

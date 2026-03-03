@@ -149,7 +149,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		? [resolvedMobileDayKey]
 		: dayKeys
 	const desktopVisibleDayKeys = dayKeys
-	const useCellPointerMove = !props.onCellPointerDown
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
 		const currentTarget = event.currentTarget
@@ -430,11 +429,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 															: props.onCellHover
 																? () => props.onCellHover?.(slot)
 																: undefined,
-													pointermove:
-														useCellPointerMove && props.onCellPointerMove
-															? (event) =>
-																	props.onCellPointerMove?.(slot, event)
-															: undefined,
+													pointermove: props.onCellPointerMove
+														? (event) => props.onCellPointerMove?.(slot, event)
+														: undefined,
 													pointerleave: props.onCellHover
 														? (event) => {
 																if (!shouldClearHoverOnPointerLeave(event)) {

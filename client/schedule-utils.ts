@@ -8,6 +8,8 @@ export type GridModel = {
 	cellByDayAndTime: Record<string, Record<string, string>>
 }
 
+type SlotLabelStyle = 'long' | 'short'
+
 function pad(value: number) {
 	return String(value).padStart(2, '0')
 }
@@ -296,6 +298,28 @@ export function getRectangularSlotSelection(params: {
 }
 
 const attendeeLocalTimeFormatters = new Map<string, Intl.DateTimeFormat>()
+const slotLabelFormatters: Record<SlotLabelStyle, Intl.DateTimeFormat> = {
+	short: new Intl.DateTimeFormat(undefined, {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+	}),
+	long: new Intl.DateTimeFormat(undefined, {
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+	}),
+}
+
+export function formatSlotLabel(slot: string, style: SlotLabelStyle = 'short') {
+	const slotDate = new Date(slot)
+	if (Number.isNaN(slotDate.getTime())) return slot
+	return slotLabelFormatters[style].format(slotDate)
+}
 
 export function formatSlotForAttendeeTimeZone(
 	slot: string,
