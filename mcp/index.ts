@@ -16,7 +16,7 @@ const serverMetadata = {
 	},
 	instructions: `
 Quick start
-- Use 'create_schedule' to create a new scheduling link and host access token.
+- Use 'create_schedule' to create a new scheduling link with a required host key, and optionally disable weekdays on creation.
 - Use 'submit_schedule_availability' to save attendee selections (attendee-side only).
 - Use 'update_schedule_host_settings' to edit host-managed schedule configuration (title and blocked slots) with the host access token.
 - Use 'get_schedule_snapshot' to inspect overlap and attendee participation.
@@ -25,7 +25,7 @@ Quick start
 
 How to chain tools safely
 - Attendee workflow: create_schedule -> submit_schedule_availability -> get_schedule_snapshot (or open_schedule_ui).
-- Host workflow: create_schedule (read hostAccessToken) -> update_schedule_host_settings (shareToken + hostAccessToken) -> get_schedule_snapshot (or open_schedule_host_ui with shareToken + hostAccessToken).
+- Host workflow: create_schedule (provide hostKey and read hostAccessToken) -> update_schedule_host_settings (shareToken + hostAccessToken) -> get_schedule_snapshot (or open_schedule_host_ui with shareToken + hostAccessToken).
 	`.trim(),
 } as const
 

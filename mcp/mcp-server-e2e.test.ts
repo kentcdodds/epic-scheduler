@@ -288,20 +288,22 @@ test(
 		await using server = await startDevServer(database.persistDir)
 		await using mcpClient = await createMcpClient(server.origin)
 
-		const start = new Date()
-		start.setMinutes(0, 0, 0)
+		const start = new Date('2026-03-02T00:00:00.000Z')
 		const end = new Date(start.getTime())
-		end.setDate(end.getDate() + 3)
+		end.setDate(end.getDate() + 7)
+		const hostKey = 'mcp-test-host-key'
 
 		const createResult = await mcpClient.client.callTool({
 			name: 'create_schedule',
 			arguments: {
 				title: 'MCP test schedule',
 				hostName: 'Host',
+				hostKey,
 				intervalMinutes: 60,
 				rangeStartUtc: start.toISOString(),
 				rangeEndUtc: end.toISOString(),
 				selectedSlots: [start.toISOString()],
+				disabledDays: ['saturday', 'sunday'],
 			},
 		})
 		const createStructured = (createResult as CallToolResult)
@@ -314,8 +316,38 @@ test(
 			typeof createStructured?.hostAccessToken === 'string'
 				? createStructured.hostAccessToken
 				: ''
+		const createdHostKey =
+			typeof createStructured?.hostKey === 'string'
+				? createStructured.hostKey
+				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
-		expect(hostAccessToken.length).toBeGreaterThan(8)
+		expect(hostAccessToken).toBe(hostKey)
+		expect(createdHostKey).toBe(hostKey)
+
+		const createdSnapshotResult = await mcpClient.client.callTool({
+			name: 'get_schedule_snapshot',
+			arguments: {
+				shareToken,
+			},
+		})
+		const createdSnapshotStructured = (createdSnapshotResult as CallToolResult)
+			.structuredContent as Record<string, unknown> | undefined
+		expect(createdSnapshotStructured?.ok).toBe(true)
+		const createdSnapshot = createdSnapshotStructured?.snapshot as
+			| {
+					blockedSlots?: Array<string>
+			  }
+			| undefined
+		const createdBlockedSlots = Array.isArray(createdSnapshot?.blockedSlots)
+			? createdSnapshot.blockedSlots
+			: []
+		expect(createdBlockedSlots.length).toBe(48)
+		expect(
+			createdBlockedSlots.every((slot) => {
+				const day = new Date(slot).getUTCDay()
+				return day === 0 || day === 6
+			}),
+		).toBe(true)
 
 		const submitResult = await mcpClient.client.callTool({
 			name: 'submit_schedule_availability',

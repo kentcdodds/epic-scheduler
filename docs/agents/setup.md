@@ -50,6 +50,12 @@ Write tool handlers also emit safe invocation logs:
 These logs intentionally avoid full token/body dumps and only include safe shape
 metadata.
 
+## MCP create tool contract notes
+
+- `create_schedule` requires `hostKey` (with optional alias `hostAccessToken`).
+- `create_schedule` supports `disabledDays` on creation (weekday names or 0-6)
+  and maps those days to blocked slots across the requested date range.
+
 ## PR preview deployments
 
 The GitHub Actions preview workflow creates per-preview Cloudflare resources so
