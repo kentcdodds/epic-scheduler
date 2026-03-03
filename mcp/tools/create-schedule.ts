@@ -8,7 +8,7 @@ const createScheduleTool = {
 	name: 'create_schedule',
 	title: 'Create Schedule',
 	description:
-		'Create a new link-based schedule with interval, date range, host name, and initial availability.',
+		'Create a new link-based schedule with interval, date range, host name, and initial availability. Returns a generated host key for host dashboard access.',
 	annotations: {
 		readOnlyHint: false,
 		destructiveHint: false,
@@ -51,7 +51,6 @@ const weekdayShortToIndex: Record<string, number> = {
 
 const safeCreateScheduleValidationMessages = new Set([
 	'Host name is required.',
-	'Host key is required.',
 	'Interval must be one of 15, 30, or 60 minutes.',
 	'rangeEndUtc must be later than rangeStartUtc.',
 	'Requested range is too large.',
@@ -59,31 +58,8 @@ const safeCreateScheduleValidationMessages = new Set([
 	'Invalid rangeEndUtc. Expected an ISO date string.',
 	'Invalid selectedSlots item. Expected an ISO date string.',
 	'Invalid hostTimeZone.',
-	'hostKey and hostAccessToken must match when both are provided.',
 	'Invalid disabledDays item. Expected weekday names (Sunday-Saturday) or indexes 0-6.',
 ])
-
-function normalizeHostKey(params: {
-	hostKey?: string
-	hostAccessToken?: string
-}) {
-	const normalizedHostKey = params.hostKey?.trim() || ''
-	const normalizedHostAccessToken = params.hostAccessToken?.trim() || ''
-	const resolvedHostKey = normalizedHostKey || normalizedHostAccessToken
-	if (!resolvedHostKey) {
-		throw new Error('Host key is required.')
-	}
-	if (
-		normalizedHostKey &&
-		normalizedHostAccessToken &&
-		normalizedHostKey !== normalizedHostAccessToken
-	) {
-		throw new Error(
-			'hostKey and hostAccessToken must match when both are provided.',
-		)
-	}
-	return resolvedHostKey
-}
 
 function normalizeDisabledDays(days: Array<string | number>) {
 	const normalized = new Set<number>()
@@ -205,18 +181,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			inputSchema: {
 				title: z.string().default('Scheduling poll'),
 				hostName: z.string(),
-				hostKey: z
-					.string()
-					.optional()
-					.describe(
-						'Host key used to open the host dashboard route for this schedule. Required unless hostAccessToken is provided.',
-					),
-				hostAccessToken: z
-					.string()
-					.optional()
-					.describe(
-						'Optional alias for hostKey. If both hostKey and hostAccessToken are provided, they must match.',
-					),
 				hostTimeZone: z
 					.string()
 					.optional()
@@ -253,8 +217,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 		async ({
 			title,
 			hostName,
-			hostKey,
-			hostAccessToken,
 			hostTimeZone,
 			intervalMinutes,
 			rangeStartUtc,
@@ -264,8 +226,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 		}: {
 			title: string
 			hostName: string
-			hostKey?: string
-			hostAccessToken?: string
 			hostTimeZone?: string
 			intervalMinutes: 15 | 30 | 60
 			rangeStartUtc: string
@@ -276,7 +236,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			const requestSummary = {
 				titleLength: title.trim().length,
 				hostNameLength: hostName.trim().length,
-				hasHostKey: !!hostKey?.trim() || !!hostAccessToken?.trim(),
 				disabledDaysCount: disabledDays.length,
 				hasHostTimeZone: Boolean(hostTimeZone),
 				intervalMinutes,
@@ -287,7 +246,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 			console.info('create_schedule tool invoked', requestSummary)
 
 			try {
-				const normalizedHostKey = normalizeHostKey({ hostKey, hostAccessToken })
 				const normalizedDisabledDays = normalizeDisabledDays(disabledDays)
 				const blockedSlots = buildBlockedSlotsFromDisabledDays({
 					intervalMinutes,
@@ -299,7 +257,6 @@ export async function registerCreateScheduleTool(agent: MCP) {
 				const created = await createSchedule(agent.getAppDb(), {
 					title,
 					hostName,
-					hostAccessToken: normalizedHostKey,
 					hostTimeZone,
 					intervalMinutes,
 					rangeStartUtc,

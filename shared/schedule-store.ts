@@ -46,7 +46,6 @@ type ScheduleInsertInput = {
 	rangeEndUtc: string
 	hostName: string
 	hostTimeZone?: string | null
-	hostAccessToken?: string | null
 	selectedSlots: Array<string>
 	blockedSlots?: Array<string>
 }
@@ -142,15 +141,6 @@ function normalizeTimeZone(
 		}).format(new Date(0))
 	} catch {
 		throw new Error(`Invalid ${fieldName}.`)
-	}
-	return normalized
-}
-
-function normalizeHostAccessToken(value: string | null | undefined) {
-	if (value === undefined || value === null) return null
-	const normalized = value.trim()
-	if (!normalized) {
-		throw new Error('Host key is required.')
 	}
 	return normalized
 }
@@ -381,8 +371,7 @@ export async function createSchedule(
 
 	const id = crypto.randomUUID()
 	const shareToken = createShareToken()
-	const hostAccessToken =
-		normalizeHostAccessToken(input.hostAccessToken) ?? createHostAccessToken()
+	const hostAccessToken = createHostAccessToken()
 	const hostAccessTokenHash = await hashHostAccessToken(hostAccessToken)
 	const hostAttendeeId = crypto.randomUUID()
 	const createdAt = new Date().toISOString()

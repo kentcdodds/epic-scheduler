@@ -52,7 +52,8 @@ metadata.
 
 ## MCP create tool contract notes
 
-- `create_schedule` requires `hostKey` (with optional alias `hostAccessToken`).
+- `create_schedule` returns a generated `hostAccessToken` (also mirrored as
+  `hostKey` in structured output).
 - `create_schedule` supports `disabledDays` on creation (weekday names or 0-6)
   and maps those days to blocked slots across the requested date range.
 

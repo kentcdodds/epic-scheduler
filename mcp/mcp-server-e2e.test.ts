@@ -291,14 +291,12 @@ test(
 		const start = new Date('2026-03-02T00:00:00.000Z')
 		const end = new Date(start.getTime())
 		end.setDate(end.getDate() + 7)
-		const hostKey = 'mcp-test-host-key'
 
 		const createResult = await mcpClient.client.callTool({
 			name: 'create_schedule',
 			arguments: {
 				title: 'MCP test schedule',
 				hostName: 'Host',
-				hostKey,
 				intervalMinutes: 60,
 				rangeStartUtc: start.toISOString(),
 				rangeEndUtc: end.toISOString(),
@@ -321,8 +319,8 @@ test(
 				? createStructured.hostKey
 				: ''
 		expect(shareToken.length).toBeGreaterThan(4)
-		expect(hostAccessToken).toBe(hostKey)
-		expect(createdHostKey).toBe(hostKey)
+		expect(hostAccessToken.length).toBeGreaterThan(8)
+		expect(createdHostKey).toBe(hostAccessToken)
 
 		const createdSnapshotResult = await mcpClient.client.callTool({
 			name: 'get_schedule_snapshot',
