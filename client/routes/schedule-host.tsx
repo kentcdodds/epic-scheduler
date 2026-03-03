@@ -1144,20 +1144,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		})
 	}
 
-	function handlePreviewPointerEnter(slot: string, event: PointerEvent) {
-		previewSelection.updateSelectionToSlot(slot)
-		if (event.pointerType !== 'mouse' || previewSelection.state.mode) return
-		setPreviewHoverTooltipPointerPosition(event.clientX, event.clientY)
-		const didChange =
-			previewHoverTooltipSlot !== slot || activePreviewSlot !== slot
-		previewHoverTooltipSlot = slot
-		activePreviewSlot = slot
-		if (didChange) {
-			handle.update()
-		}
-	}
-
-	function handlePreviewPointerMove(slot: string, event: PointerEvent) {
+	function updatePreviewHoverTooltip(slot: string, event: PointerEvent) {
 		if (event.pointerType !== 'mouse') return
 		if (previewSelection.state.mode) return
 		setPreviewHoverTooltipPointerPosition(event.clientX, event.clientY)
@@ -1168,6 +1155,15 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (didChange) {
 			handle.update()
 		}
+	}
+
+	function handlePreviewPointerEnter(slot: string, event: PointerEvent) {
+		previewSelection.updateSelectionToSlot(slot)
+		updatePreviewHoverTooltip(slot, event)
+	}
+
+	function handlePreviewPointerMove(slot: string, event: PointerEvent) {
+		updatePreviewHoverTooltip(slot, event)
 	}
 
 	function handlePreviewHover(slot: string | null) {
@@ -1500,12 +1496,6 @@ export function ScheduleHostRoute(handle: Handle) {
 				? `${formatSlotLabel(previewRangeStartSlot)} - ${formatSlotLabel(previewRangeEndSlotExclusive)}`
 				: null
 		const previewHoveredSlotValue = previewHoverTooltipSlot
-		const previewHoveredSlotAvailableNames = previewHoveredSlotValue
-			? (previewAvailability[previewHoveredSlotValue]?.availableNames ?? [])
-			: []
-		const previewHoveredSlotAvailableNameSet = new Set(
-			previewHoveredSlotAvailableNames,
-		)
 		const previewHoveredSlotDetails =
 			previewHoveredSlotValue && slots.includes(previewHoveredSlotValue)
 				? {
@@ -1514,7 +1504,10 @@ export function ScheduleHostRoute(handle: Handle) {
 						attendeeDetails: includedAttendees.map((attendee) => ({
 							id: attendee.id,
 							name: attendee.name,
-							canAttend: previewHoveredSlotAvailableNameSet.has(attendee.name),
+							canAttend:
+								includedAvailabilityById
+									.get(attendee.id)
+									?.has(previewHoveredSlotValue) ?? false,
 							...formatSlotForAttendeeTimeZone(
 								previewHoveredSlotValue,
 								attendee.timeZone,
