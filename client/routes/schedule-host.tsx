@@ -897,11 +897,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	function applyKeyboardRangeSelection() {
 		if (!keyboardRangeAnchor || !keyboardRangeAction) return false
 		if (keyboardRangeSlots.size === 0) return false
-		let changed = false
 		const shouldBeBlocked = keyboardRangeAction === 'add'
 		for (const slot of keyboardRangeSlots) {
-			const didChange = setBlockedSlotState(slot, shouldBeBlocked)
-			changed = changed || didChange
+			setBlockedSlotState(slot, shouldBeBlocked)
 		}
 		clearKeyboardRangeSelection()
 		handle.update()
