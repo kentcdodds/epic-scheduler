@@ -617,7 +617,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
 		)
-		const saveVersion = changeVersion
 		let shouldRetryAfterFailure = false
 		isSaving = true
 		handle.update()
@@ -1418,9 +1417,12 @@ export function ScheduleHostRoute(handle: Handle) {
 											submissionNameDraftById.get(attendee.id) ?? attendee.name
 										const pendingSubmissionAction =
 											submissionActionById.get(attendee.id) ?? null
+										const normalizedSubmissionName =
+											normalizeName(submissionNameDraft)
 										const canSaveSubmissionName =
 											!isHostAttendee &&
-											normalizeName(submissionNameDraft) !==
+											!!normalizedSubmissionName &&
+											normalizedSubmissionName !==
 												normalizeName(attendee.name) &&
 											pendingSubmissionAction === null
 										return (
