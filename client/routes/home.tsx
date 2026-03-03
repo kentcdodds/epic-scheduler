@@ -680,19 +680,20 @@ export function HomeRoute(handle: Handle) {
 									},
 								}}
 							/>
-							{scheduleTitleError ? (
-								<p
-									id="schedule-title-error"
-									role="alert"
-									css={{
-										margin: 0,
-										color: colors.error,
-										fontSize: typography.fontSize.xs,
-									}}
-								>
-									{scheduleTitleError}
-								</p>
-							) : null}
+							<p
+								id="schedule-title-error"
+								role={scheduleTitleError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={scheduleTitleError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{scheduleTitleError ?? ''}
+							</p>
 						</label>
 						<label css={{ display: 'grid', gap: spacing.xs }}>
 							<span
@@ -732,19 +733,20 @@ export function HomeRoute(handle: Handle) {
 									},
 								}}
 							/>
-							{hostNameError ? (
-								<p
-									id="host-name-error"
-									role="alert"
-									css={{
-										margin: 0,
-										color: colors.error,
-										fontSize: typography.fontSize.xs,
-									}}
-								>
-									{hostNameError}
-								</p>
-							) : null}
+							<p
+								id="host-name-error"
+								role={hostNameError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={hostNameError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{hostNameError ?? ''}
+							</p>
 						</label>
 					</div>
 

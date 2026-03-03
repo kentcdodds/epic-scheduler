@@ -35,7 +35,7 @@ test('home slot selection requires title and host in order', async ({
 	await expect(scheduleTitleError).toContainText(
 		'Schedule name is required before making a submission.',
 	)
-	await expect(hostNameError).toHaveCount(0)
+	await expect(hostNameError).toHaveAttribute('aria-hidden', 'true')
 	await expect(scheduleTitleInput).toBeFocused()
 	expect(readSelectedCount(await selectedCountLabel.textContent())).toBe(
 		initialSelectedCount,

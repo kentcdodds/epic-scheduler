@@ -1199,19 +1199,20 @@ export function ScheduleRoute(handle: Handle) {
 									color: colors.text,
 								}}
 							/>
-							{attendeeNameError ? (
-								<p
-									id="attendee-name-error"
-									role="alert"
-									css={{
-										margin: 0,
-										color: colors.error,
-										fontSize: typography.fontSize.xs,
-									}}
-								>
-									{attendeeNameError}
-								</p>
-							) : null}
+							<p
+								id="attendee-name-error"
+								role={attendeeNameError ? 'alert' : undefined}
+								aria-live="polite"
+								aria-hidden={attendeeNameError ? undefined : 'true'}
+								css={{
+									margin: 0,
+									minHeight: '1.25rem',
+									color: colors.error,
+									fontSize: typography.fontSize.xs,
+								}}
+							>
+								{attendeeNameError ?? ''}
+							</p>
 						</label>
 						<div
 							css={{
