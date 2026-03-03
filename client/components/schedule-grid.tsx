@@ -531,6 +531,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 												data-missing-slot-cell="true"
 												title={missingSlotExplanation}
 												css={{
+													padding: 0,
 													borderBottom: `1px solid ${colors.border}`,
 													borderRight: `1px solid ${colors.border}`,
 													borderLeft: hasWeekSeparator
