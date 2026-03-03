@@ -96,6 +96,62 @@ test('host dashboard receives realtime updates and shows hover tooltip', async (
 	await expect(tooltip.locator('li', { hasText: 'Host' })).toBeVisible()
 	await expect(tooltip.locator('li', { hasText: 'Alex' })).toBeVisible()
 
+	const visibleSlotButtons = previewGrid.locator('button[data-slot]:visible')
+	const visibleSlotButtonCount = await visibleSlotButtons.count()
+	expect(visibleSlotButtonCount).toBeGreaterThan(1)
+	const movementStartButton = visibleSlotButtons.first()
+	const movementEndButton = visibleSlotButtons.nth(1)
+	const movementStartBounds = await movementStartButton.boundingBox()
+	const movementEndBounds = await movementEndButton.boundingBox()
+	if (!movementStartBounds || !movementEndBounds) {
+		throw new Error('Expected visible slot bounds for hover continuity test.')
+	}
+	await movementStartButton.hover()
+	await page.evaluate(() => {
+		type TooltipWindow = Window & {
+			__hostHoverTooltipDetachCount?: number
+			__hostHoverTooltipVisible?: boolean
+			__hostHoverTooltipObserver?: MutationObserver
+		}
+		const tooltipWindow = window as TooltipWindow
+		tooltipWindow.__hostHoverTooltipDetachCount = 0
+		tooltipWindow.__hostHoverTooltipVisible = !!document.querySelector(
+			'aside[data-host-hover-tooltip]',
+		)
+		const observer = new MutationObserver(() => {
+			const isVisible = !!document.querySelector(
+				'aside[data-host-hover-tooltip]',
+			)
+			if (tooltipWindow.__hostHoverTooltipVisible && !isVisible) {
+				tooltipWindow.__hostHoverTooltipDetachCount =
+					(tooltipWindow.__hostHoverTooltipDetachCount ?? 0) + 1
+			}
+			tooltipWindow.__hostHoverTooltipVisible = isVisible
+		})
+		observer.observe(document.body, { childList: true, subtree: true })
+		tooltipWindow.__hostHoverTooltipObserver = observer
+	})
+	const movementStartX =
+		movementStartBounds.x + Math.max(1, movementStartBounds.width - 1)
+	const movementStartY = movementStartBounds.y + movementStartBounds.height / 2
+	const movementEndX = movementEndBounds.x + 1
+	const movementEndY = movementEndBounds.y + movementEndBounds.height / 2
+	await page.mouse.move(movementStartX, movementStartY)
+	await page.mouse.move(movementEndX, movementEndY, { steps: 20 })
+	const hoverTooltipDetachCount = await page.evaluate(() => {
+		type TooltipWindow = Window & {
+			__hostHoverTooltipDetachCount?: number
+			__hostHoverTooltipObserver?: MutationObserver
+			__hostHoverTooltipVisible?: boolean
+		}
+		const tooltipWindow = window as TooltipWindow
+		tooltipWindow.__hostHoverTooltipObserver?.disconnect()
+		delete tooltipWindow.__hostHoverTooltipObserver
+		delete tooltipWindow.__hostHoverTooltipVisible
+		return tooltipWindow.__hostHoverTooltipDetachCount ?? 0
+	})
+	expect(hoverTooltipDetachCount).toBe(0)
+
 	const alexTextDecoration = await tooltip
 		.locator('li', { hasText: 'Alex' })
 		.evaluate((element) => getComputedStyle(element).textDecorationLine)
