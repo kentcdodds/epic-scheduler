@@ -9,6 +9,7 @@ import {
 } from '#client/schedule-snapshot-utils.ts'
 import {
 	findSelectionForAttendee,
+	formatSlotLabel,
 	formatSlotForAttendeeTimeZone,
 	getRectangularSlotSelection,
 } from '#client/schedule-utils.ts'
@@ -49,16 +50,6 @@ function getBrowserTimeZone() {
 function toWebSocketUrl(path: string) {
 	const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 	return `${protocol}//${window.location.host}${path}`
-}
-
-function formatSlotLabel(slot: string) {
-	return new Intl.DateTimeFormat(undefined, {
-		weekday: 'long',
-		month: 'long',
-		day: 'numeric',
-		hour: 'numeric',
-		minute: '2-digit',
-	}).format(new Date(slot))
 }
 
 export function ScheduleRoute(handle: Handle) {
@@ -913,7 +904,7 @@ export function ScheduleRoute(handle: Handle) {
 							}}
 						>
 							<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
-								{formatSlotLabel(hoveredSlotDetails.slot)}
+								{formatSlotLabel(hoveredSlotDetails.slot, 'long')}
 							</p>
 							{hoveredSlotDetails.isBlocked ? (
 								<p css={{ margin: 0, color: colors.error }}>
@@ -970,7 +961,7 @@ export function ScheduleRoute(handle: Handle) {
 								Slot details
 							</h2>
 							<p css={{ margin: 0, color: colors.textMuted }}>
-								{formatSlotLabel(activeSlot)}
+								{formatSlotLabel(activeSlot, 'long')}
 							</p>
 							{activeSlotBlocked ? (
 								<p css={{ margin: 0, color: colors.error, fontWeight: 600 }}>

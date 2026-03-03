@@ -67,10 +67,11 @@ test('submission schedule shows hover tooltip attendee details', async ({
 
 	await page.goto(`/s/${shareToken}?name=Host`)
 	const scheduleGrid = page.locator('[data-schedule-grid-shell]').first()
-	const unavailableForAlexButton = scheduleGrid
+	const visibleScheduleTable = scheduleGrid.locator('table:visible').first()
+	const unavailableForAlexButton = visibleScheduleTable
 		.locator(`button[data-slot="${unavailableForAlexSlot}"]`)
 		.first()
-	const alexOnlySlotButton = scheduleGrid
+	const alexOnlySlotButton = visibleScheduleTable
 		.locator(`button[data-slot="${alexOnlySlot}"]`)
 		.first()
 	await expect(unavailableForAlexButton).toBeVisible()
@@ -85,16 +86,22 @@ test('submission schedule shows hover tooltip attendee details', async ({
 	await expect(tooltip.locator('li', { hasText: 'Host' })).toBeVisible()
 	await expect(alexTooltipRow).toContainText('Pacific/Auckland')
 
-	const alexUnavailableDecoration = await alexTooltipRow.evaluate(
-		(element) => getComputedStyle(element).textDecorationLine,
-	)
-	expect(alexUnavailableDecoration).toContain('line-through')
+	await expect
+		.poll(() =>
+			alexTooltipRow.evaluate(
+				(element) => getComputedStyle(element).textDecorationLine,
+			),
+		)
+		.toContain('line-through')
 
 	await alexOnlySlotButton.scrollIntoViewIfNeeded()
 	await alexOnlySlotButton.hover()
 	await expect(tooltip).toBeVisible()
-	const alexAvailableDecoration = await tooltip
-		.locator('li', { hasText: 'Alex' })
-		.evaluate((element) => getComputedStyle(element).textDecorationLine)
-	expect(alexAvailableDecoration).not.toContain('line-through')
+	await expect
+		.poll(() =>
+			tooltip
+				.locator('li', { hasText: 'Alex' })
+				.evaluate((element) => getComputedStyle(element).textDecorationLine),
+		)
+		.not.toContain('line-through')
 })
