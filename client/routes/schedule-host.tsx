@@ -613,6 +613,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				}
 			}
 		}
+		const saveVersion = changeVersion
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
