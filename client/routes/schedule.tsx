@@ -29,6 +29,8 @@ import {
 } from '#client/styles/tokens.ts'
 
 type ConnectionState = 'connecting' | 'live' | 'offline'
+const submissionHoverTooltipPointerXVar = '--submission-hover-tooltip-pointer-x'
+const submissionHoverTooltipPointerYVar = '--submission-hover-tooltip-pointer-y'
 
 function parseShareToken(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
@@ -49,6 +51,16 @@ function toWebSocketUrl(path: string) {
 	return `${protocol}//${window.location.host}${path}`
 }
 
+function formatSlotLabel(slot: string) {
+	return new Intl.DateTimeFormat(undefined, {
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit',
+	}).format(new Date(slot))
+}
+
 export function ScheduleRoute(handle: Handle) {
 	const browserTimeZone = getBrowserTimeZone()
 	let shareToken = ''
@@ -57,6 +69,9 @@ export function ScheduleRoute(handle: Handle) {
 	let selectedSlots = new Set<string>()
 	let persistedSelectedSlots = new Set<string>()
 	let activeSlot: string | null = null
+	let hoverTooltipSlot: string | null = null
+	let hoverTooltipPointerX: number | null = null
+	let hoverTooltipPointerY: number | null = null
 	let rangeAnchor: string | null = null
 	let tapRangeAction: 'add' | 'remove' | null = null
 	let mobileDayKey: string | null = null
@@ -149,6 +164,37 @@ export function ScheduleRoute(handle: Handle) {
 		offlinePollInFlight = false
 	}
 
+	function setHoverTooltipPointerPosition(clientX: number, clientY: number) {
+		if (typeof document === 'undefined') return
+		if (hoverTooltipPointerX === clientX && hoverTooltipPointerY === clientY) {
+			return
+		}
+		hoverTooltipPointerX = clientX
+		hoverTooltipPointerY = clientY
+		const rootStyle = document.documentElement.style
+		rootStyle.setProperty(submissionHoverTooltipPointerXVar, `${clientX}px`)
+		rootStyle.setProperty(submissionHoverTooltipPointerYVar, `${clientY}px`)
+	}
+
+	function clearHoverTooltipPointerPosition() {
+		hoverTooltipPointerX = null
+		hoverTooltipPointerY = null
+		if (typeof document === 'undefined') return
+		const rootStyle = document.documentElement.style
+		rootStyle.removeProperty(submissionHoverTooltipPointerXVar)
+		rootStyle.removeProperty(submissionHoverTooltipPointerYVar)
+	}
+
+	function clearSubmissionHoverTooltip() {
+		const didChange =
+			hoverTooltipSlot !== null ||
+			hoverTooltipPointerX !== null ||
+			hoverTooltipPointerY !== null
+		hoverTooltipSlot = null
+		clearHoverTooltipPointerPosition()
+		return didChange
+	}
+
 	const pointerSelection = createPointerDragSelectionController({
 		requestRender: () => {
 			handle.update()
@@ -190,6 +236,7 @@ export function ScheduleRoute(handle: Handle) {
 		clearSocketResources()
 		clearOfflinePollTimer()
 		clearSaveDebounceTimer()
+		clearSubmissionHoverTooltip()
 		pointerSelection.cleanup()
 		pendingSave = false
 	}
@@ -423,6 +470,9 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function handleCellPointerDown(slot: string, event: PointerEvent) {
+		if (clearSubmissionHoverTooltip()) {
+			handle.update()
+		}
 		const nextMode = resolveTapRangeModeFromPointer({
 			currentMode: useTapRangeMode,
 			pointerType: event.pointerType,
@@ -448,6 +498,21 @@ export function ScheduleRoute(handle: Handle) {
 
 	function handleCellPointerEnter(slot: string) {
 		pointerSelection.updateSelectionToSlot(slot)
+	}
+
+	function handleCellPointerMove(slot: string, event: PointerEvent) {
+		if (event.pointerType !== 'mouse') return
+		if (pointerSelection.state.mode) return
+		setHoverTooltipPointerPosition(event.clientX, event.clientY)
+		if (hoverTooltipSlot === slot) return
+		hoverTooltipSlot = slot
+		handle.update()
+	}
+
+	function handleCellHover(slot: string | null) {
+		if (slot) return
+		if (!clearSubmissionHoverTooltip()) return
+		handle.update()
 	}
 
 	function handleCellPointerUp() {
@@ -526,6 +591,8 @@ export function ScheduleRoute(handle: Handle) {
 		selectedSlots = new Set<string>()
 		persistedSelectedSlots = new Set<string>()
 		activeSlot = null
+		hoverTooltipSlot = null
+		clearHoverTooltipPointerPosition()
 		rangeAnchor = null
 		tapRangeAction = null
 		mobileDayKey = null
@@ -583,6 +650,29 @@ export function ScheduleRoute(handle: Handle) {
 					}))
 		const activeSlotBlocked =
 			activeSlotValue !== null && blockedSlots.has(activeSlotValue)
+		const hoveredSlotValue = hoverTooltipSlot
+		const hoveredSlotAvailableNames = hoveredSlotValue
+			? (currentSnapshot?.availableNamesBySlot[hoveredSlotValue] ?? [])
+			: []
+		const hoveredSlotAvailableNameSet = new Set(hoveredSlotAvailableNames)
+		const hoveredSlotDetails =
+			hoveredSlotValue && currentSnapshot?.slots.includes(hoveredSlotValue)
+				? {
+						slot: hoveredSlotValue,
+						isBlocked: blockedSlots.has(hoveredSlotValue),
+						attendeeDetails: attendeeEntries.map((entry) => ({
+							id: entry.id,
+							name: entry.name,
+							canAttend: hoveredSlotAvailableNameSet.has(entry.name),
+							...formatSlotForAttendeeTimeZone(
+								hoveredSlotValue,
+								entry.timeZone,
+							),
+						})),
+					}
+				: null
+		const tooltipWidthPx = 340
+		const tooltipHeightPx = 300
 		const hostName =
 			currentSnapshot?.attendees.find((entry) => entry.isHost)?.name ??
 			'the organizer'
@@ -767,14 +857,27 @@ export function ScheduleRoute(handle: Handle) {
 							onCellPointerEnter: (slot, _event) => {
 								handleCellPointerEnter(slot)
 							},
+							onCellPointerMove: (slot, event) => {
+								handleCellPointerMove(slot, event)
+							},
+							onCellHover: (slot) => {
+								handleCellHover(slot)
+							},
 							onCellPointerUp: (_slot, _event) => {
 								handleCellPointerUp()
 							},
 							onCellClick: (slot, _event) => {
-								if (!useTapRangeMode) return
+								const didClearTooltip = clearSubmissionHoverTooltip()
+								if (!useTapRangeMode) {
+									if (didClearTooltip) {
+										handle.update()
+									}
+									return
+								}
 								handleCellClick(slot)
 							},
 							onCellFocus: (slot) => {
+								clearSubmissionHoverTooltip()
 								activeSlot = slot
 								handle.update()
 							},
@@ -784,6 +887,66 @@ export function ScheduleRoute(handle: Handle) {
 							Schedule not found or unavailable.
 						</p>
 					)}
+					{hoveredSlotDetails && hoverTooltipSlot ? (
+						<aside
+							role="note"
+							data-submission-hover-tooltip
+							aria-live="polite"
+							css={{
+								'--submission-hover-tooltip-width': `min(${tooltipWidthPx}px, calc(100vw - 1.5rem))`,
+								'--submission-hover-tooltip-height': `min(${tooltipHeightPx}px, calc(100vh - 1.5rem))`,
+								position: 'fixed',
+								left: 'max(12px, min(calc(var(--submission-hover-tooltip-pointer-x, 0px) + 16px), calc(100vw - var(--submission-hover-tooltip-width) - 12px)))',
+								top: 'max(12px, min(calc(var(--submission-hover-tooltip-pointer-y, 0px) + 16px), calc(100vh - var(--submission-hover-tooltip-height) - 12px)))',
+								zIndex: 40,
+								width: 'var(--submission-hover-tooltip-width)',
+								maxHeight: 'var(--submission-hover-tooltip-height)',
+								overflowY: 'auto',
+								display: 'grid',
+								gap: spacing.xs,
+								padding: spacing.sm,
+								borderRadius: radius.md,
+								border: `1px solid ${colors.border}`,
+								backgroundColor: colors.surface,
+								boxShadow: shadows.md,
+								pointerEvents: 'none',
+							}}
+						>
+							<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
+								{formatSlotLabel(hoveredSlotDetails.slot)}
+							</p>
+							{hoveredSlotDetails.isBlocked ? (
+								<p css={{ margin: 0, color: colors.error }}>
+									This slot is unavailable because the host blocked it.
+								</p>
+							) : null}
+							<ul
+								css={{
+									margin: 0,
+									paddingLeft: '1rem',
+									display: 'grid',
+									gap: spacing.xs,
+								}}
+							>
+								{hoveredSlotDetails.attendeeDetails.map((entry) => {
+									const canAttend =
+										!hoveredSlotDetails.isBlocked && entry.canAttend
+									return (
+										<li
+											key={`hovered-slot-attendee-${entry.id}`}
+											css={{
+												textDecoration: canAttend ? 'none' : 'line-through',
+												color: canAttend ? colors.text : colors.textMuted,
+											}}
+										>
+											<strong>{entry.name}</strong> — {entry.localTime} (
+											{entry.timeZoneLabel})
+										</li>
+									)
+								})}
+							</ul>
+						</aside>
+					) : null}
 
 					{activeSlot && currentSnapshot ? (
 						<section
@@ -807,13 +970,7 @@ export function ScheduleRoute(handle: Handle) {
 								Slot details
 							</h2>
 							<p css={{ margin: 0, color: colors.textMuted }}>
-								{new Intl.DateTimeFormat(undefined, {
-									weekday: 'long',
-									month: 'long',
-									day: 'numeric',
-									hour: 'numeric',
-									minute: '2-digit',
-								}).format(new Date(activeSlot))}
+								{formatSlotLabel(activeSlot)}
 							</p>
 							{activeSlotBlocked ? (
 								<p css={{ margin: 0, color: colors.error, fontWeight: 600 }}>

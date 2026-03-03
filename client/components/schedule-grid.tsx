@@ -149,7 +149,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		? [resolvedMobileDayKey]
 		: dayKeys
 	const desktopVisibleDayKeys = dayKeys
-	const useCellPointerMove = !props.onCellPointerDown
+	const useCellPointerMove = !!props.onCellPointerMove
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
 		const currentTarget = event.currentTarget
