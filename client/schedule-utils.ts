@@ -139,7 +139,15 @@ export function buildGridModel(slots: Array<string>): GridModel {
 	const cellByDayAndTime: Record<string, Record<string, string>> = {}
 	const timeSeen = new Set<string>()
 	const dayWallTimeCounts: Record<string, Record<string, number>> = {}
-	const maxOccurrenceByWallTime = new Map<string, number>()
+	const duplicatedWallTimeKeys = new Set<string>()
+	const wallTimeOffsetOccurrences = new Map<string, Map<number, number>>()
+	const slotEntries: Array<{
+		slot: string
+		date: Date
+		dayKey: string
+		wallTimeKey: string
+		offsetMinutes: number
+	}> = []
 	const rowMetadataByTimeKey: Record<
 		string,
 		{ wallTimeKey: string; sampleDate: Date }
@@ -168,12 +176,36 @@ export function buildGridModel(slots: Array<string>): GridModel {
 		const dayCounts = (dayWallTimeCounts[dayKey] ??= {})
 		const nextOccurrence = (dayCounts[wallTimeKey] ?? 0) + 1
 		dayCounts[wallTimeKey] = nextOccurrence
-		const timeKey = formatTimeRowKey(wallTimeKey, nextOccurrence)
-		maxOccurrenceByWallTime.set(
+		if (nextOccurrence > 1) {
+			duplicatedWallTimeKeys.add(wallTimeKey)
+		}
+		slotEntries.push({
+			slot,
+			date,
+			dayKey,
 			wallTimeKey,
-			Math.max(maxOccurrenceByWallTime.get(wallTimeKey) ?? 0, nextOccurrence),
-		)
+			offsetMinutes: date.getTimezoneOffset(),
+		})
+	}
 
+	for (const entry of slotEntries) {
+		const { slot, date, dayKey, wallTimeKey, offsetMinutes } = entry
+		let occurrence = 1
+		if (duplicatedWallTimeKeys.has(wallTimeKey)) {
+			let offsetOccurrences = wallTimeOffsetOccurrences.get(wallTimeKey)
+			if (!offsetOccurrences) {
+				offsetOccurrences = new Map()
+				wallTimeOffsetOccurrences.set(wallTimeKey, offsetOccurrences)
+			}
+			const existingOccurrence = offsetOccurrences.get(offsetMinutes)
+			if (existingOccurrence === undefined) {
+				occurrence = offsetOccurrences.size + 1
+				offsetOccurrences.set(offsetMinutes, occurrence)
+			} else {
+				occurrence = existingOccurrence
+			}
+		}
+		const timeKey = formatTimeRowKey(wallTimeKey, occurrence)
 		if (!cellByDayAndTime[dayKey]) {
 			cellByDayAndTime[dayKey] = {}
 			dayKeys.push(dayKey)
@@ -189,11 +221,6 @@ export function buildGridModel(slots: Array<string>): GridModel {
 		cellByDayAndTime[dayKey]![timeKey] = slot
 	}
 
-	const duplicatedWallTimeKeys = new Set(
-		Array.from(maxOccurrenceByWallTime.entries())
-			.filter(([, maxOccurrence]) => maxOccurrence > 1)
-			.map(([wallTimeKey]) => wallTimeKey),
-	)
 	for (const timeKey of timeKeys) {
 		const metadata = rowMetadataByTimeKey[timeKey]
 		if (!metadata) continue
