@@ -186,15 +186,8 @@ export function createPointerDragSelectionController(
 
 	return {
 		state,
-		clearAutoScrollRaf,
-		clearSelection,
-		detachSelectionListeners,
-		attachSelectionListeners,
 		updateSelectionToSlot,
-		refreshSelectionAtPointerPosition,
-		maybeStartAutoScroll,
 		finishSelection,
-		handlePointerMove,
 		startSelection,
 		cleanup,
 	}
