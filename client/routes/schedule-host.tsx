@@ -155,6 +155,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	let blockedSlots = new Set<string>()
 	let persistedBlockedSlots = new Set<string>()
 	let excludedAttendeeIds = new Set<string>()
+	let submissionNameDraftById = new Map<string, string>()
+	let submissionActionById = new Map<string, 'rename' | 'delete'>()
 	let previewMode: PreviewMode = 'all'
 	let activePreviewSlot: string | null = null
 	let previewTooltipSlot: string | null = null
@@ -386,16 +388,34 @@ export function ScheduleHostRoute(handle: Handle) {
 		return hostNameChanged || titleChanged || blockedChanged
 	}
 
-	function applySnapshot(nextSnapshot: ScheduleSnapshot) {
-		const currentHostName = getHostAttendeeName(snapshot)
+	function applySnapshot(
+		nextSnapshot: ScheduleSnapshot,
+		options?: { preserveHostDrafts?: boolean },
+	) {
+		const preserveHostDrafts = options?.preserveHostDrafts ?? false
+		const previousSnapshot = snapshot
+		const previousAttendeeNameById = new Map(
+			(previousSnapshot?.attendees ?? []).map((attendee) => [
+				attendee.id,
+				attendee.name,
+			]),
+		)
+		const currentHostName = getHostAttendeeName(previousSnapshot)
 		const keepLocalHostName =
-			!!snapshot &&
-			normalizeName(hostNameDraft) !== normalizeName(currentHostName)
+			preserveHostDrafts ||
+			(!!previousSnapshot &&
+				normalizeName(hostNameDraft) !== normalizeName(currentHostName))
 		const keepLocalTitle =
-			!!snapshot && titleDraft.trim() !== snapshot.schedule.title.trim()
+			preserveHostDrafts ||
+			(!!previousSnapshot &&
+				titleDraft.trim() !== previousSnapshot.schedule.title.trim())
 		const keepLocalBlocked =
-			!!snapshot && !areSetsEqual(blockedSlots, persistedBlockedSlots)
-		const keepLocalRange = !!snapshot && hasLocalRangeChanges(snapshot)
+			preserveHostDrafts ||
+			(!!previousSnapshot &&
+				!areSetsEqual(blockedSlots, persistedBlockedSlots))
+		const keepLocalRange =
+			preserveHostDrafts ||
+			(!!previousSnapshot && hasLocalRangeChanges(previousSnapshot))
 		const nextBlockedSlots = toSet(nextSnapshot.blockedSlots)
 		const nextDateRange = getSnapshotDateRangeInputs(nextSnapshot)
 		snapshot = nextSnapshot
@@ -429,6 +449,22 @@ export function ScheduleHostRoute(handle: Handle) {
 		excludedAttendeeIds = new Set(
 			Array.from(excludedAttendeeIds).filter((id) => validAttendeeIds.has(id)),
 		)
+		const nextSubmissionNameDraftById = new Map<string, string>()
+		for (const attendee of nextSnapshot.attendees) {
+			if (attendee.isHost) continue
+			const previousName = previousAttendeeNameById.get(attendee.id)
+			const existingDraft = submissionNameDraftById.get(attendee.id)
+			const shouldKeepDraft =
+				typeof previousName === 'string' &&
+				typeof existingDraft === 'string' &&
+				existingDraft !== previousName &&
+				!submissionActionById.has(attendee.id)
+			nextSubmissionNameDraftById.set(
+				attendee.id,
+				shouldKeepDraft ? existingDraft : attendee.name,
+			)
+		}
+		submissionNameDraftById = nextSubmissionNameDraftById
 		if (activePreviewSlot && !nextSnapshot.slots.includes(activePreviewSlot)) {
 			activePreviewSlot = null
 		}
@@ -577,11 +613,11 @@ export function ScheduleHostRoute(handle: Handle) {
 				}
 			}
 		}
+		const saveVersion = changeVersion
 		const title = titleDraft.trim() || 'New schedule'
 		const sortedBlockedSlots = Array.from(blockedSlots).sort((left, right) =>
 			left.localeCompare(right),
 		)
-		const saveVersion = changeVersion
 		let shouldRetryAfterFailure = false
 		isSaving = true
 		handle.update()
@@ -625,17 +661,11 @@ export function ScheduleHostRoute(handle: Handle) {
 				return
 			}
 			const hadQueuedLocalChanges = pendingSave
-			const nextBlockedSlots = toSet(payload.snapshot.blockedSlots)
-			const nextDateRange = getSnapshotDateRangeInputs(payload.snapshot)
-			snapshot = payload.snapshot
-			persistedBlockedSlots = new Set(nextBlockedSlots)
-			if (!hadQueuedLocalChanges && saveVersion === changeVersion) {
-				hostNameDraft = getHostAttendeeName(payload.snapshot)
-				titleDraft = payload.snapshot.schedule.title
-				blockedSlots = new Set(nextBlockedSlots)
-				rangeStartDateInput = nextDateRange.startDateInput
-				rangeEndDateInput = nextDateRange.endDateInput
-			}
+			const shouldPreserveHostDrafts =
+				hadQueuedLocalChanges || saveVersion !== changeVersion
+			applySnapshot(payload.snapshot, {
+				preserveHostDrafts: shouldPreserveHostDrafts,
+			})
 			if (!rangeValidationError) {
 				setStatus('Host settings synced.')
 			}
@@ -656,6 +686,113 @@ export function ScheduleHostRoute(handle: Handle) {
 				}
 			} else {
 				pendingSave = false
+			}
+		}
+	}
+
+	async function renameSubmission(attendeeId: string) {
+		const requestShareToken = shareToken
+		if (!requestShareToken || handle.signal.aborted) return
+		const requestHostAccessToken = hostAccessToken
+		if (!requestHostAccessToken) {
+			setStatus('Host access token missing.', true)
+			return
+		}
+		const nextSubmissionName = normalizeName(
+			submissionNameDraftById.get(attendeeId) ?? '',
+		)
+		if (!nextSubmissionName) {
+			setStatus('Submission name is required.', true)
+			return
+		}
+		if (submissionActionById.has(attendeeId)) return
+		submissionActionById.set(attendeeId, 'rename')
+		handle.update()
+		try {
+			const response = await fetch(`/api/schedules/${requestShareToken}/host`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Host-Token': requestHostAccessToken,
+				},
+				body: JSON.stringify({
+					submissionId: attendeeId,
+					submissionName: nextSubmissionName,
+				}),
+			})
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				snapshot?: ScheduleSnapshot
+				error?: string
+			} | null
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				const errorText =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to rename submission.'
+				setStatus(errorText, true)
+				return
+			}
+			applySnapshot(payload.snapshot)
+			setStatus('Submission name updated.')
+		} catch {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			setStatus('Network error while renaming submission.', true)
+		} finally {
+			submissionActionById.delete(attendeeId)
+			if (requestShareToken === shareToken && !handle.signal.aborted) {
+				handle.update()
+			}
+		}
+	}
+
+	async function deleteSubmission(attendeeId: string) {
+		const requestShareToken = shareToken
+		if (!requestShareToken || handle.signal.aborted) return
+		const requestHostAccessToken = hostAccessToken
+		if (!requestHostAccessToken) {
+			setStatus('Host access token missing.', true)
+			return
+		}
+		if (submissionActionById.has(attendeeId)) return
+		submissionActionById.set(attendeeId, 'delete')
+		handle.update()
+		try {
+			const response = await fetch(`/api/schedules/${requestShareToken}/host`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Host-Token': requestHostAccessToken,
+				},
+				body: JSON.stringify({
+					submissionId: attendeeId,
+					deleteSubmission: true,
+				}),
+			})
+			const payload = (await response.json().catch(() => null)) as {
+				ok?: boolean
+				snapshot?: ScheduleSnapshot
+				error?: string
+			} | null
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			if (!response.ok || !payload?.ok || !payload.snapshot) {
+				const errorText =
+					typeof payload?.error === 'string'
+						? payload.error
+						: 'Unable to delete submission.'
+				setStatus(errorText, true)
+				return
+			}
+			applySnapshot(payload.snapshot)
+			setStatus('Submission deleted.')
+		} catch {
+			if (requestShareToken !== shareToken || handle.signal.aborted) return
+			setStatus('Network error while deleting submission.', true)
+		} finally {
+			submissionActionById.delete(attendeeId)
+			if (requestShareToken === shareToken && !handle.signal.aborted) {
+				handle.update()
 			}
 		}
 	}
@@ -774,6 +911,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		blockedSlots = new Set<string>()
 		persistedBlockedSlots = new Set<string>()
 		excludedAttendeeIds = new Set<string>()
+		submissionNameDraftById = new Map<string, string>()
+		submissionActionById = new Map<string, 'rename' | 'delete'>()
 		previewMode = 'all'
 		activePreviewSlot = null
 		previewTooltipSlot = null
@@ -1263,63 +1402,199 @@ export function ScheduleHostRoute(handle: Handle) {
 									Respondents
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Click a name to include/exclude them in the preview. Hidden
-									checkboxes stay keyboard-accessible.
+									Toggle inclusion for preview, then rename or delete non-host
+									submissions.
 								</p>
 								<div
 									css={{
-										display: 'flex',
-										flexWrap: 'wrap',
+										display: 'grid',
 										gap: spacing.sm,
 									}}
 								>
 									{attendees.map((attendee) => {
 										const isIncluded = !excludedAttendeeIds.has(attendee.id)
+										const isHostAttendee = attendee.isHost
+										const submissionNameDraft =
+											submissionNameDraftById.get(attendee.id) ?? attendee.name
+										const pendingSubmissionAction =
+											submissionActionById.get(attendee.id) ?? null
+										const normalizedSubmissionName =
+											normalizeName(submissionNameDraft)
+										const canSaveSubmissionName =
+											!isHostAttendee &&
+											!!normalizedSubmissionName &&
+											normalizedSubmissionName !==
+												normalizeName(attendee.name) &&
+											pendingSubmissionAction === null
 										return (
-											<label
+											<article
 												key={attendee.id}
 												css={{
-													display: 'inline-flex',
-													alignItems: 'center',
+													display: 'grid',
 													gap: spacing.xs,
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
+													padding: spacing.sm,
+													borderRadius: radius.md,
 													border: `1px solid ${colors.border}`,
-													backgroundColor: isIncluded
-														? colors.surface
-														: colors.background,
-													cursor: 'pointer',
+													backgroundColor: colors.surface,
 												}}
 											>
-												<input
-													type="checkbox"
-													checked={isIncluded}
-													on={{
-														change: () => toggleIncludedAttendee(attendee.id),
-													}}
+												<div
 													css={{
-														position: 'absolute',
-														width: 1,
-														height: 1,
-														padding: 0,
-														margin: -1,
-														overflow: 'hidden',
-														clip: 'rect(0, 0, 0, 0)',
-														whiteSpace: 'nowrap',
-														border: 0,
-													}}
-												/>
-												<span
-													css={{
-														color: colors.text,
-														textDecoration: isIncluded
-															? 'none'
-															: 'line-through',
+														display: 'flex',
+														flexWrap: 'wrap',
+														alignItems: 'center',
+														justifyContent: 'space-between',
+														gap: spacing.sm,
 													}}
 												>
-													{attendee.name}
-												</span>
-											</label>
+													<label
+														css={{
+															display: 'inline-flex',
+															alignItems: 'center',
+															gap: spacing.xs,
+															padding: `${spacing.xs} ${spacing.sm}`,
+															borderRadius: radius.full,
+															border: `1px solid ${colors.border}`,
+															backgroundColor: isIncluded
+																? colors.surface
+																: colors.background,
+															cursor: 'pointer',
+														}}
+													>
+														<input
+															type="checkbox"
+															checked={isIncluded}
+															on={{
+																change: () =>
+																	toggleIncludedAttendee(attendee.id),
+															}}
+															css={{
+																position: 'absolute',
+																width: 1,
+																height: 1,
+																padding: 0,
+																margin: -1,
+																overflow: 'hidden',
+																clip: 'rect(0, 0, 0, 0)',
+																whiteSpace: 'nowrap',
+																border: 0,
+															}}
+														/>
+														<span
+															css={{
+																color: colors.text,
+																textDecoration: isIncluded
+																	? 'none'
+																	: 'line-through',
+															}}
+														>
+															{attendee.name}
+															{isHostAttendee ? ' (host)' : ''}
+														</span>
+													</label>
+													{isHostAttendee ? (
+														<span
+															css={{
+																color: colors.textMuted,
+																fontSize: typography.fontSize.sm,
+															}}
+														>
+															Host submission
+														</span>
+													) : (
+														<button
+															type="button"
+															aria-label={`Delete submission for ${attendee.name}`}
+															disabled={pendingSubmissionAction !== null}
+															on={{
+																click: () => {
+																	void deleteSubmission(attendee.id)
+																},
+															}}
+															css={{
+																padding: `${spacing.xs} ${spacing.sm}`,
+																borderRadius: radius.sm,
+																border: `1px solid ${colors.border}`,
+																backgroundColor: colors.background,
+																color: colors.error,
+																cursor:
+																	pendingSubmissionAction === null
+																		? 'pointer'
+																		: 'not-allowed',
+																opacity:
+																	pendingSubmissionAction === null ? 1 : 0.7,
+															}}
+														>
+															{pendingSubmissionAction === 'delete'
+																? 'Deleting…'
+																: 'Delete submission'}
+														</button>
+													)}
+												</div>
+												{isHostAttendee ? null : (
+													<div
+														css={{
+															display: 'grid',
+															gap: spacing.xs,
+															gridTemplateColumns: 'minmax(0, 1fr) auto',
+															[mq.mobile]: {
+																gridTemplateColumns: '1fr',
+															},
+														}}
+													>
+														<input
+															type="text"
+															aria-label={`Submission name input for ${attendee.name}`}
+															value={submissionNameDraft}
+															disabled={pendingSubmissionAction === 'delete'}
+															on={{
+																input: (event) => {
+																	submissionNameDraftById.set(
+																		attendee.id,
+																		event.currentTarget.value,
+																	)
+																	handle.update()
+																},
+															}}
+															css={{
+																padding: `${spacing.sm} ${spacing.md}`,
+																borderRadius: radius.md,
+																border: `1px solid ${colors.border}`,
+																backgroundColor: colors.background,
+																color: colors.text,
+															}}
+														/>
+														<button
+															type="button"
+															aria-label={`Save renamed submission for ${attendee.name}`}
+															disabled={!canSaveSubmissionName}
+															on={{
+																click: () => {
+																	void renameSubmission(attendee.id)
+																},
+															}}
+															css={{
+																padding: `${spacing.sm} ${spacing.md}`,
+																borderRadius: radius.md,
+																border: `1px solid ${colors.border}`,
+																backgroundColor: canSaveSubmissionName
+																	? colors.primary
+																	: colors.background,
+																color: canSaveSubmissionName
+																	? colors.onPrimary
+																	: colors.textMuted,
+																cursor: canSaveSubmissionName
+																	? 'pointer'
+																	: 'not-allowed',
+															}}
+														>
+															{pendingSubmissionAction === 'rename'
+																? 'Saving…'
+																: 'Save name'}
+														</button>
+													</div>
+												)}
+											</article>
 										)
 									})}
 								</div>
