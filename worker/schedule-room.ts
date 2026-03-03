@@ -29,10 +29,6 @@ type RenameAvailabilityPayload = {
 	nextName?: unknown
 }
 
-function isRecordValue(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
 function isAvailabilityClientError(message: string) {
 	return /(not found|required|invalid|must|range|interval)/i.test(message)
 }
