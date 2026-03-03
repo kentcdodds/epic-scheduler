@@ -4,6 +4,7 @@ import {
 	renameAttendeeSubmission,
 	upsertAttendeeAvailability,
 } from '#shared/schedule-store.ts'
+import { isRecordValue } from '#shared/record-utils.ts'
 
 type BroadcastPayload = {
 	type: string
