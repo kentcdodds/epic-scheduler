@@ -59,6 +59,11 @@ type ScheduleGridProps = {
 		key: string
 		shiftKey: boolean
 	}) => void
+	dayHeaderLayout?: 'single-line' | 'stacked'
+	dayColumnWidth?: 'default' | 'narrow'
+	showWeekSeparators?: boolean
+	outlinedSlots?: ReadonlySet<string>
+	outlinedSlotLabel?: string
 }
 
 function toSelectionLabel(params: {
@@ -94,6 +99,52 @@ function getCellBackground(params: {
 		maxCount: params.maxCount,
 		isSelected: params.isSelected,
 	})
+}
+
+function parseDayKeyToDate(dayKey: string) {
+	const [rawYear, rawMonth, rawDay] = dayKey.split('-')
+	if (!rawYear || !rawMonth || !rawDay) return null
+	const year = Number.parseInt(rawYear, 10)
+	const month = Number.parseInt(rawMonth, 10)
+	const day = Number.parseInt(rawDay, 10)
+	if (
+		!Number.isInteger(year) ||
+		!Number.isInteger(month) ||
+		!Number.isInteger(day)
+	) {
+		return null
+	}
+	const date = new Date(year, month - 1, day, 0, 0, 0, 0)
+	if (Number.isNaN(date.getTime())) return null
+	return date
+}
+
+const dayHeaderMonthDayFormatter = new Intl.DateTimeFormat(undefined, {
+	month: 'short',
+	day: 'numeric',
+})
+const dayHeaderWeekdayFormatter = new Intl.DateTimeFormat(undefined, {
+	weekday: 'short',
+})
+
+function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
+	const date = parseDayKeyToDate(dayKey)
+	if (!date) {
+		return {
+			monthDay: fallbackLabel,
+			weekday: '',
+		}
+	}
+	return {
+		monthDay: dayHeaderMonthDayFormatter.format(date),
+		weekday: dayHeaderWeekdayFormatter.format(date),
+	}
+}
+
+function isSundayStartOfWeek(dayKey: string) {
+	const date = parseDayKeyToDate(dayKey)
+	if (!date) return false
+	return date.getDay() === 0
 }
 
 function getRowCells(row: HTMLTableRowElement) {
@@ -251,6 +302,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		: dayKeys
 	const desktopVisibleDayKeys = dayKeys
 	const desktopHorizontalOverflow = props.desktopHorizontalOverflow ?? 'page'
+	const useStackedDayHeader = props.dayHeaderLayout === 'stacked'
+	const useNarrowDayColumns = props.dayColumnWidth === 'narrow'
+	const dayColumnWidthRem = useNarrowDayColumns ? 6.2 : 8
+	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
 		const currentTarget = event.currentTarget
@@ -330,8 +385,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 					css={{
 						borderCollapse: 'separate',
 						borderSpacing: 0,
-						minWidth: compact ? '100%' : `max(44rem, ${dayKeys.length * 8}rem)`,
+						minWidth: compact
+							? '100%'
+							: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
 						width: '100%',
+						tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
 					}}
 				>
 					<caption css={visuallyHiddenCss}>{tableCaption}</caption>
@@ -362,25 +420,61 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 							>
 								Time
 							</th>
-							{visibleDayKeys.map((dayKey) => (
-								<th
-									key={dayKey}
-									scope="col"
-									css={{
-										position: 'sticky',
-										top: 0,
-										zIndex: 2,
-										backgroundColor: colors.surface,
-										padding: `${spacing.sm} ${spacing.sm}`,
-										textAlign: 'center',
-										fontSize: typography.fontSize.sm,
-										color: colors.text,
-										borderBottom: `1px solid ${colors.border}`,
-									}}
-								>
-									{dayLabels[dayKey]}
-								</th>
-							))}
+							{visibleDayKeys.map((dayKey, dayColumnIndex) => {
+								const hasWeekSeparator =
+									props.showWeekSeparators &&
+									dayColumnIndex > 0 &&
+									isSundayStartOfWeek(dayKey)
+								const stackedDayHeader = useStackedDayHeader
+									? formatStackedDayHeader(dayKey, dayLabels[dayKey] ?? dayKey)
+									: null
+								return (
+									<th
+										key={dayKey}
+										scope="col"
+										css={{
+											position: 'sticky',
+											top: 0,
+											zIndex: 2,
+											backgroundColor: colors.surface,
+											padding: useNarrowDayColumns
+												? `${spacing.xs} ${spacing.xs}`
+												: `${spacing.sm} ${spacing.sm}`,
+											textAlign: 'center',
+											fontSize: typography.fontSize.sm,
+											color: colors.text,
+											borderBottom: `1px solid ${colors.border}`,
+											width: useNarrowDayColumns ? '6.2rem' : undefined,
+											borderLeft: hasWeekSeparator
+												? `${weekSeparatorWidth} solid ${colors.surface}`
+												: undefined,
+										}}
+									>
+										{stackedDayHeader ? (
+											<span
+												css={{
+													display: 'grid',
+													justifyItems: 'center',
+													gap: '0.1rem',
+													lineHeight: 1.15,
+												}}
+											>
+												<span>{stackedDayHeader.monthDay}</span>
+												<span
+													css={{
+														fontSize: typography.fontSize.xs,
+														color: colors.textMuted,
+													}}
+												>
+													{stackedDayHeader.weekday}
+												</span>
+											</span>
+										) : (
+											dayLabels[dayKey]
+										)}
+									</th>
+								)
+							})}
 						</tr>
 					</thead>
 					<tbody>
@@ -404,8 +498,12 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 								>
 									{timeLabels[timeKey]}
 								</th>
-								{visibleDayKeys.map((dayKey) => {
+								{visibleDayKeys.map((dayKey, dayColumnIndex) => {
 									const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
+									const hasWeekSeparator =
+										props.showWeekSeparators &&
+										dayColumnIndex > 0 &&
+										isSundayStartOfWeek(dayKey)
 									if (!slot) {
 										const missingSlotExplanation = `No slot at ${timeLabels[timeKey]} on ${dayLabels[dayKey]}. This can happen around daylight-saving transitions or at schedule range boundaries.`
 										return (
@@ -416,6 +514,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 												css={{
 													borderBottom: `1px solid ${colors.border}`,
 													borderRight: `1px solid ${colors.border}`,
+													borderLeft: hasWeekSeparator
+														? `${weekSeparatorWidth} solid ${colors.surface}`
+														: undefined,
 													backgroundColor:
 														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
 													height: '2.25rem',
@@ -460,6 +561,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										props.highlightedSlots?.has(slot) ?? false
 									const isPendingSelection =
 										props.selectionSlots?.has(slot) ?? false
+									const isOutlined = props.outlinedSlots?.has(slot) ?? false
 									const isRangeAnchor = props.rangeAnchor === slot
 									const isActive = props.activeSlot === slot
 									const background = getCellBackground({
@@ -503,10 +605,19 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const disabledLabel = isDisabled
 										? ', unavailable for scheduling'
 										: ''
-									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${disabledLabel}`
+									const outlinedSelectionLabel =
+										isOutlined && props.outlinedSlotLabel
+											? `, ${props.outlinedSlotLabel}`
+											: isOutlined
+												? ', selected range'
+												: ''
+									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${outlinedSelectionLabel}${disabledLabel}`
 									const interactive = !props.readOnly && !isDisabled
 									const pendingSelectionOverlay = isPendingSelection
 										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
+										: null
+									const outlinedSlotRing = isOutlined
+										? `inset 0 0 0 2px ${colors.primary}`
 										: null
 									const activeSlotRing =
 										isRangeAnchor || isActive
@@ -514,6 +625,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											: null
 									const combinedBoxShadow = [
 										pendingSelectionOverlay,
+										outlinedSlotRing,
 										activeSlotRing,
 									]
 										.filter((value): value is string => !!value)
@@ -526,6 +638,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 												padding: 0,
 												borderBottom: `1px solid ${colors.border}`,
 												borderRight: `1px solid ${colors.border}`,
+												borderLeft: hasWeekSeparator
+													? `${weekSeparatorWidth} solid ${colors.surface}`
+													: undefined,
 											}}
 										>
 											<button

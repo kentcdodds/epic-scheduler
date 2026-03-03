@@ -7,6 +7,7 @@ import {
 	createSlotRangeFromDateInputs,
 	formatDateInputValue,
 	formatSlotLabel,
+	formatSlotForAttendeeTimeZone,
 	formatSlotRangeForAttendeeTimeZone,
 	getRectangularSlotSelection,
 	toDayKey,
@@ -27,6 +28,8 @@ import {
 
 type PreviewMode = 'all' | 'count'
 type ConnectionState = 'connecting' | 'live' | 'offline'
+const previewHoverTooltipPointerXVar = '--preview-hover-tooltip-pointer-x'
+const previewHoverTooltipPointerYVar = '--preview-hover-tooltip-pointer-y'
 
 function parseHostRouteParams(pathname: string) {
 	const segments = pathname.split('/').filter(Boolean)
@@ -168,6 +171,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	let submissionActionById = new Map<string, 'rename' | 'delete'>()
 	let previewMode: PreviewMode = 'all'
 	let activePreviewSlot: string | null = null
+	let previewHoverTooltipSlot: string | null = null
+	let previewHoverTooltipPointerX: number | null = null
+	let previewHoverTooltipPointerY: number | null = null
 	let previewSelectedSlots = new Set<string>()
 	let previewRangeAnchor: string | null = null
 	let usePreviewTapRangeMode = detectTapRangeMode()
@@ -256,6 +262,43 @@ export function ScheduleHostRoute(handle: Handle) {
 		keyboardRangeAction = null
 		keyboardRangeSlots = new Set<string>()
 	}
+
+	function setPreviewHoverTooltipPointerPosition(
+		clientX: number,
+		clientY: number,
+	) {
+		if (typeof document === 'undefined') return
+		if (
+			previewHoverTooltipPointerX === clientX &&
+			previewHoverTooltipPointerY === clientY
+		) {
+			return
+		}
+		previewHoverTooltipPointerX = clientX
+		previewHoverTooltipPointerY = clientY
+		const rootStyle = document.documentElement.style
+		rootStyle.setProperty(previewHoverTooltipPointerXVar, `${clientX}px`)
+		rootStyle.setProperty(previewHoverTooltipPointerYVar, `${clientY}px`)
+	}
+
+	function clearPreviewHoverTooltipPointerPosition() {
+		previewHoverTooltipPointerX = null
+		previewHoverTooltipPointerY = null
+		if (typeof document === 'undefined') return
+		const rootStyle = document.documentElement.style
+		rootStyle.removeProperty(previewHoverTooltipPointerXVar)
+		rootStyle.removeProperty(previewHoverTooltipPointerYVar)
+	}
+
+	function clearPreviewHoverTooltip() {
+		const didChange =
+			previewHoverTooltipSlot !== null ||
+			previewHoverTooltipPointerX !== null ||
+			previewHoverTooltipPointerY !== null
+		previewHoverTooltipSlot = null
+		clearPreviewHoverTooltipPointerPosition()
+		return didChange
+	}
 	const hostSelection = createPointerDragSelectionController({
 		requestRender: () => {
 			handle.update()
@@ -318,6 +361,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
 		clearKeyboardRangeSelection()
+		clearPreviewHoverTooltip()
 		hostSelection.cleanup()
 		previewSelection.cleanup()
 		clearSocketResources()
@@ -481,6 +525,13 @@ export function ScheduleHostRoute(handle: Handle) {
 		submissionNameDraftById = nextSubmissionNameDraftById
 		if (activePreviewSlot && !nextSnapshot.slots.includes(activePreviewSlot)) {
 			activePreviewSlot = null
+		}
+		if (
+			previewHoverTooltipSlot &&
+			!nextSnapshot.slots.includes(previewHoverTooltipSlot)
+		) {
+			previewHoverTooltipSlot = null
+			clearPreviewHoverTooltipPointerPosition()
 		}
 		if (
 			keyboardRangeAnchor &&
@@ -959,11 +1010,12 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function clearPreviewSelectedRange() {
 		const hadSelection = previewSelectedSlots.size > 0 || !!previewRangeAnchor
+		const didClearTooltip = clearPreviewHoverTooltip()
 		previewSelectedSlots = new Set<string>()
 		previewRangeAnchor = null
 		previewSelectionStatus = null
 		activePreviewSlot = null
-		if (hadSelection) {
+		if (hadSelection || didClearTooltip) {
 			handle.update()
 		}
 	}
@@ -993,9 +1045,20 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handlePreviewPointerDown(slot: string, event: PointerEvent) {
+		const didClearTooltip = clearPreviewHoverTooltip()
 		updatePreviewTapMode(event.pointerType)
-		if (usePreviewTapRangeMode) return
-		if (blockedSlots.has(slot)) return
+		if (usePreviewTapRangeMode) {
+			if (didClearTooltip) {
+				handle.update()
+			}
+			return
+		}
+		if (blockedSlots.has(slot)) {
+			if (didClearTooltip) {
+				handle.update()
+			}
+			return
+		}
 		previewSelection.startSelection({
 			slot,
 			event,
@@ -1003,8 +1066,51 @@ export function ScheduleHostRoute(handle: Handle) {
 		})
 	}
 
-	function handlePreviewPointerEnter(slot: string) {
+	function handlePreviewPointerEnter(slot: string, event: PointerEvent) {
 		previewSelection.updateSelectionToSlot(slot)
+		if (event.pointerType !== 'mouse' || previewSelection.state.mode) return
+		setPreviewHoverTooltipPointerPosition(event.clientX, event.clientY)
+		const didChange =
+			previewHoverTooltipSlot !== slot || activePreviewSlot !== slot
+		previewHoverTooltipSlot = slot
+		activePreviewSlot = slot
+		if (didChange) {
+			handle.update()
+		}
+	}
+
+	function handlePreviewPointerMove(slot: string, event: PointerEvent) {
+		if (event.pointerType !== 'mouse') return
+		if (previewSelection.state.mode) return
+		setPreviewHoverTooltipPointerPosition(event.clientX, event.clientY)
+		const didChange =
+			previewHoverTooltipSlot !== slot || activePreviewSlot !== slot
+		previewHoverTooltipSlot = slot
+		activePreviewSlot = slot
+		if (didChange) {
+			handle.update()
+		}
+	}
+
+	function handlePreviewHover(slot: string | null) {
+		if (slot) {
+			const previousActiveSlot = activePreviewSlot
+			if (!previewSelection.state.mode) {
+				activePreviewSlot = slot
+			}
+			if (activePreviewSlot !== previousActiveSlot) {
+				handle.update()
+			}
+			return
+		}
+		if (!clearPreviewHoverTooltip()) return
+		handle.update()
+	}
+
+	function handlePreviewFocus(slot: string) {
+		clearPreviewHoverTooltip()
+		activePreviewSlot = slot
+		handle.update()
 	}
 
 	function handlePreviewPointerUp() {
@@ -1012,10 +1118,21 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handlePreviewSelectionClick(slot: string, event: MouseEvent) {
+		const didClearTooltip = clearPreviewHoverTooltip()
 		// In non-tap mode, pointer drag handles selection and clicks (`event.detail > 0`)
 		// should be ignored. Keep keyboard activation (`event.detail === 0`) working.
-		if (!usePreviewTapRangeMode && event.detail > 0) return
-		if (blockedSlots.has(slot)) return
+		if (!usePreviewTapRangeMode && event.detail > 0) {
+			if (didClearTooltip) {
+				handle.update()
+			}
+			return
+		}
+		if (blockedSlots.has(slot)) {
+			if (didClearTooltip) {
+				handle.update()
+			}
+			return
+		}
 		if (usePreviewTapRangeMode) {
 			if (!previewRangeAnchor) {
 				previewRangeAnchor = slot
@@ -1048,6 +1165,23 @@ export function ScheduleHostRoute(handle: Handle) {
 		} else {
 			excludedAttendeeIds.add(attendeeId)
 		}
+		handle.update()
+	}
+
+	function showAllAttendeeResponses() {
+		if (excludedAttendeeIds.size === 0) return
+		excludedAttendeeIds = new Set<string>()
+		handle.update()
+	}
+
+	function hideAllAttendeeResponses() {
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) return
+		const nextExcludedIds = new Set(
+			currentSnapshot.attendees.map((attendee) => attendee.id),
+		)
+		if (areSetsEqual(nextExcludedIds, excludedAttendeeIds)) return
+		excludedAttendeeIds = nextExcludedIds
 		handle.update()
 	}
 
@@ -1103,6 +1237,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		submissionActionById = new Map<string, 'rename' | 'delete'>()
 		previewMode = 'all'
 		activePreviewSlot = null
+		previewHoverTooltipSlot = null
+		clearPreviewHoverTooltipPointerPosition()
 		previewSelectedSlots = new Set<string>()
 		previewRangeAnchor = null
 		usePreviewTapRangeMode = detectTapRangeMode()
@@ -1275,6 +1411,31 @@ export function ScheduleHostRoute(handle: Handle) {
 			previewRangeStartSlot && previewRangeEndSlotExclusive
 				? `${formatSlotLabel(previewRangeStartSlot)} - ${formatSlotLabel(previewRangeEndSlotExclusive)}`
 				: null
+		const previewHoveredSlotValue = previewHoverTooltipSlot
+		const previewHoveredSlotAvailableNames = previewHoveredSlotValue
+			? (previewAvailability[previewHoveredSlotValue]?.availableNames ?? [])
+			: []
+		const previewHoveredSlotAvailableNameSet = new Set(
+			previewHoveredSlotAvailableNames,
+		)
+		const previewHoveredSlotDetails =
+			previewHoveredSlotValue && slots.includes(previewHoveredSlotValue)
+				? {
+						slot: previewHoveredSlotValue,
+						isBlocked: blockedSlots.has(previewHoveredSlotValue),
+						attendeeDetails: includedAttendees.map((attendee) => ({
+							id: attendee.id,
+							name: attendee.name,
+							canAttend: previewHoveredSlotAvailableNameSet.has(attendee.name),
+							...formatSlotForAttendeeTimeZone(
+								previewHoveredSlotValue,
+								attendee.timeZone,
+							),
+						})),
+					}
+				: null
+		const previewTooltipWidthPx = 340
+		const previewTooltipHeightPx = 300
 		const attendeeTotalSummaryEntries = includedAttendees
 			.map((attendee) => {
 				const availableSlotsForAttendee =
@@ -1656,9 +1817,63 @@ export function ScheduleHostRoute(handle: Handle) {
 									Respondents
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Toggle each name to include or exclude it from preview
-									calculations.
+									Show or hide each attendee's responses in the preview table
+									and summaries.
 								</p>
+								<div
+									css={{
+										display: 'flex',
+										flexWrap: 'wrap',
+										gap: spacing.xs,
+									}}
+								>
+									<button
+										type="button"
+										on={{ click: showAllAttendeeResponses }}
+										disabled={excludedAttendeeIds.size === 0}
+										css={{
+											padding: `${spacing.xs} ${spacing.sm}`,
+											borderRadius: radius.full,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.surface,
+											color: colors.text,
+											cursor:
+												excludedAttendeeIds.size === 0
+													? 'not-allowed'
+													: 'pointer',
+											opacity: excludedAttendeeIds.size === 0 ? 0.68 : 1,
+										}}
+									>
+										Show all responses
+									</button>
+									<button
+										type="button"
+										on={{ click: hideAllAttendeeResponses }}
+										disabled={
+											attendees.length === 0 ||
+											excludedAttendeeIds.size === attendees.length
+										}
+										css={{
+											padding: `${spacing.xs} ${spacing.sm}`,
+											borderRadius: radius.full,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.surface,
+											color: colors.text,
+											cursor:
+												attendees.length === 0 ||
+												excludedAttendeeIds.size === attendees.length
+													? 'not-allowed'
+													: 'pointer',
+											opacity:
+												attendees.length === 0 ||
+												excludedAttendeeIds.size === attendees.length
+													? 0.68
+													: 1,
+										}}
+									>
+										Hide all responses
+									</button>
+								</div>
 								<div
 									css={{
 										display: 'grid',
@@ -1708,7 +1923,12 @@ export function ScheduleHostRoute(handle: Handle) {
 														gap: spacing.sm,
 													}}
 												>
-													<label
+													<button
+														type="button"
+														aria-pressed={isIncluded}
+														on={{
+															click: () => toggleIncludedAttendee(attendee.id),
+														}}
 														css={{
 															display: 'inline-flex',
 															alignItems: 'center',
@@ -1719,31 +1939,13 @@ export function ScheduleHostRoute(handle: Handle) {
 															backgroundColor: isIncluded
 																? colors.surface
 																: colors.background,
+															color: colors.text,
 															cursor: 'pointer',
 														}}
 													>
-														<input
-															type="checkbox"
-															checked={isIncluded}
-															on={{
-																change: () =>
-																	toggleIncludedAttendee(attendee.id),
-															}}
-															css={{
-																position: 'absolute',
-																width: 1,
-																height: 1,
-																padding: 0,
-																margin: -1,
-																overflow: 'hidden',
-																clip: 'rect(0, 0, 0, 0)',
-																whiteSpace: 'nowrap',
-																border: 0,
-															}}
-														/>
+														{isIncluded ? 'Showing' : 'Hidden'} responses:{' '}
 														<span
 															css={{
-																color: colors.text,
 																textDecoration: isIncluded
 																	? 'none'
 																	: 'line-through',
@@ -1752,7 +1954,7 @@ export function ScheduleHostRoute(handle: Handle) {
 															{attendee.name}
 															{isHostAttendee ? ' (host)' : ''}
 														</span>
-													</label>
+													</button>
 													{isHostAttendee ? (
 														<span
 															css={{
@@ -1959,10 +2161,15 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: previewSelectedSlotsForSummary,
+									outlinedSlots: previewSelectedSlotsForSummary,
+									outlinedSlotLabel: 'included in selected preview range',
 									selectionSlots: previewSelection.state.slots,
 									selectionSlotLabel:
 										'included in pending preview range selection',
 									desktopHorizontalOverflow: 'local',
+									dayHeaderLayout: 'stacked',
+									dayColumnWidth: 'narrow',
+									showWeekSeparators: true,
 									selectedSlotLabel: 'selected in host preview',
 									unselectedSlotLabel: 'host preview slot',
 									disabledSlots: blockedSlots,
@@ -1982,26 +2189,94 @@ export function ScheduleHostRoute(handle: Handle) {
 									onCellPointerDown: (slot, event) => {
 										handlePreviewPointerDown(slot, event)
 									},
-									onCellPointerEnter: (slot, _event) => {
-										handlePreviewPointerEnter(slot)
+									onCellPointerEnter: (slot, event) => {
+										handlePreviewPointerEnter(slot, event)
+									},
+									onCellPointerMove: (slot, event) => {
+										handlePreviewPointerMove(slot, event)
 									},
 									onCellPointerUp: (_slot, _event) => {
 										handlePreviewPointerUp()
 									},
-									onCellHover: (slot) => {
-										if (!previewSelection.state.mode) {
-											activePreviewSlot = slot
-										}
-										handle.update()
-									},
-									onCellFocus: (slot) => {
-										activePreviewSlot = slot
-										handle.update()
-									},
+									onCellHover: handlePreviewHover,
+									onCellFocus: handlePreviewFocus,
 									onCellClick: (slot, event) => {
 										handlePreviewSelectionClick(slot, event)
 									},
 								})}
+								{previewHoveredSlotDetails && previewHoverTooltipSlot ? (
+									<aside
+										role="note"
+										data-host-preview-hover-tooltip
+										aria-live="polite"
+										css={{
+											'--preview-hover-tooltip-width': `min(${previewTooltipWidthPx}px, calc(100vw - 1.5rem))`,
+											'--preview-hover-tooltip-height': `min(${previewTooltipHeightPx}px, calc(100vh - 1.5rem))`,
+											position: 'fixed',
+											left: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-x, 0px) + 16px), calc(100vw - var(--preview-hover-tooltip-width) - 12px)))',
+											top: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-y, 0px) + 16px), calc(100vh - var(--preview-hover-tooltip-height) - 12px)))',
+											zIndex: 40,
+											width: 'var(--preview-hover-tooltip-width)',
+											maxHeight: 'var(--preview-hover-tooltip-height)',
+											overflowY: 'auto',
+											display: 'grid',
+											gap: spacing.xs,
+											padding: spacing.sm,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.surface,
+											boxShadow: shadows.md,
+											pointerEvents: 'none',
+										}}
+									>
+										<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
+											{formatSlotLabel(previewHoveredSlotDetails.slot, 'long')}
+										</p>
+										{previewHoveredSlotDetails.isBlocked ? (
+											<p css={{ margin: 0, color: colors.error }}>
+												This slot is unavailable because the host blocked it.
+											</p>
+										) : null}
+										{previewHoveredSlotDetails.attendeeDetails.length === 0 ? (
+											<p css={{ margin: 0, color: colors.textMuted }}>
+												No attendee responses are currently shown.
+											</p>
+										) : (
+											<ul
+												css={{
+													margin: 0,
+													paddingLeft: '1rem',
+													display: 'grid',
+													gap: spacing.xs,
+												}}
+											>
+												{previewHoveredSlotDetails.attendeeDetails.map(
+													(entry) => {
+														const canAttend =
+															!previewHoveredSlotDetails.isBlocked &&
+															entry.canAttend
+														return (
+															<li
+																key={`preview-hovered-slot-attendee-${entry.id}`}
+																css={{
+																	textDecoration: canAttend
+																		? 'none'
+																		: 'line-through',
+																	color: canAttend
+																		? colors.text
+																		: colors.textMuted,
+																}}
+															>
+																<strong>{entry.name}</strong> —{' '}
+																{entry.localTime} ({entry.timeZoneLabel})
+															</li>
+														)
+													},
+												)}
+											</ul>
+										)}
+									</aside>
+								) : null}
 								<section
 									data-host-preview-attendee-summary
 									css={{
@@ -2193,6 +2468,9 @@ export function ScheduleHostRoute(handle: Handle) {
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
 									desktopHorizontalOverflow: 'local',
+									dayHeaderLayout: 'stacked',
+									dayColumnWidth: 'narrow',
+									showWeekSeparators: true,
 									selectionSlots: pendingBlockedSelectionSlots,
 									selectionSlotLabel: pendingBlockedSelectionLabel,
 									selectedSlotLabel: 'marked unavailable by host',
