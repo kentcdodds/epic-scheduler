@@ -19,6 +19,12 @@ test('host dashboard can block slots from attendee selection', async ({
 	await expect(
 		page.getByRole('heading', { name: 'Host dashboard' }),
 	).toBeVisible()
+	const hostTimeZone = await page.evaluate(
+		() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+	)
+	await expect(
+		page.getByText(`Times are shown in your browser timezone: ${hostTimeZone}`),
+	).toBeVisible()
 	await expect(
 		page.getByRole('heading', { name: 'Host unavailable slots' }),
 	).toBeVisible()
