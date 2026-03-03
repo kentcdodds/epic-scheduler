@@ -2238,9 +2238,11 @@ export function ScheduleHostRoute(handle: Handle) {
 									</div>
 								</div>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Green slots mean everyone currently included can attend. Drag
-									to select a window, or on touch devices tap one slot for the
-									start and another for the end.
+									{previewMode === 'all'
+										? 'Green slots mean everyone currently included can attend. '
+										: null}
+									Drag to select a window, or on touch devices tap one slot for
+									the start and another for the end.
 								</p>
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
