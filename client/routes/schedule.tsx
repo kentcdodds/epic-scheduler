@@ -418,6 +418,10 @@ export function ScheduleRoute(handle: Handle) {
 		if (handle.signal.aborted || isDeletingSubmission || isRenamingSubmission) {
 			return
 		}
+		if (isSaving) {
+			setStatus('Saving availability. Try again in a moment.')
+			return
+		}
 		const normalizedName = normalizeName(attendeeName)
 		if (!normalizedName) {
 			setStatus('Enter your name before deleting your submission.', true)
@@ -484,6 +488,10 @@ export function ScheduleRoute(handle: Handle) {
 		const requestShareToken = shareToken
 		if (!snapshot || !requestShareToken) return
 		if (handle.signal.aborted || isRenamingSubmission || isDeletingSubmission) {
+			return
+		}
+		if (isSaving) {
+			setStatus('Saving availability. Try again in a moment.')
 			return
 		}
 		const renameSourceName = pendingRenameSourceName

@@ -2,6 +2,7 @@ import { type BuildAction } from 'remix/fetch-router'
 import { getScheduleSnapshot } from '#shared/schedule-store.ts'
 import { type AppEnv } from '#types/env-schema.ts'
 import { type routes } from '#server/routes.ts'
+import { getShareToken, isRecordValue } from './schedule-handler-utils.ts'
 
 type RenameSubmissionRequest = {
 	currentName?: unknown
@@ -12,16 +13,6 @@ type RenameSubmissionRoomPayload = {
 	ok?: boolean
 	renamed?: boolean
 	error?: string
-}
-
-function getShareToken(pathname: string) {
-	const segments = pathname.split('/').filter(Boolean)
-	if (segments.length < 3) return ''
-	return segments[2] ?? ''
-}
-
-function isRecordValue(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 export function createScheduleRenameSubmissionHandler(
