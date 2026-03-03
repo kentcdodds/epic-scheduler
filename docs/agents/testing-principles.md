@@ -16,9 +16,18 @@ magic.
   JSON".
 - Write tests so they could run offline if necessary: avoid relying on the
   public internet and third-party services; prefer local fakes/fixtures.
-- Prefer fast unit tests for server logic; keep e2e tests focused on journeys.
+- Prefer fast unit tests for server logic.
+- Keep e2e tests focused on core happy-path journeys; edge cases belong in unit
+  tests or browser-level tests.
 - Run server/unit tests with `bun test ./server ./mock-servers` to avoid
   Playwright spec discovery and accidental matches like `mcp-server-e2e`.
+
+## Documentation scope
+
+- Use `docs/agents` for cross-cutting guidance that applies across multiple
+  files or workflows.
+- Keep file-specific nuance near the code under test (inline comments or test
+  helper names), not in global docs.
 
 ## Examples
 

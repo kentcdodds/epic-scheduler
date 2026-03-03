@@ -24,7 +24,9 @@ We use bun for installing dependencies and running scripts. Do not use npm.
   architecture notes, or verification guidance have changed.
 - Treat documentation updates as part of done work so `docs/agents` stays
   current.
-- Keep `AGENTS.md` concise and map-like; put detailed guidance in focused docs.
+- Keep `AGENTS.md` concise and map-like.
+- Keep `docs/agents` focused on cross-cutting guidance only; put file-specific
+  details in nearby inline comments or tests.
 - When failures repeat, promote lessons from docs into tests, lint rules, or
   scripts so improvements compound.
 
