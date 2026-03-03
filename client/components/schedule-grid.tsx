@@ -151,6 +151,16 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const desktopVisibleDayKeys = dayKeys
 	const useCellPointerMove = !props.onCellPointerDown
 
+	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
+		const currentTarget = event.currentTarget
+		const relatedTarget = event.relatedTarget
+		if (!(currentTarget instanceof Element)) return true
+		if (!(relatedTarget instanceof Node)) return true
+		const scroller = currentTarget.closest('[data-schedule-grid-scroller]')
+		if (!scroller) return true
+		return !scroller.contains(relatedTarget)
+	}
+
 	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
 		return (
 			<div
@@ -426,7 +436,12 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 																	props.onCellPointerMove?.(slot, event)
 															: undefined,
 													pointerleave: props.onCellHover
-														? () => props.onCellHover?.(null)
+														? (event) => {
+																if (!shouldClearHoverOnPointerLeave(event)) {
+																	return
+																}
+																props.onCellHover?.(null)
+															}
 														: undefined,
 													pointerup: props.onCellPointerUp
 														? (event) => props.onCellPointerUp?.(slot, event)
