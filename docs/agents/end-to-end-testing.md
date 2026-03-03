@@ -34,6 +34,9 @@ on the Epic Web E2E workshop and our existing setup.
 - Collapsed attendee/preview axes when an entire row or column is host-blocked,
   while host unavailable-slots grid still renders the full matrix.
 - Integration across the worker, client router, and API endpoints.
+- Route-specific document titles for primary pages (`/`, `/s/:shareToken`,
+  `/s/:shareToken/:hostAccessToken`, and key marketing pages) so browser-tab
+  labels stay accurate after navigation.
 - Regressions that are expensive to catch in unit tests.
 
 Avoid testing implementation details, styling, or pure utility functions.
@@ -97,6 +100,8 @@ handled by the static asset fetcher in `worker/index.ts`.
 ## Assertions
 
 - Assert user-facing results (success message, redirect, visible element).
+- When metadata changes are in scope, assert browser-tab titles with
+  `await expect(page).toHaveTitle(...)`.
 - For async actions, wait on the UI result, not arbitrary timeouts.
 - For client-router regressions, you may set a `window` marker before clicking a
   link and assert it survives navigation to prove there was no full document

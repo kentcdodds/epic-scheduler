@@ -1,6 +1,7 @@
 import { type Handle } from 'remix/component'
 import { navigate } from '#client/client-router.tsx'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
+import { setDocumentTitle } from '#client/document-title.ts'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
 	addDays,
@@ -334,6 +335,7 @@ export function HomeRoute(handle: Handle) {
 		'1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))'
 
 	return () => {
+		setDocumentTitle('Epic Scheduler | Link-based meeting scheduler')
 		const slotAvailability = getSlotAvailability()
 		const selectedCount = selectedSlots.size
 		const isSaving = status === 'saving'
