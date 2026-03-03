@@ -264,12 +264,10 @@ export function HomeRoute(handle: Handle) {
 	function finishPointerSelection(cancelled = false) {
 		if (!pointerSelectionMode) return
 		detachPointerSelectionListeners()
-		const changed = cancelled ? false : applyPendingPointerSelection()
-		clearPointerSelection()
-		if (changed) {
-			handle.update()
-			return
+		if (!cancelled) {
+			applyPendingPointerSelection()
 		}
+		clearPointerSelection()
 		handle.update()
 	}
 

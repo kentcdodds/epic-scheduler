@@ -297,12 +297,10 @@ export function ScheduleHostRoute(handle: Handle) {
 	function finishHostSelection(cancelled = false) {
 		if (!hostSelectionMode) return
 		detachHostSelectionListeners()
-		const changed = cancelled ? false : applyPendingHostSelection()
-		clearHostSelection()
-		if (changed) {
-			handle.update()
-			return
+		if (!cancelled) {
+			applyPendingHostSelection()
 		}
+		clearHostSelection()
 		handle.update()
 	}
 
