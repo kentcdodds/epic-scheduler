@@ -562,10 +562,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		hostSelection.updateSelectionToSlot(slot)
 	}
 
-	function handleHostUnavailablePointerMove(event: PointerEvent) {
-		hostSelection.handlePointerMove(event)
-	}
-
 	function toggleIncludedAttendee(attendeeId: string) {
 		if (excludedAttendeeIds.has(attendeeId)) {
 			excludedAttendeeIds.delete(attendeeId)
@@ -1331,9 +1327,6 @@ export function ScheduleHostRoute(handle: Handle) {
 									},
 									onCellPointerEnter: (slot, _event) => {
 										handleHostUnavailablePointerEnter(slot)
-									},
-									onCellPointerMove: (_slot, event) => {
-										handleHostUnavailablePointerMove(event)
 									},
 									onCellPointerUp: (_slot, _event) => {
 										handleHostUnavailablePointerUp()

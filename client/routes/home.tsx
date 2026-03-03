@@ -326,6 +326,12 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	syncSlots()
+	const secondaryTextColor =
+		'color-mix(in srgb, var(--color-text) 82%, var(--color-surface))'
+	const heroBadgeBackground =
+		'color-mix(in srgb, var(--color-primary) 26%, var(--color-surface))'
+	const heroBadgeBorder =
+		'1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))'
 
 	return () => {
 		const slotAvailability = getSlotAvailability()
@@ -351,14 +357,46 @@ export function HomeRoute(handle: Handle) {
 						boxShadow: shadows.sm,
 					}}
 				>
-					<img
-						src="/epic-scheduler-logo.svg"
-						alt="Epic Scheduler"
+					<div
 						css={{
-							width: 'min(100%, 28rem)',
-							height: 'auto',
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: spacing.md,
+							flexWrap: 'wrap',
 						}}
-					/>
+					>
+						<img
+							src="/epic-scheduler-favicon.svg"
+							alt=""
+							aria-hidden="true"
+							css={{
+								width: '3.2rem',
+								height: '3.2rem',
+								borderRadius: radius.md,
+							}}
+						/>
+						<div css={{ display: 'grid', gap: spacing.xs }}>
+							<p
+								css={{
+									margin: 0,
+									fontSize: typography.fontSize.xl,
+									fontWeight: typography.fontWeight.semibold,
+									color: colors.text,
+									lineHeight: 1.05,
+								}}
+							>
+								Epic Scheduler
+							</p>
+							<p
+								css={{
+									margin: 0,
+									color: secondaryTextColor,
+								}}
+							>
+								Fast overlap, fewer messages.
+							</p>
+						</div>
+					</div>
 					<h1
 						css={{
 							margin: 0,
@@ -372,7 +410,7 @@ export function HomeRoute(handle: Handle) {
 					<p
 						css={{
 							margin: 0,
-							color: colors.textMuted,
+							color: secondaryTextColor,
 							maxWidth: '54ch',
 						}}
 					>
@@ -390,8 +428,9 @@ export function HomeRoute(handle: Handle) {
 							css={{
 								padding: `${spacing.xs} ${spacing.sm}`,
 								borderRadius: radius.full,
-								backgroundColor: colors.primarySoft,
-								color: colors.primaryText,
+								backgroundColor: heroBadgeBackground,
+								border: heroBadgeBorder,
+								color: colors.text,
 								fontSize: typography.fontSize.xs,
 								fontWeight: typography.fontWeight.medium,
 							}}
@@ -402,8 +441,9 @@ export function HomeRoute(handle: Handle) {
 							css={{
 								padding: `${spacing.xs} ${spacing.sm}`,
 								borderRadius: radius.full,
-								backgroundColor: colors.primarySoft,
-								color: colors.primaryText,
+								backgroundColor: heroBadgeBackground,
+								border: heroBadgeBorder,
+								color: colors.text,
 								fontSize: typography.fontSize.xs,
 								fontWeight: typography.fontWeight.medium,
 							}}
@@ -414,8 +454,9 @@ export function HomeRoute(handle: Handle) {
 							css={{
 								padding: `${spacing.xs} ${spacing.sm}`,
 								borderRadius: radius.full,
-								backgroundColor: colors.primarySoft,
-								color: colors.primaryText,
+								backgroundColor: heroBadgeBackground,
+								border: heroBadgeBorder,
+								color: colors.text,
 								fontSize: typography.fontSize.xs,
 								fontWeight: typography.fontWeight.medium,
 							}}
@@ -474,6 +515,10 @@ export function HomeRoute(handle: Handle) {
 									border: `1px solid ${colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
+									'&::placeholder': {
+										color: secondaryTextColor,
+										opacity: 1,
+									},
 								}}
 							/>
 						</label>
@@ -504,6 +549,10 @@ export function HomeRoute(handle: Handle) {
 									border: `1px solid ${colors.border}`,
 									backgroundColor: colors.background,
 									color: colors.text,
+									'&::placeholder': {
+										color: secondaryTextColor,
+										opacity: 1,
+									},
 								}}
 							/>
 						</label>
@@ -607,10 +656,10 @@ export function HomeRoute(handle: Handle) {
 							alignItems: 'center',
 						}}
 					>
-						<p css={{ margin: 0, color: colors.textMuted }}>
+						<p css={{ margin: 0, color: secondaryTextColor }}>
 							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
 						</p>
-						<p css={{ margin: 0, color: colors.textMuted }}>
+						<p css={{ margin: 0, color: secondaryTextColor }}>
 							Times are shown in your browser timezone: {browserTimeZone}
 						</p>
 					</div>
