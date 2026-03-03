@@ -76,6 +76,7 @@ export function ScheduleRoute(handle: Handle) {
 	let isDeletingSubmission = false
 	let isRenamingSubmission = false
 	let isLoading = true
+	let connectionState: ConnectionState = 'connecting'
 	let socket: WebSocket | null = null
 	let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 	let offlinePollTimer: ReturnType<typeof setInterval> | null = null
@@ -275,6 +276,7 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function setConnectionState(nextState: ConnectionState) {
+		connectionState = nextState
 		if (nextState === 'offline') {
 			if (!offlinePollTimer) {
 				offlinePollTimer = setInterval(() => {
@@ -977,6 +979,12 @@ export function ScheduleRoute(handle: Handle) {
 		const hostName =
 			currentSnapshot?.attendees.find((entry) => entry.isHost)?.name ??
 			'the organizer'
+		const connectionLabel =
+			connectionState === 'live'
+				? 'Realtime connected'
+				: connectionState === 'connecting'
+					? 'Connecting realtime…'
+					: `Realtime unavailable; polling every ${Math.floor(offlinePollIntervalMs / 1000)}s`
 
 		if (!shareToken) {
 			setDocumentTitle(toAppTitle('Schedule not found'))
