@@ -3,6 +3,7 @@ import { type AppEnv } from '#types/env-schema.ts'
 import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
 import { createHealthHandler } from './handlers/health.ts'
 import { createScheduleHostReadHandler } from './handlers/schedule-host-read.ts'
+import { scheduleHostPage, schedulePage } from './handlers/app-pages.ts'
 import { home } from './handlers/home.ts'
 import { createScheduleCreateHandler } from './handlers/schedule-create.ts'
 import { createScheduleHostUpdateHandler } from './handlers/schedule-host-update.ts'
@@ -29,6 +30,8 @@ export function createAppRouter(appEnv: AppEnv) {
 	})
 
 	router.map(routes.home, home)
+	router.map(routes.schedulePage, schedulePage)
+	router.map(routes.scheduleHostPage, scheduleHostPage)
 	router.map(routes.howItWorks, howItWorks)
 	router.map(routes.features, features)
 	router.map(routes.blog, blogIndex)

@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { setDocumentTitle, toAppTitle } from './document-title.ts'
 
 type RouterSetup = {
 	routes: Record<string, JSX.Element>
@@ -291,6 +292,7 @@ export function Router(handle: Handle, setup: RouterSetup) {
 		const path = getPathname()
 		const routeElement = matchRoute(path, setup.routes)
 		if (routeElement) return routeElement
+		setDocumentTitle(toAppTitle('Page not found'))
 		return setup.fallback ?? null
 	}
 }

@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
@@ -612,6 +613,7 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	return () => {
 		if (!shareToken || !hostAccessToken) {
+			setDocumentTitle(toAppTitle('Host dashboard not found'))
 			return (
 				<section css={{ display: 'grid', gap: spacing.md }}>
 					<h2 css={{ margin: 0, color: colors.text }}>
@@ -759,6 +761,19 @@ export function ScheduleHostRoute(handle: Handle) {
 		const hostPath = `${attendeePath}/${encodeURIComponent(hostAccessToken)}`
 		const attendeeUrl = appOrigin ? `${appOrigin}${attendeePath}` : attendeePath
 		const hostUrl = appOrigin ? `${appOrigin}${hostPath}` : hostPath
+		const scheduleTitle = currentSnapshot?.schedule.title.trim() ?? ''
+
+		if (isLoading && !currentSnapshot) {
+			setDocumentTitle(toAppTitle('Loading host dashboard'))
+		} else if (currentSnapshot) {
+			setDocumentTitle(
+				toAppTitle(
+					scheduleTitle ? `${scheduleTitle} host dashboard` : 'Host dashboard',
+				),
+			)
+		} else {
+			setDocumentTitle(toAppTitle('Host dashboard unavailable'))
+		}
 
 		return (
 			<section css={{ display: 'grid', gap: spacing.lg }}>

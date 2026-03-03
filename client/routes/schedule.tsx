@@ -1,4 +1,5 @@
 import { type Handle } from 'remix/component'
+import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
@@ -593,6 +594,7 @@ export function ScheduleRoute(handle: Handle) {
 					: `Realtime unavailable; polling every ${Math.floor(offlinePollIntervalMs / 1000)}s`
 
 		if (!shareToken) {
+			setDocumentTitle(toAppTitle('Schedule not found'))
 			return (
 				<section css={{ display: 'grid', gap: spacing.md }}>
 					<h2 css={{ margin: 0, color: colors.text }}>Schedule not found</h2>
@@ -601,6 +603,21 @@ export function ScheduleRoute(handle: Handle) {
 					</p>
 				</section>
 			)
+		}
+
+		const scheduleTitle = currentSnapshot?.schedule.title.trim() ?? ''
+		if (isLoading && !currentSnapshot) {
+			setDocumentTitle(toAppTitle('Loading schedule'))
+		} else if (currentSnapshot) {
+			setDocumentTitle(
+				toAppTitle(
+					scheduleTitle
+						? `${scheduleTitle} availability`
+						: 'Schedule availability',
+				),
+			)
+		} else {
+			setDocumentTitle(toAppTitle('Schedule unavailable'))
 		}
 
 		return (
