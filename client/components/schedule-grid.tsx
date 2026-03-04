@@ -642,10 +642,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const pendingSelectionOverlay = isPendingSelection
 										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
 										: null
-									const accentedSlotOverlay = isAccented
-										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 20%, transparent)`
+									const accentedSlotRing = isAccented
+										? `inset 0 0 0 2px ${colors.success}`
 										: null
-									const outlinedSlotRing = isOutlined
+									const outlinedSlotRing = isOutlined && !isAccented
 										? `inset 0 0 0 2px ${colors.primary}`
 										: null
 									const activeSlotRing =
@@ -654,7 +654,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											: null
 									const combinedBoxShadow = [
 										pendingSelectionOverlay,
-										accentedSlotOverlay,
+										accentedSlotRing,
 										outlinedSlotRing,
 										activeSlotRing,
 									]
