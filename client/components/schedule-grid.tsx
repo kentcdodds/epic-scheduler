@@ -645,9 +645,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const accentedSlotRing = isAccented
 										? `inset 0 0 0 2px ${colors.success}`
 										: null
-									const outlinedSlotRing = isOutlined && !isAccented
-										? `inset 0 0 0 2px ${colors.primary}`
-										: null
+									const outlinedSlotRing =
+										isOutlined && !isAccented
+											? `inset 0 0 0 2px ${colors.primary}`
+											: null
 									const activeSlotRing =
 										isRangeAnchor || isActive
 											? `inset 0 0 0 2px ${colors.primary}`
