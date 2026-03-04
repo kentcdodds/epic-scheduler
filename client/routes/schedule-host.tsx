@@ -2398,26 +2398,6 @@ export function ScheduleHostRoute(handle: Handle) {
 																				return
 																			}
 																			if (
-																				normalizedSubmittedName
-																					.toLowerCase()
-																					.includes('error')
-																			) {
-																				if (isHostAttendee) {
-																					hostNameDraft = submittedNameDraft
-																				} else {
-																					submissionNameDraftById.set(
-																						attendee.id,
-																						submittedNameDraft,
-																					)
-																				}
-																				submissionErrorById.set(
-																					attendee.id,
-																					'Temporary test error: names containing "error" are not allowed.',
-																				)
-																				handle.update()
-																				return
-																			}
-																			if (
 																				normalizedSubmittedName ===
 																				normalizeName(attendee.name)
 																			) {
