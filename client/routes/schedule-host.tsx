@@ -38,10 +38,7 @@ const namePillMinHeight = '2.125rem'
 const namePillPaddingInline = `calc(${spacing.sm} + 4px)`
 let namePillMeasureElement: HTMLSpanElement | null = null
 
-function getNamePillBaseStyles(params: {
-	isIncluded: boolean
-	widthPx: number
-}) {
+function getNamePillBaseStyles(params: { isIncluded: boolean; widthPx: number }) {
 	return {
 		width: `${params.widthPx}px`,
 		maxWidth: '100%',
@@ -63,10 +60,7 @@ function getNamePillBaseStyles(params: {
 
 function getNamePillMeasureElement() {
 	if (typeof document === 'undefined') return null
-	if (
-		namePillMeasureElement &&
-		document.body.contains(namePillMeasureElement)
-	) {
+	if (namePillMeasureElement && document.body.contains(namePillMeasureElement)) {
 		return namePillMeasureElement
 	}
 	const element = document.createElement('span')
@@ -91,17 +85,6 @@ function getNamePillMeasureElement() {
 	document.body.appendChild(element)
 	namePillMeasureElement = element
 	return namePillMeasureElement
-}
-
-function clearNamePillMeasureElement() {
-	if (typeof document === 'undefined') return
-	if (
-		namePillMeasureElement &&
-		document.body.contains(namePillMeasureElement)
-	) {
-		document.body.removeChild(namePillMeasureElement)
-	}
-	namePillMeasureElement = null
 }
 
 function measureNamePillWidthPx(text: string) {
@@ -189,6 +172,76 @@ function toRangeEndSlotExclusive(slot: string, intervalMinutes: number) {
 	const slotMs = Date.parse(slot)
 	if (Number.isNaN(slotMs)) return null
 	return new Date(slotMs + intervalMinutes * 60_000).toISOString()
+}
+
+function buildAvailabilityRangeSummary(params: {
+	selectionSlotsSorted: Array<string>
+	intervalMinutes: number
+	availableSlots: ReadonlySet<string>
+	timeZone: string | null
+}) {
+	type Segment = {
+		startSlot: string
+		endSlot: string
+		startMs: number
+		endMs: number
+		isAvailable: boolean
+	}
+	const segments: Array<Segment> = []
+	const intervalMs = params.intervalMinutes * 60_000
+	let activeSegment: Segment | null = null
+	for (const slot of params.selectionSlotsSorted) {
+		const slotMs = Date.parse(slot)
+		if (Number.isNaN(slotMs)) continue
+		const isAvailable = params.availableSlots.has(slot)
+		if (!activeSegment) {
+			activeSegment = {
+				startSlot: slot,
+				endSlot: slot,
+				startMs: slotMs,
+				endMs: slotMs,
+				isAvailable,
+			}
+			continue
+		}
+		const isConsecutive = slotMs - activeSegment.endMs === intervalMs
+		if (activeSegment.isAvailable === isAvailable && isConsecutive) {
+			activeSegment.endSlot = slot
+			activeSegment.endMs = slotMs
+			continue
+		}
+		segments.push(activeSegment)
+		activeSegment = {
+			startSlot: slot,
+			endSlot: slot,
+			startMs: slotMs,
+			endMs: slotMs,
+			isAvailable,
+		}
+	}
+	if (activeSegment) segments.push(activeSegment)
+	return segments.map((segment) => {
+		const rangeEndSlotExclusive = toRangeEndSlotExclusive(
+			segment.endSlot,
+			params.intervalMinutes,
+		)
+		const localRange = rangeEndSlotExclusive
+			? formatSlotRangeForAttendeeTimeZone({
+					rangeStartSlot: segment.startSlot,
+					rangeEndSlotExclusive,
+					timeZone: params.timeZone,
+				})
+			: {
+					localRange: 'Local time unknown',
+					timeZoneLabel: params.timeZone ?? 'timezone unknown',
+				}
+		return {
+			startSlot: segment.startSlot,
+			isAvailable: segment.isAvailable,
+			localRangeText: localRange.localRange,
+			timeZoneLabel: localRange.timeZoneLabel,
+		}
+	})
 }
 function buildEmptyAvailability(slots: Array<string>) {
 	return Object.fromEntries(
@@ -342,10 +395,7 @@ function copyTextWithFallback(text: string) {
 	return copied
 }
 
-function focusSubmissionEditInput(
-	attendeeId: string,
-	options?: { selectAll?: boolean },
-) {
+function focusSubmissionEditInput(attendeeId: string, options?: { selectAll?: boolean }) {
 	if (typeof document === 'undefined') return
 	setTimeout(() => {
 		const input = document.querySelector(
@@ -636,7 +686,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		previewSelection.cleanup()
 		clearSocketResources()
 		clearRefreshTimer()
-		clearNamePillMeasureElement()
 		pendingSave = false
 	}
 
@@ -796,9 +845,9 @@ export function ScheduleHostRoute(handle: Handle) {
 			const previousName = previousAttendeeNameById.get(attendee.id)
 			const existingDraft = submissionNameDraftById.get(attendee.id)
 			const shouldKeepDraft =
+				typeof previousName === 'string' &&
 				typeof existingDraft === 'string' &&
-				(submissionActionById.has(attendee.id) ||
-					(typeof previousName === 'string' && existingDraft !== previousName))
+				existingDraft !== previousName
 			nextSubmissionNameDraftById.set(
 				attendee.id,
 				shouldKeepDraft ? existingDraft : attendee.name,
@@ -1090,10 +1139,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 	}
 
-	async function renameSubmission(
-		attendeeId: string,
-		nextSubmissionName: string,
-	) {
+	async function renameSubmission(attendeeId: string, nextSubmissionName: string) {
 		const requestShareToken = shareToken
 		if (!requestShareToken || handle.signal.aborted) return
 		const requestHostAccessToken = hostAccessToken
@@ -1767,7 +1813,7 @@ export function ScheduleHostRoute(handle: Handle) {
 					)
 				: null
 		const previewRangeSummaryEntries =
-			previewRangeStartSlot && previewRangeEndSlotExclusive
+			previewRangeStartSlot && previewRangeEndSlotExclusive && currentSnapshot
 				? includedAttendees
 						.map((attendee) => {
 							const availableSlots =
@@ -1778,21 +1824,17 @@ export function ScheduleHostRoute(handle: Handle) {
 									availableSlotCount += 1
 								}
 							}
-							const canAttendEntireRange =
-								previewSelectionCount > 0 &&
-								availableSlotCount === previewSelectionCount
-							const localRange = formatSlotRangeForAttendeeTimeZone({
-								rangeStartSlot: previewRangeStartSlot,
-								rangeEndSlotExclusive: previewRangeEndSlotExclusive,
+							const availabilityRanges = buildAvailabilityRangeSummary({
+								selectionSlotsSorted: previewSelectionSlotsSorted,
+								intervalMinutes: currentSnapshot.schedule.intervalMinutes,
+								availableSlots,
 								timeZone: attendee.timeZone,
 							})
 							return {
 								id: attendee.id,
 								name: attendee.name,
 								availableSlotCount,
-								canAttendEntireRange,
-								localRangeText: localRange.localRange,
-								timeZoneLabel: localRange.timeZoneLabel,
+								availabilityRanges,
 							}
 						})
 						.sort((left, right) => {
@@ -2190,641 +2232,646 @@ export function ScheduleHostRoute(handle: Handle) {
 										backgroundColor: colors.background,
 									}}
 								>
-									<div
-										css={{
-											display: 'flex',
-											flexWrap: 'wrap',
-											alignItems: 'center',
-											justifyContent: 'space-between',
-											gap: spacing.sm,
-										}}
-									>
-										<div css={{ display: 'grid', gap: spacing.xs }}>
-											<h2
-												css={{
-													margin: 0,
-													fontSize: typography.fontSize.base,
-													color: colors.text,
-												}}
-											>
-												Respondents and summary
-											</h2>
-										</div>
-										{previewSelectionCount > 0 ? (
-											<button
-												type="button"
-												on={{ click: clearPreviewSelectedRange }}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: `1px solid ${colors.border}`,
-													backgroundColor: colors.surface,
-													color: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												Clear selection
-											</button>
-										) : null}
+								<div
+									css={{
+										display: 'flex',
+										flexWrap: 'wrap',
+										alignItems: 'center',
+										justifyContent: 'space-between',
+										gap: spacing.sm,
+									}}
+								>
+									<div css={{ display: 'grid', gap: spacing.xs }}>
+										<h2
+											css={{
+												margin: 0,
+												fontSize: typography.fontSize.base,
+												color: colors.text,
+											}}
+										>
+											Respondents and summary
+										</h2>
 									</div>
-									{previewSelection.state.mode ? (
-										<p role="status" aria-live="polite" css={visuallyHiddenCss}>
-											Selecting {previewSelection.state.slots.size} slot
-											{previewSelection.state.slots.size === 1 ? '' : 's'} —
-											release to apply or press Escape to cancel.
-										</p>
+									{previewSelectionCount > 0 ? (
+										<button
+											type="button"
+											on={{ click: clearPreviewSelectedRange }}
+											css={{
+												padding: `${spacing.xs} ${spacing.sm}`,
+												borderRadius: radius.full,
+												border: `1px solid ${colors.border}`,
+												backgroundColor: colors.surface,
+												color: colors.text,
+												cursor: 'pointer',
+											}}
+										>
+											Clear selection
+										</button>
 									) : null}
-									{previewSelectionStatus ? (
-										<p role="status" aria-live="polite" css={visuallyHiddenCss}>
-											{previewSelectionStatus}
-										</p>
-									) : null}
-									<div
-										css={{
-											display: 'grid',
-											gap: spacing.sm,
-										}}
-									>
-										{attendees.map((attendee) => {
-											const isIncluded = !excludedAttendeeIds.has(attendee.id)
-											const isHostAttendee = attendee.isHost
-											const submissionNameDraft =
-												submissionNameDraftById.get(attendee.id) ??
-												attendee.name
-											const nameDraft = isHostAttendee
-												? hostNameDraft
-												: submissionNameDraft
-											const namePillWidthPx = measureNamePillWidthPx(nameDraft)
-											const pendingSubmissionAction =
-												submissionActionById.get(attendee.id) ?? null
-											const submissionErrorMessage =
-												submissionErrorById.get(attendee.id) ?? null
-											const isEditingSubmission =
-												editingSubmissionId === attendee.id
-											const isFocusedPreviewAttendee =
-												focusedPreviewAttendeeId === attendee.id
-											const rangeSummaryEntry =
-												previewRangeSummaryById.get(attendee.id) ?? null
-											const totalSummaryEntry =
-												attendeeTotalSummaryById.get(attendee.id) ?? null
-											const normalizedSubmissionName = normalizeName(nameDraft)
-											const hasBlankSubmissionName =
-												isEditingSubmission &&
-												normalizedSubmissionName.length === 0
-											const inlineSubmissionErrorMessage =
-												submissionErrorMessage ??
-												(hasBlankSubmissionName
-													? 'Submission name is required.'
-													: null)
-											return (
-												<article
-													key={attendee.id}
+								</div>
+								{previewSelection.state.mode ? (
+									<p role="status" aria-live="polite" css={visuallyHiddenCss}>
+										Selecting {previewSelection.state.slots.size} slot
+										{previewSelection.state.slots.size === 1 ? '' : 's'} —
+										release to apply or press Escape to cancel.
+									</p>
+								) : null}
+								{previewSelectionStatus ? (
+									<p role="status" aria-live="polite" css={visuallyHiddenCss}>
+										{previewSelectionStatus}
+									</p>
+								) : null}
+								<div
+									css={{
+										display: 'grid',
+										gap: spacing.sm,
+									}}
+								>
+									{attendees.map((attendee) => {
+										const isIncluded = !excludedAttendeeIds.has(attendee.id)
+										const isHostAttendee = attendee.isHost
+										const submissionNameDraft =
+											submissionNameDraftById.get(attendee.id) ?? attendee.name
+										const nameDraft = isHostAttendee
+											? hostNameDraft
+											: submissionNameDraft
+										const displayNamePillWidthPx = measureNamePillWidthPx(nameDraft)
+										const editNamePillWidthPx = measureNamePillWidthPx(nameDraft)
+										const pendingSubmissionAction =
+											submissionActionById.get(attendee.id) ?? null
+										const submissionErrorMessage =
+											submissionErrorById.get(attendee.id) ?? null
+										const isEditingSubmission =
+											editingSubmissionId === attendee.id
+										const isFocusedPreviewAttendee =
+											focusedPreviewAttendeeId === attendee.id
+										const rangeSummaryEntry =
+											previewRangeSummaryById.get(attendee.id) ?? null
+										const totalSummaryEntry =
+											attendeeTotalSummaryById.get(attendee.id) ?? null
+										const normalizedSubmissionName = normalizeName(nameDraft)
+										const hasBlankSubmissionName =
+											isEditingSubmission && normalizedSubmissionName.length === 0
+										const inlineSubmissionErrorMessage =
+											submissionErrorMessage ??
+											(hasBlankSubmissionName
+												? 'Submission name is required.'
+												: null)
+										const inlineSubmissionErrorId = `submission-error-${attendee.id}`
+										return (
+											<article
+												key={attendee.id}
+												css={{
+													display: 'grid',
+													gap: spacing.xs,
+													padding: spacing.sm,
+													borderRadius: radius.md,
+													border: `1px solid ${colors.border}`,
+													backgroundColor: isIncluded
+														? colors.surface
+														: colors.background,
+												}}
+											>
+												<div
 													css={{
 														display: 'grid',
-														gap: spacing.xs,
-														padding: spacing.sm,
-														borderRadius: radius.md,
-														border: `1px solid ${colors.border}`,
-														backgroundColor: isIncluded
-															? colors.surface
-															: colors.background,
+														gap: spacing.sm,
+														gridTemplateColumns: 'minmax(0, 1fr) auto',
+														alignItems: 'center',
+														[mq.mobile]: {
+															gridTemplateColumns: '1fr',
+														},
 													}}
 												>
 													<div
 														css={{
-															display: 'grid',
-															gap: spacing.sm,
-															gridTemplateColumns: 'minmax(0, 1fr) auto',
+															display: 'flex',
 															alignItems: 'center',
-															[mq.mobile]: {
-																gridTemplateColumns: '1fr',
-															},
+															gap: spacing.sm,
+															minWidth: 0,
 														}}
 													>
-														<div
-															css={{
-																display: 'flex',
-																alignItems: 'center',
-																gap: spacing.sm,
-																minWidth: 0,
-															}}
-														>
-															{isEditingSubmission ? (
-																<form
-																	data-submission-edit-form={attendee.id}
-																	on={{
-																		submit: (event) => {
-																			event.preventDefault()
-																			const formData = new FormData(
-																				event.currentTarget,
-																			)
-																			const submittedNameDraft = String(
-																				formData.get('submissionName') ?? '',
-																			)
-																			const normalizedSubmittedName =
-																				normalizeName(submittedNameDraft)
-																			if (!normalizedSubmittedName) {
-																				submissionErrorById.set(
-																					attendee.id,
-																					'Submission name is required.',
-																				)
-																				handle.update()
-																				return
-																			}
-																			if (
-																				normalizedSubmittedName ===
-																				normalizeName(attendee.name)
-																			) {
-																				editingSubmissionId = null
-																				submissionErrorById.delete(attendee.id)
-																				handle.update()
-																				focusSubmissionEditButton(attendee.id)
-																				return
-																			}
+														{isEditingSubmission ? (
+															<form
+																data-submission-edit-form={attendee.id}
+																on={{
+																	submit: (event) => {
+																		event.preventDefault()
+																		const formData = new FormData(
+																			event.currentTarget,
+																		)
+																		const submittedNameDraft = String(
+																			formData.get('submissionName') ?? '',
+																		)
+																		const normalizedSubmittedName =
+																			normalizeName(submittedNameDraft)
+																		if (!normalizedSubmittedName) {
 																			if (isHostAttendee) {
 																				hostNameDraft = submittedNameDraft
-																				changeVersion += 1
-																				queueHostSettingsSave()
-																				editingSubmissionId = null
-																				submissionErrorById.delete(attendee.id)
-																				handle.update()
-																				focusSubmissionEditButton(attendee.id)
-																				return
+																			} else {
+																				submissionNameDraftById.set(
+																					attendee.id,
+																					submittedNameDraft,
+																				)
 																			}
-																			submissionNameDraftById.set(
+																			submissionErrorById.set(
 																				attendee.id,
-																				submittedNameDraft,
+																				'Submission name is required.',
 																			)
+																			handle.update()
+																			return
+																		}
+																		if (
+																			normalizedSubmittedName
+																				.toLowerCase()
+																				.includes('error')
+																		) {
+																			if (isHostAttendee) {
+																				hostNameDraft = submittedNameDraft
+																			} else {
+																				submissionNameDraftById.set(
+																					attendee.id,
+																					submittedNameDraft,
+																				)
+																			}
+																			submissionErrorById.set(
+																				attendee.id,
+																				'Temporary test error: names containing "error" are not allowed.',
+																			)
+																			handle.update()
+																			return
+																		}
+																		if (
+																			normalizedSubmittedName ===
+																			normalizeName(attendee.name)
+																		) {
 																			editingSubmissionId = null
 																			submissionErrorById.delete(attendee.id)
 																			handle.update()
 																			focusSubmissionEditButton(attendee.id)
-																			void renameSubmission(
-																				attendee.id,
-																				normalizedSubmittedName,
-																			)
-																		},
-																	}}
+																			return
+																		}
+																		if (isHostAttendee) {
+																			hostNameDraft = submittedNameDraft
+																			changeVersion += 1
+																			queueHostSettingsSave()
+																			editingSubmissionId = null
+																			submissionErrorById.delete(attendee.id)
+																			handle.update()
+																			focusSubmissionEditButton(attendee.id)
+																			return
+																		}
+																		submissionNameDraftById.set(
+																			attendee.id,
+																			submittedNameDraft,
+																		)
+																		editingSubmissionId = null
+																		submissionErrorById.delete(attendee.id)
+																		handle.update()
+																		focusSubmissionEditButton(attendee.id)
+																		void renameSubmission(
+																			attendee.id,
+																			normalizedSubmittedName,
+																		)
+																	},
+																}}
+																css={{
+																	display: 'flex',
+																	alignItems: 'center',
+																	gap: spacing.xs,
+																	minWidth: 0,
+																}}
+															>
+																<div
 																	css={{
-																		display: 'flex',
+																		display: 'inline-flex',
 																		alignItems: 'center',
 																		gap: spacing.xs,
-																		minWidth: 0,
+																		maxWidth: '100%',
 																	}}
 																>
-																	<div
+																	<input
+																		type="text"
+																		data-submission-edit-input={attendee.id}
+																		aria-label={`Submission name input for ${attendee.name}`}
+																		aria-invalid={
+																			inlineSubmissionErrorMessage
+																				? true
+																				: undefined
+																		}
+																		aria-describedby={
+																			inlineSubmissionErrorMessage
+																				? inlineSubmissionErrorId
+																				: undefined
+																		}
+																		name="submissionName"
+																		value={nameDraft}
+																		disabled={pendingSubmissionAction === 'delete'}
 																		css={{
-																			display: 'inline-flex',
-																			alignItems: 'center',
-																			gap: spacing.xs,
-																			maxWidth: '100%',
+																			appearance: 'none',
+																			...getNamePillBaseStyles({
+																				isIncluded,
+																				widthPx: editNamePillWidthPx,
+																			}),
+																			margin: 0,
+																			outline: 'none',
+																			'&:focus-visible': {
+																				outline: `2px solid ${colors.primary}`,
+																				outlineOffset: 2,
+																			},
 																		}}
-																	>
-																		<input
-																			type="text"
-																			data-submission-edit-input={attendee.id}
-																			aria-label={`Submission name input for ${attendee.name}`}
-																			name="submissionName"
-																			value={nameDraft}
-																			disabled={
-																				pendingSubmissionAction === 'delete'
-																			}
-																			css={{
-																				appearance: 'none',
-																				...getNamePillBaseStyles({
-																					isIncluded,
-																					widthPx: namePillWidthPx,
-																				}),
-																				margin: 0,
-																				outline: 'none',
-																				'&:focus-visible': {
-																					outline: `2px solid ${colors.primary}`,
-																					outlineOffset: 2,
-																				},
-																			}}
-																			on={{
-																				input: (event) => {
-																					const nextName =
-																						event.currentTarget.value
-																					const measuredWidthPx =
-																						measureNamePillWidthPx(nextName)
-																					event.currentTarget.style.width = `${measuredWidthPx}px`
-																					if (isHostAttendee) {
-																						hostNameDraft = nextName
-																					} else {
-																						submissionNameDraftById.set(
-																							attendee.id,
-																							nextName,
-																						)
-																					}
-																					const didClearError =
-																						submissionErrorById.delete(
-																							attendee.id,
-																						)
-																					if (didClearError) {
-																						handle.update()
-																					}
-																				},
-																				keydown: (event) => {
-																					if (event.key !== 'Escape') return
-																					event.preventDefault()
-																					editingSubmissionId = null
-																					if (isHostAttendee) {
-																						hostNameDraft = attendee.name
-																					} else {
-																						submissionNameDraftById.set(
-																							attendee.id,
-																							attendee.name,
-																						)
-																					}
-																					submissionErrorById.delete(
+																		on={{
+																			input: (event) => {
+																				const nextName = event.currentTarget.value
+																				const measuredWidthPx =
+																					measureNamePillWidthPx(nextName)
+																				event.currentTarget.style.width =
+																					`${measuredWidthPx}px`
+																				if (isHostAttendee) {
+																					hostNameDraft = nextName
+																				} else {
+																					submissionNameDraftById.set(
 																						attendee.id,
+																						nextName,
 																					)
+																				}
+																				const didClearError =
+																					submissionErrorById.delete(attendee.id)
+																				if (didClearError) {
 																					handle.update()
-																					focusSubmissionEditButton(attendee.id)
-																				},
-																				blur: (event) => {
-																					if (
-																						editingSubmissionId !== attendee.id
-																					)
-																						return
-																					const nextFocused =
-																						event.relatedTarget
-																					if (nextFocused instanceof Element) {
-																						const parentEditForm =
-																							nextFocused.closest(
-																								`form[data-submission-edit-form="${attendee.id}"]`,
-																							)
-																						if (parentEditForm) {
-																							return
-																						}
-																					}
-																					editingSubmissionId = null
-																					if (isHostAttendee) {
-																						hostNameDraft = attendee.name
-																					} else {
-																						submissionNameDraftById.set(
-																							attendee.id,
-																							attendee.name,
-																						)
-																					}
-																					submissionErrorById.delete(
+																				}
+																			},
+																			keydown: (event) => {
+																				if (event.key !== 'Escape') return
+																				event.preventDefault()
+																				editingSubmissionId = null
+																				if (isHostAttendee) {
+																					hostNameDraft = attendee.name
+																				} else {
+																					submissionNameDraftById.set(
 																						attendee.id,
+																						attendee.name,
 																					)
-																					handle.update()
-																				},
-																			}}
-																		/>
-																	</div>
-																</form>
-															) : (
-																<button
-																	type="button"
-																	data-submission-name-button={attendee.id}
-																	aria-label={
-																		isHostAttendee
-																			? `Edit host name for ${attendee.name}`
-																			: `Edit submission name for ${attendee.name}`
-																	}
-																	disabled={pendingSubmissionAction !== null}
-																	on={{
-																		click: () => {
-																			if (pendingSubmissionAction !== null)
-																				return
-																			const previousEditingSubmissionId =
-																				editingSubmissionId
-																			editingSubmissionId = attendee.id
-																			if (
-																				!isHostAttendee &&
-																				!submissionNameDraftById.has(
-																					attendee.id,
+																				}
+																				submissionErrorById.delete(attendee.id)
+																				handle.update()
+																				focusSubmissionEditButton(attendee.id)
+																			},
+																		blur: (event) => {
+																			if (editingSubmissionId !== attendee.id) return
+																			const nextFocused = event.relatedTarget
+																			if (nextFocused instanceof Element) {
+																				const parentEditForm = nextFocused.closest(
+																					`form[data-submission-edit-form="${attendee.id}"]`,
 																				)
-																			) {
+																				if (parentEditForm) {
+																					return
+																				}
+																			}
+																			editingSubmissionId = null
+																			if (isHostAttendee) {
+																				hostNameDraft = attendee.name
+																			} else {
 																				submissionNameDraftById.set(
 																					attendee.id,
 																					attendee.name,
 																				)
 																			}
-																			if (
-																				previousEditingSubmissionId &&
-																				previousEditingSubmissionId !==
-																					attendee.id
-																			) {
-																				submissionErrorById.delete(
-																					previousEditingSubmissionId,
-																				)
-																			}
 																			submissionErrorById.delete(attendee.id)
 																			handle.update()
-																			focusSubmissionEditInput(attendee.id, {
-																				selectAll: true,
-																			})
 																		},
-																	}}
-																	css={{
-																		appearance: 'none',
-																		display: 'inline-flex',
-																		alignItems: 'center',
-																		gap: spacing.xs,
-																		...getNamePillBaseStyles({
-																			isIncluded,
-																			widthPx: namePillWidthPx,
-																		}),
-																		textAlign: 'left',
-																		cursor:
-																			pendingSubmissionAction === null
-																				? 'pointer'
-																				: 'not-allowed',
-																		overflow: 'hidden',
-																		textOverflow: 'ellipsis',
-																	}}
-																>
-																	{nameDraft}
-																</button>
-															)}
-														</div>
-														<div
-															css={{
-																display: 'inline-flex',
-																gap: spacing.xs,
-																justifySelf: 'start',
-															}}
-														>
-															{!isHostAttendee ? (
-																<button
-																	type="button"
-																	aria-label={`Delete submission for ${attendee.name}`}
-																	title={
-																		pendingSubmissionAction === 'delete'
-																			? 'Deleting submission'
-																			: deleteConfirmationAttendeeId ===
-																				  attendee.id
-																				? 'Confirm deletion'
-																				: 'Delete submission'
-																	}
-																	disabled={pendingSubmissionAction !== null}
-																	on={{
-																		click: (event) => {
-																			if (pendingSubmissionAction !== null)
-																				return
-																			if (
-																				deleteConfirmationAttendeeId !==
-																				attendee.id
-																			) {
-																				event.preventDefault()
-																				setDeleteConfirmationAttendee(
-																					attendee.id,
-																				)
-																				return
-																			}
-																			deleteConfirmationAttendeeId = null
-																			handle.update()
-																			void deleteSubmission(attendee.id)
-																		},
-																		blur: () => {
-																			if (
-																				deleteConfirmationAttendeeId !==
-																				attendee.id
+																		}}
+																	/>
+																</div>
+															</form>
+														) : (
+															<button
+																type="button"
+																data-submission-name-button={attendee.id}
+																aria-label={
+																	isHostAttendee
+																		? `Edit host name for ${attendee.name}`
+																		: `Edit submission name for ${attendee.name}`
+																}
+																disabled={pendingSubmissionAction !== null}
+																on={{
+																	click: () => {
+																		if (pendingSubmissionAction !== null) return
+																		const previousEditingSubmissionId =
+																			editingSubmissionId
+																		editingSubmissionId = attendee.id
+																		if (
+																			!isHostAttendee &&
+																			!submissionNameDraftById.has(attendee.id)
+																		) {
+																			submissionNameDraftById.set(
+																				attendee.id,
+																				attendee.name,
 																			)
-																				return
-																			setDeleteConfirmationAttendee(null)
-																		},
-																	}}
-																	css={{
-																		display: 'inline-flex',
-																		alignItems: 'center',
-																		justifyContent: 'center',
-																		width:
-																			deleteConfirmationAttendeeId ===
-																			attendee.id
-																				? 'auto'
-																				: 30,
-																		height: 30,
-																		padding:
-																			deleteConfirmationAttendeeId ===
-																			attendee.id
-																				? `0 ${spacing.xs}`
-																				: 0,
-																		borderRadius: radius.sm,
-																		border: `1px solid ${colors.border}`,
-																		backgroundColor:
-																			deleteConfirmationAttendeeId ===
-																			attendee.id
-																				? colors.error
-																				: colors.background,
-																		color:
-																			deleteConfirmationAttendeeId ===
-																			attendee.id
-																				? colors.onPrimary
-																				: colors.error,
-																		cursor:
-																			pendingSubmissionAction === null
-																				? 'pointer'
-																				: 'not-allowed',
-																		opacity:
-																			pendingSubmissionAction === null
-																				? 1
-																				: 0.72,
-																	}}
-																>
-																	{pendingSubmissionAction === 'delete'
-																		? 'Deleting…'
-																		: deleteConfirmationAttendeeId ===
-																			  attendee.id
-																			? 'Confirm'
-																			: renderTrashIcon()}
-																</button>
-															) : (
-																<span
-																	title="host"
-																	aria-label="host"
-																	role="img"
-																	css={{
-																		display: 'inline-flex',
-																		alignItems: 'center',
-																		justifyContent: 'center',
-																		width: 30,
-																		height: 30,
-																		padding: 0,
-																		borderRadius: radius.sm,
-																		border: `1px solid ${colors.border}`,
-																		backgroundColor: colors.background,
-																		color: colors.textMuted,
-																	}}
-																>
-																	{renderHostIcon()}
-																</span>
-															)}
-															<button
-																type="button"
-																aria-pressed={isIncluded}
-																aria-label={
-																	isIncluded
-																		? `Hide ${attendee.name} from preview`
-																		: `Show ${attendee.name} in preview`
-																}
-																title={
-																	isIncluded
-																		? 'Hide submission from preview'
-																		: 'Show submission in preview'
-																}
-																on={{
-																	click: () =>
-																		toggleIncludedAttendee(attendee.id),
+																		}
+																		if (
+																			previousEditingSubmissionId &&
+																			previousEditingSubmissionId !== attendee.id
+																		) {
+																			submissionErrorById.delete(
+																				previousEditingSubmissionId,
+																			)
+																		}
+																		submissionErrorById.delete(attendee.id)
+																		handle.update()
+																		focusSubmissionEditInput(attendee.id, {
+																			selectAll: true,
+																		})
+																	},
 																}}
 																css={{
+																	appearance: 'none',
 																	display: 'inline-flex',
 																	alignItems: 'center',
-																	justifyContent: 'center',
-																	width: 30,
-																	height: 30,
-																	padding: 0,
-																	borderRadius: radius.sm,
-																	border: `1px solid ${colors.border}`,
-																	backgroundColor: isIncluded
-																		? colors.primary
-																		: colors.background,
-																	color: isIncluded
-																		? colors.onPrimary
-																		: colors.text,
-																	cursor: 'pointer',
+																	gap: spacing.xs,
+																	...getNamePillBaseStyles({
+																		isIncluded,
+																		widthPx: displayNamePillWidthPx,
+																	}),
+																	textAlign: 'left',
+																	cursor:
+																		pendingSubmissionAction === null
+																			? 'pointer'
+																			: 'not-allowed',
+																	overflow: 'hidden',
+																	textOverflow: 'ellipsis',
 																}}
 															>
-																{isIncluded
-																	? renderVisibleIcon()
-																	: renderHiddenIcon()}
+																{nameDraft}
 															</button>
-															<button
-																type="button"
-																aria-pressed={isFocusedPreviewAttendee}
-																aria-label={
-																	isFocusedPreviewAttendee
-																		? `Disable highlight for ${attendee.name}`
-																		: `Highlight ${attendee.name}`
-																}
-																title={
-																	isFocusedPreviewAttendee
-																		? 'Disable highlight'
-																		: 'Highlight attendee availability'
-																}
-																on={{
-																	click: () =>
-																		toggleFocusedPreviewAttendee(attendee.id),
-																}}
-																css={{
-																	display: 'inline-flex',
-																	alignItems: 'center',
-																	justifyContent: 'center',
-																	width: 30,
-																	height: 30,
-																	padding: 0,
-																	borderRadius: radius.sm,
-																	border: `1px solid ${colors.border}`,
-																	backgroundColor: isFocusedPreviewAttendee
-																		? colors.primary
-																		: colors.background,
-																	color: isFocusedPreviewAttendee
-																		? colors.onPrimary
-																		: colors.text,
-																	cursor: 'pointer',
-																}}
-															>
-																{renderHighlightIcon()}
-															</button>
-														</div>
+														)}
 													</div>
 													<div
 														css={{
-															display: 'grid',
+															display: 'inline-flex',
 															gap: spacing.xs,
-															alignContent: 'start',
+															justifySelf: 'start',
 														}}
 													>
-														{isIncluded ? (
-															<div css={{ display: 'grid', gap: spacing.xs }}>
-																{previewSelectionCount > 0 &&
-																selectedRangeLabel &&
-																rangeSummaryEntry ? (
-																	<>
-																		<p
-																			css={{
-																				margin: 0,
-																				color: colors.textMuted,
-																			}}
-																		>
-																			{rangeSummaryEntry.availableSlotCount}/
-																			{previewSelectionCount} selected slot
-																			{previewSelectionCount === 1
-																				? ''
-																				: 's'}{' '}
-																			available.
-																		</p>
-																		<p
-																			css={{
-																				margin: 0,
-																				color:
-																					rangeSummaryEntry.canAttendEntireRange
-																						? colors.text
-																						: colors.textMuted,
-																				textDecoration:
-																					rangeSummaryEntry.canAttendEntireRange
-																						? 'none'
-																						: 'line-through',
-																				textDecorationColor: colors.error,
-																				textDecorationThickness: '2px',
-																			}}
-																		>
-																			{rangeSummaryEntry.localRangeText}{' '}
-																			{rangeSummaryEntry.timeZoneLabel}
-																		</p>
-																	</>
-																) : totalSummaryEntry ? (
-																	<p
-																		css={{ margin: 0, color: colors.textMuted }}
-																	>
-																		{totalSummaryEntry.totalAvailableSlots}{' '}
-																		available slot
-																		{totalSummaryEntry.totalAvailableSlots === 1
-																			? ''
-																			: 's'}{' '}
-																		— {totalSummaryEntry.timeZoneLabel}
-																	</p>
-																) : (
-																	<p
-																		css={{ margin: 0, color: colors.textMuted }}
-																	>
-																		No availability recorded yet.
-																	</p>
-																)}
-															</div>
+														{!isHostAttendee ? (
+															<button
+																type="button"
+																aria-label={`Delete submission for ${attendee.name}`}
+																title={
+																	pendingSubmissionAction === 'delete'
+																		? 'Deleting submission'
+																		: deleteConfirmationAttendeeId === attendee.id
+																			? 'Confirm deletion'
+																			: 'Delete submission'
+																}
+																disabled={pendingSubmissionAction !== null}
+																on={{
+																	click: (event) => {
+																		if (pendingSubmissionAction !== null) return
+																		if (deleteConfirmationAttendeeId !== attendee.id) {
+																			event.preventDefault()
+																			setDeleteConfirmationAttendee(attendee.id)
+																			return
+																		}
+																		deleteConfirmationAttendeeId = null
+																		handle.update()
+																		void deleteSubmission(attendee.id)
+																	},
+																	blur: () => {
+																		if (deleteConfirmationAttendeeId !== attendee.id) return
+																		setDeleteConfirmationAttendee(null)
+																	},
+																}}
+																css={{
+																	display: 'inline-flex',
+																	alignItems: 'center',
+																	justifyContent: 'center',
+																	width:
+																		deleteConfirmationAttendeeId === attendee.id
+																			? 'auto'
+																			: 30,
+																	height: 30,
+																	padding:
+																		deleteConfirmationAttendeeId === attendee.id
+																			? `0 ${spacing.xs}`
+																			: 0,
+																	borderRadius: radius.sm,
+																	border: `1px solid ${colors.border}`,
+																	backgroundColor:
+																		deleteConfirmationAttendeeId === attendee.id
+																			? colors.error
+																			: colors.background,
+																	color:
+																		deleteConfirmationAttendeeId === attendee.id
+																			? colors.onPrimary
+																			: colors.error,
+																	cursor:
+																		pendingSubmissionAction === null
+																			? 'pointer'
+																			: 'not-allowed',
+																	opacity:
+																		pendingSubmissionAction === null ? 1 : 0.72,
+																}}
+															>
+																{pendingSubmissionAction === 'delete'
+																	? 'Deleting…'
+																	: deleteConfirmationAttendeeId === attendee.id
+																		? 'Confirm'
+																		: renderTrashIcon()}
+															</button>
 														) : (
-															<p css={{ margin: 0, color: colors.textMuted }}>
-																Excluded from preview calculations.
-															</p>
+															<span
+																title="host"
+																aria-label="host"
+																role="img"
+																css={{
+																	display: 'inline-flex',
+																	alignItems: 'center',
+																	justifyContent: 'center',
+																	width: 30,
+																	height: 30,
+																	padding: 0,
+																	borderRadius: radius.sm,
+																	border: `1px solid ${colors.border}`,
+																	backgroundColor: colors.background,
+																	color: colors.textMuted,
+																}}
+															>
+																{renderHostIcon()}
+															</span>
 														)}
-														<p
-															role={
-																inlineSubmissionErrorMessage
-																	? 'alert'
-																	: undefined
+														<button
+															type="button"
+															aria-pressed={isIncluded}
+															aria-label={
+																isIncluded
+																	? `Hide ${attendee.name} from preview`
+																	: `Show ${attendee.name} in preview`
 															}
-															aria-live="polite"
-															aria-hidden={
-																inlineSubmissionErrorMessage ? undefined : true
+															title={
+																isIncluded
+																	? 'Hide submission from preview'
+																	: 'Show submission in preview'
 															}
+															on={{
+																click: () => toggleIncludedAttendee(attendee.id),
+															}}
 															css={{
-																margin: 0,
-																minHeight: '1.5rem',
-																color: colors.error,
+																display: 'inline-flex',
+																alignItems: 'center',
+																justifyContent: 'center',
+																width: 30,
+																height: 30,
+																padding: 0,
+																borderRadius: radius.sm,
+																border: `1px solid ${colors.border}`,
+																backgroundColor: isIncluded
+																	? colors.primary
+																	: colors.background,
+																color: isIncluded
+																	? colors.onPrimary
+																	: colors.text,
+																cursor: 'pointer',
 															}}
 														>
-															{inlineSubmissionErrorMessage ?? '\u00a0'}
-														</p>
+															{isIncluded ? renderVisibleIcon() : renderHiddenIcon()}
+														</button>
+														<button
+															type="button"
+															aria-pressed={isFocusedPreviewAttendee}
+															aria-label={
+																isFocusedPreviewAttendee
+																	? `Disable highlight for ${attendee.name}`
+																	: `Highlight ${attendee.name}`
+															}
+															title={
+																isFocusedPreviewAttendee
+																	? 'Disable highlight'
+																	: 'Highlight attendee availability'
+															}
+															on={{
+																click: () =>
+																	toggleFocusedPreviewAttendee(attendee.id),
+															}}
+															css={{
+																display: 'inline-flex',
+																alignItems: 'center',
+																justifyContent: 'center',
+																width: 30,
+																height: 30,
+																padding: 0,
+																borderRadius: radius.sm,
+																border: `1px solid ${colors.border}`,
+																backgroundColor: isFocusedPreviewAttendee
+																	? colors.primary
+																	: colors.background,
+																color: isFocusedPreviewAttendee
+																	? colors.onPrimary
+																	: colors.text,
+																cursor: 'pointer',
+															}}
+														>
+															{renderHighlightIcon()}
+														</button>
 													</div>
-												</article>
-											)
-										})}
-									</div>
+													{inlineSubmissionErrorMessage ? (
+														<p
+															id={inlineSubmissionErrorId}
+															role="alert"
+															aria-live="polite"
+															css={{
+																gridColumn: '1 / -1',
+																margin: 0,
+																color: colors.error,
+																fontSize: typography.fontSize.sm,
+																lineHeight: 1.25,
+															}}
+														>
+															{inlineSubmissionErrorMessage}
+														</p>
+													) : null}
+												</div>
+												<div
+													css={{
+														display: 'grid',
+														gap: spacing.xs,
+														alignContent: 'start',
+													}}
+												>
+													{isIncluded ? (
+														<div css={{ display: 'grid', gap: spacing.xs }}>
+															{previewSelectionCount > 0 &&
+															selectedRangeLabel &&
+															rangeSummaryEntry ? (
+																<>
+																	<p
+																		css={{ margin: 0, color: colors.textMuted }}
+																	>
+																		{rangeSummaryEntry.availableSlotCount}/
+																		{previewSelectionCount} selected slot
+																		{previewSelectionCount === 1
+																			? ''
+																			: 's'}{' '}
+																		available.
+																	</p>
+																	<p
+																		css={{
+																			margin: 0,
+																			color: colors.textMuted,
+																		}}
+																	>
+																		{rangeSummaryEntry.availabilityRanges.map(
+																			(range, index) => (
+																				<span key={`${range.startSlot}-${range.isAvailable}`}>
+																					{index > 0 ? ', ' : null}
+																					<span
+																						css={{
+																							color: range.isAvailable
+																								? colors.text
+																								: colors.textMuted,
+																							textDecoration:
+																								range.isAvailable
+																									? 'none'
+																									: 'line-through',
+																							textDecorationColor:
+																								colors.error,
+																							textDecorationThickness:
+																								'2px',
+																						}}
+																					>
+																						{range.localRangeText}{' '}
+																						{range.timeZoneLabel}
+																					</span>
+																				</span>
+																			),
+																		)}
+																	</p>
+																</>
+															) : totalSummaryEntry ? (
+																<p css={{ margin: 0, color: colors.textMuted }}>
+																	{totalSummaryEntry.totalAvailableSlots}{' '}
+																	available slot
+																	{totalSummaryEntry.totalAvailableSlots === 1
+																		? ''
+																		: 's'}{' '}
+																	— {totalSummaryEntry.timeZoneLabel}
+																</p>
+															) : (
+																<p css={{ margin: 0, color: colors.textMuted }}>
+																	No availability recorded yet.
+																</p>
+															)}
+														</div>
+													) : (
+														<p css={{ margin: 0, color: colors.textMuted }}>
+															Excluded from preview calculations.
+														</p>
+													)}
+												</div>
+											</article>
+										)
+									})}
+								</div>
 								</section>
 
 								<section
@@ -2833,238 +2880,232 @@ export function ScheduleHostRoute(handle: Handle) {
 										gap: spacing.sm,
 									}}
 								>
-									<div
+								<div
+									css={{
+										display: 'flex',
+										flexWrap: 'wrap',
+										alignItems: 'center',
+										gap: spacing.sm,
+										justifyContent: 'space-between',
+									}}
+								>
+									<h2
 										css={{
-											display: 'flex',
-											flexWrap: 'wrap',
-											alignItems: 'center',
-											gap: spacing.sm,
-											justifyContent: 'space-between',
+											margin: 0,
+											fontSize: typography.fontSize.base,
+											color: colors.text,
 										}}
 									>
-										<h2
-											css={{
-												margin: 0,
-												fontSize: typography.fontSize.base,
-												color: colors.text,
+										Best-time preview
+									</h2>
+									<div
+										role="group"
+										aria-label="Preview mode"
+										css={{
+											display: 'inline-flex',
+											gap: spacing.xs,
+											padding: spacing.xs,
+											borderRadius: radius.full,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.background,
+										}}
+									>
+										<button
+											type="button"
+											aria-pressed={previewMode === 'all'}
+											on={{
+												click: () => {
+													previewMode = 'all'
+													handle.update()
+												},
 											}}
-										>
-											Best-time preview
-										</h2>
-										<div
-											role="group"
-											aria-label="Preview mode"
 											css={{
-												display: 'inline-flex',
-												gap: spacing.xs,
-												padding: spacing.xs,
+												padding: `${spacing.xs} ${spacing.sm}`,
 												borderRadius: radius.full,
-												border: `1px solid ${colors.border}`,
-												backgroundColor: colors.background,
+												border: 'none',
+												backgroundColor:
+													previewMode === 'all'
+														? colors.primary
+														: 'transparent',
+												color:
+													previewMode === 'all'
+														? colors.onPrimary
+														: colors.text,
+												cursor: 'pointer',
 											}}
 										>
-											<button
-												type="button"
-												aria-pressed={previewMode === 'all'}
-												on={{
-													click: () => {
-														previewMode = 'all'
-														handle.update()
-													},
-												}}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: 'none',
-													backgroundColor:
-														previewMode === 'all'
-															? colors.primary
-															: 'transparent',
-													color:
-														previewMode === 'all'
-															? colors.onPrimary
-															: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												All selected attendees
-											</button>
-											<button
-												type="button"
-												aria-pressed={previewMode === 'count'}
-												on={{
-													click: () => {
-														previewMode = 'count'
-														handle.update()
-													},
-												}}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: 'none',
-													backgroundColor:
-														previewMode === 'count'
-															? colors.primary
-															: 'transparent',
-													color:
-														previewMode === 'count'
-															? colors.onPrimary
-															: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												Count available attendees
-											</button>
-										</div>
-									</div>
-									<p css={{ margin: 0, color: colors.textMuted }}>
-										{previewMode === 'all'
-											? 'Green slots mean everyone currently included can attend. '
-											: null}
-										{onMobileViewport
-											? 'Tap one slot for the start and another for the end.'
-											: 'Drag to select a window.'}
-									</p>
-									{renderScheduleGrid({
-										slots: currentSnapshot.slots,
-										selectedSlots: previewSelectedSlotsForSummary,
-										outlinedSlots: previewSelectedSlotsForSummary,
-										outlinedSlotLabel: 'included in selected preview range',
-										accentedSlots: focusedPreviewSlots,
-										accentedSlotLabel:
-											focusedPreviewAttendee === null
-												? undefined
-												: `highlighted for ${focusedPreviewAttendee.name}`,
-										selectionSlots: previewSelection.state.slots,
-										selectionSlotLabel:
-											'included in pending preview range selection',
-										desktopHorizontalOverflow: 'local',
-										dayHeaderLayout: 'stacked',
-										dayColumnWidth: 'narrow',
-										showWeekSeparators: true,
-										fitToContentWidth: true,
-										selectedSlotLabel: 'selected in host preview',
-										unselectedSlotLabel: 'host preview slot',
-										disabledSlots: blockedSlots,
-										hideDisabledOnlyRowsAndColumns: true,
-										highlightedSlots: previewHighlightedSlots,
-										highlightedSlotLabel:
-											previewMode === 'all'
-												? 'all selected attendees can attend'
-												: undefined,
-										slotAvailability: previewAvailability,
-										maxAvailabilityCount: previewMaxCount,
-										activeSlot: activePreviewSlot,
-										rangeAnchor: previewRangeAnchor,
-										mobileDayKey,
-										pending: false,
-										onMobileDayChange: (dayKey) => {
-											mobileDayKey = dayKey
-											handle.update()
-										},
-										onCellPointerDown: (slot, event) => {
-											handlePreviewPointerDown(slot, event)
-										},
-										onCellPointerEnter: (slot, event) => {
-											handlePreviewPointerEnter(slot, event)
-										},
-										onCellPointerMove: (slot, event) => {
-											handlePreviewPointerMove(slot, event)
-										},
-										onCellPointerUp: (_slot, _event) => {
-											handlePreviewPointerUp()
-										},
-										onCellHover: handlePreviewHover,
-										onCellFocus: handlePreviewFocus,
-										onCellClick: (slot, event) => {
-											handlePreviewSelectionClick(slot, event)
-										},
-									})}
-									{focusedPreviewAttendee ? (
-										<p css={{ margin: 0, color: colors.textMuted }}>
-											Highlighting {focusedPreviewAttendee.name}'s available
-											slots.
-										</p>
-									) : null}
-									{previewHoveredSlotDetails && previewHoverTooltipSlot ? (
-										<aside
-											role="note"
-											data-host-preview-hover-tooltip
-											aria-live="polite"
+											All selected attendees
+										</button>
+										<button
+											type="button"
+											aria-pressed={previewMode === 'count'}
+											on={{
+												click: () => {
+													previewMode = 'count'
+													handle.update()
+												},
+											}}
 											css={{
-												'--preview-hover-tooltip-width': `min(${previewTooltipWidthPx}px, calc(100vw - 1.5rem))`,
-												'--preview-hover-tooltip-height': `min(${previewTooltipHeightPx}px, calc(100vh - 1.5rem))`,
-												position: 'fixed',
-												left: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-x, 0px) + 16px), calc(100vw - var(--preview-hover-tooltip-width) - 12px)))',
-												top: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-y, 0px) + 16px), calc(100vh - var(--preview-hover-tooltip-height) - 12px)))',
-												zIndex: 40,
-												width: 'var(--preview-hover-tooltip-width)',
-												maxHeight: 'var(--preview-hover-tooltip-height)',
-												overflowY: 'auto',
-												display: 'grid',
-												gap: spacing.xs,
-												padding: spacing.sm,
-												borderRadius: radius.md,
-												border: `1px solid ${colors.border}`,
-												backgroundColor: colors.surface,
-												boxShadow: shadows.md,
-												pointerEvents: 'none',
+												padding: `${spacing.xs} ${spacing.sm}`,
+												borderRadius: radius.full,
+												border: 'none',
+												backgroundColor:
+													previewMode === 'count'
+														? colors.primary
+														: 'transparent',
+												color:
+													previewMode === 'count'
+														? colors.onPrimary
+														: colors.text,
+												cursor: 'pointer',
 											}}
 										>
-											<p
-												css={{ margin: 0, color: colors.text, fontWeight: 600 }}
-											>
-												{formatSlotLabel(
-													previewHoveredSlotDetails.slot,
-													'long',
-												)}
+											Count available attendees
+										</button>
+									</div>
+								</div>
+								<p css={{ margin: 0, color: colors.textMuted }}>
+									{previewMode === 'all'
+										? 'Green slots mean everyone currently included can attend. '
+										: null}
+									{onMobileViewport
+										? 'Tap one slot for the start and another for the end.'
+										: 'Drag to select a window.'}
+								</p>
+								{renderScheduleGrid({
+									slots: currentSnapshot.slots,
+									selectedSlots: previewSelectedSlotsForSummary,
+									outlinedSlots: previewSelectedSlotsForSummary,
+									outlinedSlotLabel: 'included in selected preview range',
+									accentedSlots: focusedPreviewSlots,
+									accentedSlotLabel:
+										focusedPreviewAttendee === null
+											? undefined
+											: `highlighted for ${focusedPreviewAttendee.name}`,
+									selectionSlots: previewSelection.state.slots,
+									selectionSlotLabel:
+										'included in pending preview range selection',
+									desktopHorizontalOverflow: 'local',
+									dayHeaderLayout: 'stacked',
+									dayColumnWidth: 'narrow',
+									showWeekSeparators: true,
+									fitToContentWidth: true,
+									selectedSlotLabel: 'selected in host preview',
+									unselectedSlotLabel: 'host preview slot',
+									disabledSlots: blockedSlots,
+									hideDisabledOnlyRowsAndColumns: true,
+									highlightedSlots: previewHighlightedSlots,
+									highlightedSlotLabel:
+										previewMode === 'all'
+											? 'all selected attendees can attend'
+											: undefined,
+									slotAvailability: previewAvailability,
+									maxAvailabilityCount: previewMaxCount,
+									activeSlot: activePreviewSlot,
+									rangeAnchor: previewRangeAnchor,
+									mobileDayKey,
+									pending: false,
+									onMobileDayChange: (dayKey) => {
+										mobileDayKey = dayKey
+										handle.update()
+									},
+									onCellPointerDown: (slot, event) => {
+										handlePreviewPointerDown(slot, event)
+									},
+									onCellPointerEnter: (slot, event) => {
+										handlePreviewPointerEnter(slot, event)
+									},
+									onCellPointerMove: (slot, event) => {
+										handlePreviewPointerMove(slot, event)
+									},
+									onCellPointerUp: (_slot, _event) => {
+										handlePreviewPointerUp()
+									},
+									onCellHover: handlePreviewHover,
+									onCellFocus: handlePreviewFocus,
+									onCellClick: (slot, event) => {
+										handlePreviewSelectionClick(slot, event)
+									},
+								})}
+								{focusedPreviewAttendee ? (
+									<p css={{ margin: 0, color: colors.textMuted }}>
+										Highlighting {focusedPreviewAttendee.name}'s available
+										slots.
+									</p>
+								) : null}
+								{previewHoveredSlotDetails && previewHoverTooltipSlot ? (
+									<aside
+										role="note"
+										data-host-preview-hover-tooltip
+										aria-live="polite"
+										css={{
+											'--preview-hover-tooltip-width': `min(${previewTooltipWidthPx}px, calc(100vw - 1.5rem))`,
+											'--preview-hover-tooltip-height': `min(${previewTooltipHeightPx}px, calc(100vh - 1.5rem))`,
+											position: 'fixed',
+											left: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-x, 0px) + 16px), calc(100vw - var(--preview-hover-tooltip-width) - 12px)))',
+											top: 'max(12px, min(calc(var(--preview-hover-tooltip-pointer-y, 0px) + 16px), calc(100vh - var(--preview-hover-tooltip-height) - 12px)))',
+											zIndex: 40,
+											width: 'var(--preview-hover-tooltip-width)',
+											maxHeight: 'var(--preview-hover-tooltip-height)',
+											overflowY: 'auto',
+											display: 'grid',
+											gap: spacing.xs,
+											padding: spacing.sm,
+											borderRadius: radius.md,
+											border: `1px solid ${colors.border}`,
+											backgroundColor: colors.surface,
+											boxShadow: shadows.md,
+											pointerEvents: 'none',
+										}}
+									>
+										<p css={{ margin: 0, color: colors.text, fontWeight: 600 }}>
+											{formatSlotLabel(previewHoveredSlotDetails.slot, 'long')}
+										</p>
+										{previewHoveredSlotDetails.isBlocked ? (
+											<p css={{ margin: 0, color: colors.error }}>
+												This slot is unavailable because the host blocked it.
 											</p>
-											{previewHoveredSlotDetails.isBlocked ? (
-												<p css={{ margin: 0, color: colors.error }}>
-													This slot is unavailable because the host blocked it.
-												</p>
-											) : null}
-											{previewHoveredSlotDetails.attendeeDetails.length ===
-											0 ? (
-												<p css={{ margin: 0, color: colors.textMuted }}>
-													No attendee responses are currently shown.
-												</p>
-											) : (
-												<ul
-													css={{
-														margin: 0,
-														paddingLeft: '1rem',
-														display: 'grid',
-														gap: spacing.xs,
-													}}
-												>
-													{previewHoveredSlotDetails.attendeeDetails.map(
-														(entry) => {
-															const canAttend =
-																!previewHoveredSlotDetails.isBlocked &&
-																entry.canAttend
-															return (
-																<li
-																	key={`preview-hovered-slot-attendee-${entry.id}`}
-																	css={{
-																		textDecoration: canAttend
-																			? 'none'
-																			: 'line-through',
-																		color: canAttend
-																			? colors.text
-																			: colors.textMuted,
-																	}}
-																>
-																	<strong>{entry.name}</strong> —{' '}
-																	{entry.localTime} ({entry.timeZoneLabel})
-																</li>
-															)
-														},
-													)}
-												</ul>
-											)}
-										</aside>
-									) : null}
+										) : null}
+										{previewHoveredSlotDetails.attendeeDetails.length === 0 ? (
+											<p css={{ margin: 0, color: colors.textMuted }}>
+												No attendee responses are currently shown.
+											</p>
+										) : (
+											<ul
+												css={{
+													margin: 0,
+													paddingLeft: '1rem',
+													display: 'grid',
+													gap: spacing.xs,
+												}}
+											>
+												{previewHoveredSlotDetails.attendeeDetails.map(
+													(entry) => {
+														const canAttend =
+															!previewHoveredSlotDetails.isBlocked &&
+															entry.canAttend
+														return (
+															<li
+																key={`preview-hovered-slot-attendee-${entry.id}`}
+																css={{
+																	textDecoration: canAttend
+																		? 'none'
+																		: 'line-through',
+																	color: canAttend
+																		? colors.text
+																		: colors.textMuted,
+																}}
+															>
+																<strong>{entry.name}</strong> —{' '}
+																{entry.localTime} ({entry.timeZoneLabel})
+															</li>
+														)
+													},
+												)}
+											</ul>
+										)}
+									</aside>
+								) : null}
 								</section>
 							</div>
 
