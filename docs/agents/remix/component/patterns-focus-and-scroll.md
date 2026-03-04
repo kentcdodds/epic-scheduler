@@ -101,6 +101,15 @@ function ScrollableList(handle: Handle) {
 }
 ```
 
+## Client router history scroll restoration
+
+- For browser back/forward, keep scroll restoration and focus behavior
+  coordinated.
+- Persist positions in `sessionStorage` keyed by `history.state.key` and restore
+  for `popstate` navigations.
+- Avoid forcing focus to the main heading on `popstate`, or focus updates can
+  cancel restored scroll.
+
 ## Navigation
 
 - [Pattern: inputs](./patterns-inputs.md)
