@@ -454,7 +454,7 @@ export function navigate(to: string) {
 	const positions = getScrollPositions()
 	const storedY = positions[currentKey]
 	const scrollY =
-		window.scrollY === 0 && typeof storedY === 'number'
+		window.scrollY === 0 && typeof storedY === 'number' && !scrollSaveScheduled
 			? storedY
 			: window.scrollY
 	positions[currentKey] = scrollY
