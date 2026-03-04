@@ -30,7 +30,6 @@ import {
 	typography,
 } from '#client/styles/tokens.ts'
 
-type PreviewMode = 'all' | 'count'
 type ConnectionState = 'connecting' | 'live' | 'offline'
 const previewHoverTooltipPointerXVar = '--preview-hover-tooltip-pointer-x'
 const previewHoverTooltipPointerYVar = '--preview-hover-tooltip-pointer-y'
@@ -445,7 +444,6 @@ export function ScheduleHostRoute(handle: Handle) {
 	let submissionActionById = new Map<string, 'rename' | 'delete'>()
 	let submissionErrorById = new Map<string, string>()
 	let editingSubmissionId: string | null = null
-	let previewMode: PreviewMode = 'all'
 	let focusedPreviewAttendeeId: string | null = null
 	let deleteConfirmationAttendeeId: string | null = null
 	let activePreviewSlot: string | null = null
@@ -1680,7 +1678,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		submissionErrorById = new Map<string, string>()
 		editingSubmissionId = null
 		deleteConfirmationAttendeeId = null
-		previewMode = 'all'
 		focusedPreviewAttendeeId = null
 		activePreviewSlot = null
 		previewHoverTooltipSlot = null
@@ -1745,9 +1742,6 @@ export function ScheduleHostRoute(handle: Handle) {
 				: []
 			).filter((slot) => !blockedSlots.has(slot)),
 		)
-		const blockedSlotsSorted = Array.from(blockedSlots).sort((left, right) =>
-			left.localeCompare(right),
-		)
 		const previewAvailability: Record<
 			string,
 			{ count: number; availableNames: Array<string> }
@@ -1776,21 +1770,7 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 		}
 		const previewMaxCount = Math.max(1, includedAttendeeCount)
-		const previewHighlightedSlots =
-			previewMode === 'all' ? allAvailableSlots : undefined
-		const bestSlots = slots
-			.filter((slot) => !blockedSlots.has(slot))
-			.map((slot) => ({
-				slot,
-				count: includedAttendees.filter((attendee) =>
-					includedAvailabilityById.get(attendee.id)?.has(slot),
-				).length,
-			}))
-			.sort((left, right) => {
-				if (right.count !== left.count) return right.count - left.count
-				return left.slot.localeCompare(right.slot)
-			})
-			.slice(0, 5)
+		const previewHighlightedSlots = allAvailableSlots
 		const blockedAvailability = currentSnapshot
 			? buildEmptyAvailability(currentSnapshot.slots)
 			: {}
@@ -2922,94 +2902,17 @@ export function ScheduleHostRoute(handle: Handle) {
 										gap: spacing.sm,
 									}}
 								>
-									<div
+									<h2
 										css={{
-											display: 'flex',
-											flexWrap: 'wrap',
-											alignItems: 'center',
-											gap: spacing.sm,
-											justifyContent: 'space-between',
+											margin: 0,
+											fontSize: typography.fontSize.base,
+											color: colors.text,
 										}}
 									>
-										<h2
-											css={{
-												margin: 0,
-												fontSize: typography.fontSize.base,
-												color: colors.text,
-											}}
-										>
-											Best-time preview
-										</h2>
-										<div
-											role="group"
-											aria-label="Preview mode"
-											css={{
-												display: 'inline-flex',
-												gap: spacing.xs,
-												padding: spacing.xs,
-												borderRadius: radius.full,
-												border: `1px solid ${colors.border}`,
-												backgroundColor: colors.background,
-											}}
-										>
-											<button
-												type="button"
-												aria-pressed={previewMode === 'all'}
-												on={{
-													click: () => {
-														previewMode = 'all'
-														handle.update()
-													},
-												}}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: 'none',
-													backgroundColor:
-														previewMode === 'all'
-															? colors.primary
-															: 'transparent',
-													color:
-														previewMode === 'all'
-															? colors.onPrimary
-															: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												All selected attendees
-											</button>
-											<button
-												type="button"
-												aria-pressed={previewMode === 'count'}
-												on={{
-													click: () => {
-														previewMode = 'count'
-														handle.update()
-													},
-												}}
-												css={{
-													padding: `${spacing.xs} ${spacing.sm}`,
-													borderRadius: radius.full,
-													border: 'none',
-													backgroundColor:
-														previewMode === 'count'
-															? colors.primary
-															: 'transparent',
-													color:
-														previewMode === 'count'
-															? colors.onPrimary
-															: colors.text,
-													cursor: 'pointer',
-												}}
-											>
-												Count available attendees
-											</button>
-										</div>
-									</div>
+										Best-time preview
+									</h2>
 									<p css={{ margin: 0, color: colors.textMuted }}>
-										{previewMode === 'all'
-											? 'Green slots mean everyone currently included can attend. '
-											: null}
+										Green slots mean everyone currently included can attend.{' '}
 										{onMobileViewport
 											? 'Tap one slot for the start and another for the end.'
 											: 'Drag to select a window.'}
@@ -3037,10 +2940,7 @@ export function ScheduleHostRoute(handle: Handle) {
 										disabledSlots: blockedSlots,
 										hideDisabledOnlyRowsAndColumns: true,
 										highlightedSlots: previewHighlightedSlots,
-										highlightedSlotLabel:
-											previewMode === 'all'
-												? 'all selected attendees can attend'
-												: undefined,
+										highlightedSlotLabel: 'all selected attendees can attend',
 										slotAvailability: previewAvailability,
 										maxAvailabilityCount: previewMaxCount,
 										activeSlot: activePreviewSlot,
@@ -3069,12 +2969,6 @@ export function ScheduleHostRoute(handle: Handle) {
 											handlePreviewSelectionClick(slot, event)
 										},
 									})}
-									{focusedPreviewAttendee ? (
-										<p css={{ margin: 0, color: colors.textMuted }}>
-											Highlighting {focusedPreviewAttendee.name}'s available
-											slots.
-										</p>
-									) : null}
 									{previewHoveredSlotDetails && previewHoverTooltipSlot ? (
 										<aside
 											role="note"
@@ -3173,11 +3067,9 @@ export function ScheduleHostRoute(handle: Handle) {
 									Host unavailable slots
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
-									Click and drag to select a range, then release to apply. Use
-									arrow keys to move between slots and press Enter or Space to
-									toggle one slot. On touch screens, tap one slot to start a
-									range and tap another to apply. Press Escape to cancel an
-									in-progress drag.
+									{onMobileViewport
+										? 'Tap one slot to start a range and tap another to apply.'
+										: 'Click and drag to select a range, then release to apply. Use arrow keys to move between slots and press Enter or Space to toggle one slot. Press Escape to cancel an in-progress drag.'}
 								</p>
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
@@ -3220,10 +3112,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
 									},
 								})}
-								<p css={{ margin: 0, color: colors.textMuted }}>
-									{blockedSlots.size} blocked slot
-									{blockedSlots.size === 1 ? '' : 's'}
-								</p>
 								{isPointerRangePending || keyboardRangeSlots.size > 0 ? (
 									<p role="status" aria-live="polite" css={visuallyHiddenCss}>
 										Selecting{' '}
@@ -3249,47 +3137,6 @@ export function ScheduleHostRoute(handle: Handle) {
 								) : null}
 							</section>
 
-							<section
-								css={{
-									display: 'grid',
-									gap: spacing.sm,
-									padding: spacing.md,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-								}}
-							>
-								<h2
-									css={{
-										margin: 0,
-										fontSize: typography.fontSize.base,
-										color: colors.text,
-									}}
-								>
-									Best options
-								</h2>
-								<ul
-									css={{
-										margin: 0,
-										paddingLeft: '1rem',
-										display: 'grid',
-										gap: spacing.xs,
-									}}
-								>
-									{bestSlots.map((entry) => (
-										<li key={`best-slot-${entry.slot}`}>
-											<strong>{formatSlotLabel(entry.slot)}</strong> —{' '}
-											{entry.count}/{includedAttendeeCount} selected attendee
-											{includedAttendeeCount === 1 ? '' : 's'} available
-										</li>
-									))}
-								</ul>
-								{bestSlots.length === 0 ? (
-									<p css={{ margin: 0, color: colors.textMuted }}>
-										No slots available after host blocks.
-									</p>
-								) : null}
-							</section>
 						</>
 					) : (
 						<p css={{ margin: 0, color: colors.error }}>
@@ -3297,23 +3144,6 @@ export function ScheduleHostRoute(handle: Handle) {
 						</p>
 					)}
 
-					<div
-						css={{
-							display: 'grid',
-							gap: spacing.xs,
-							gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-							[mq.mobile]: {
-								gridTemplateColumns: '1fr',
-							},
-						}}
-					>
-						<p css={{ margin: 0, color: colors.textMuted }}>
-							Blocked slots synced: {persistedBlockedSlots.size}
-						</p>
-						<p css={{ margin: 0, color: colors.textMuted, textAlign: 'right' }}>
-							Last blocked slot: {blockedSlotsSorted.at(-1) ?? 'none'}
-						</p>
-					</div>
 					<p
 						role={
 							statusMessage ? (statusError ? 'alert' : 'status') : undefined

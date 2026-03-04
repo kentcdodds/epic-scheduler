@@ -163,7 +163,7 @@ test('host dashboard can rename an attendee from edit mode', async ({
 	).toBeVisible()
 })
 
-test('all-attendees preview mode shows partial slot availability counts', async ({
+test('best-time preview shows partial slot availability counts', async ({
 	page,
 	request,
 }) => {
@@ -223,12 +223,6 @@ test('all-attendees preview mode shows partial slot availability counts', async 
 			has: page.getByRole('heading', { name: 'Best-time preview' }),
 		})
 		.first()
-	await expect(
-		previewSection.getByRole('button', {
-			name: 'All selected attendees',
-			exact: true,
-		}),
-	).toHaveAttribute('aria-pressed', 'true')
 	const hostOnlySlotCell = previewSection
 		.locator('[data-schedule-grid-shell] table:visible')
 		.first()
