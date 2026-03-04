@@ -107,6 +107,9 @@ function ScrollableList(handle: Handle) {
   coordinated.
 - Persist positions in `sessionStorage` keyed by `history.state.key` and restore
   for `popstate` navigations.
+- Inject an inline scroll restoration script in `server/layout.ts` so the
+  initial scroll position is applied before `client-entry.js` runs, avoiding
+  visible scroll flashes.
 - Avoid forcing focus to the main heading on `popstate`, or focus updates can
   cancel restored scroll.
 
