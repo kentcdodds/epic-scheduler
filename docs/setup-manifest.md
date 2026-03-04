@@ -46,7 +46,8 @@ Local development uses `.env`, which Wrangler loads automatically:
 - `APP_COMMIT_SHA` (optional; set automatically by deploy workflows for
   version-aware `/health` checks)
 
-Tests use `.env.test` when `CLOUDFLARE_ENV=test` (set by Playwright).
+Tests run with `CLOUDFLARE_ENV=test` (set by Playwright) and still read local
+secrets from `.env`.
 
 ## GitHub Actions secrets
 
