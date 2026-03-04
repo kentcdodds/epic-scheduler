@@ -23,6 +23,7 @@ const scrollPositionsStorageKey = 'react-router-scroll-positions'
 let hasLoadedScrollPositions = false
 let scrollPositions: Record<string, number> = {}
 let scrollSaveScheduled = false
+let scrollSaveToken = 0
 let skipScrollSave = false
 let lastNavigationType: RouterNavigationType = 'push'
 
@@ -95,9 +96,9 @@ function persistScrollPositions() {
 	}
 }
 
-function saveCurrentScrollPosition() {
+function saveCurrentScrollPosition(scrollKey: string | null = null) {
 	if (typeof window === 'undefined') return
-	const key = ensureHistoryStateKey()
+	const key = scrollKey ?? ensureHistoryStateKey()
 	getScrollPositions()[key] = window.scrollY
 	persistScrollPositions()
 }
@@ -107,10 +108,13 @@ function scheduleScrollSave() {
 	if (skipScrollSave) return
 	if (scrollSaveScheduled) return
 	scrollSaveScheduled = true
+	const key = ensureHistoryStateKey()
+	const token = scrollSaveToken
 	window.requestAnimationFrame(() => {
 		scrollSaveScheduled = false
 		if (skipScrollSave) return
-		saveCurrentScrollPosition()
+		if (token !== scrollSaveToken) return
+		saveCurrentScrollPosition(key)
 	})
 }
 
@@ -394,7 +398,10 @@ function ensureRouter() {
 	if ('scrollRestoration' in window.history) {
 		window.history.scrollRestoration = 'manual'
 	}
-	restoreScrollPosition()
+	window.requestAnimationFrame(() => {
+		skipScrollSave = true
+		restoreScrollPositionForPopstate(null, 8)
+	})
 	window.addEventListener('scroll', scheduleScrollSave, { passive: true })
 	window.addEventListener('pagehide', () => {
 		saveCurrentScrollPosition()
@@ -443,6 +450,16 @@ export function navigate(to: string) {
 	const nextPath = `${destination.pathname}${destination.search}${destination.hash}`
 	if (nextPath === getCurrentPathWithSearchAndHash()) return
 
+	const currentKey = ensureHistoryStateKey()
+	const positions = getScrollPositions()
+	const storedY = positions[currentKey]
+	const scrollY =
+		window.scrollY === 0 && typeof storedY === 'number'
+			? storedY
+			: window.scrollY
+	positions[currentKey] = scrollY
+	persistScrollPositions()
+	scrollSaveToken += 1
 	const nextKey = createHistoryStateKey()
 	window.history.pushState({ key: nextKey }, '', nextPath)
 	notify('push')
