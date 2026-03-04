@@ -43,6 +43,12 @@ file style first, then run the formatter.
 - Use `undefined` for optional or omitted fields, and avoid mixing within one
   API.
 
+## UX stability
+
+- Avoid introducing layout shift in interactive states; reserve message space
+  and keep control footprints stable during loading/error transitions.
+- Follow `docs/agents/ux-principles.md` for cross-cutting UX guidance.
+
 ## References
 
 - https://kentcdodds.com/blog/function-forms

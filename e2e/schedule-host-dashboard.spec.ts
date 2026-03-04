@@ -23,9 +23,13 @@ test('host dashboard can update host name', async ({ page }) => {
 		throw new Error('Expected host route share and access tokens.')
 	}
 
-	const hostNameInput = page.getByLabel('Host name')
-	await expect(hostNameInput).toHaveValue('Host Original')
+	await page.getByLabel('Edit host name for Host Original').click()
+	const hostNameInput = page.getByLabel(
+		'Submission name input for Host Original',
+	)
+	await expect(hostNameInput).toBeVisible()
 	await hostNameInput.fill('Host Renamed')
+	await hostNameInput.press('Enter')
 
 	await expect
 		.poll(
@@ -56,10 +60,110 @@ test('host dashboard can update host name', async ({ page }) => {
 		.toBe('Host Renamed')
 
 	await page.reload()
-	await expect(page.getByLabel('Host name')).toHaveValue('Host Renamed')
+	await expect(page.getByLabel('Edit host name for Host Renamed')).toBeVisible()
 })
 
-test('all-attendees preview mode shows partial slot availability counts', async ({
+test('host dashboard can rename an attendee from edit mode', async ({
+	browser,
+	page,
+}) => {
+	await page.goto('/')
+	await page.getByLabel('Schedule title').fill('Team sync')
+	await page.getByLabel('Your name').fill('Host')
+	await page.getByRole('button', { name: 'Create share link' }).click()
+	await expect(page).toHaveURL(/\/s\/[a-z0-9]+\/[a-z0-9]+$/i)
+
+	const { shareToken, hostAccessToken } = parseHostRouteTokens(page.url())
+	expect(shareToken).not.toBe('')
+	expect(hostAccessToken).not.toBe('')
+	if (!shareToken || !hostAccessToken) {
+		throw new Error('Expected host route share and access tokens.')
+	}
+
+	const attendeeContext = await browser.newContext()
+	const attendeePage = await attendeeContext.newPage()
+
+	try {
+		await attendeePage.goto(`/s/${shareToken}?name=Alex`)
+		await attendeePage.getByLabel('Your name').fill('Alex')
+		const attendeeSlot = attendeePage
+			.locator('[data-schedule-grid-shell] table:visible')
+			.first()
+			.locator('button')
+			.first()
+		await expect(attendeeSlot).toBeVisible()
+		await attendeeSlot.click()
+
+		await expect
+			.poll(
+				async () => {
+					const response = await page.request.get(
+						`/api/schedules/${shareToken}/host-snapshot`,
+						{
+							headers: {
+								'X-Host-Token': hostAccessToken,
+							},
+						},
+					)
+					if (!response.ok()) return false
+					const payload = (await response.json()) as {
+						ok?: boolean
+						snapshot?: {
+							attendees?: Array<{ name?: string; isHost?: boolean }>
+						}
+					}
+					if (!payload.ok || !payload.snapshot) return false
+					return !!payload.snapshot.attendees?.some(
+						(attendee) => attendee.name === 'Alex' && !attendee.isHost,
+					)
+				},
+				{ timeout: 12_000 },
+			)
+			.toBe(true)
+	} finally {
+		await attendeeContext.close()
+	}
+
+	await page.getByLabel('Edit submission name for Alex').click()
+	const attendeeNameInput = page.getByLabel('Submission name input for Alex')
+	await expect(attendeeNameInput).toBeVisible()
+	await attendeeNameInput.fill('Alex Renamed')
+	await attendeeNameInput.press('Enter')
+
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(
+					`/api/schedules/${shareToken}/host-snapshot`,
+					{
+						headers: {
+							'X-Host-Token': hostAccessToken,
+						},
+					},
+				)
+				if (!response.ok()) return false
+				const payload = (await response.json()) as {
+					ok?: boolean
+					snapshot?: {
+						attendees?: Array<{ name?: string; isHost?: boolean }>
+					}
+				}
+				if (!payload.ok || !payload.snapshot) return false
+				return !!payload.snapshot.attendees?.some(
+					(attendee) => attendee.name === 'Alex Renamed' && !attendee.isHost,
+				)
+			},
+			{ timeout: 12_000 },
+		)
+		.toBe(true)
+
+	await page.reload()
+	await expect(
+		page.getByLabel('Edit submission name for Alex Renamed'),
+	).toBeVisible()
+})
+
+test('best-time preview shows partial slot availability counts', async ({
 	page,
 	request,
 }) => {
@@ -119,12 +223,6 @@ test('all-attendees preview mode shows partial slot availability counts', async 
 			has: page.getByRole('heading', { name: 'Best-time preview' }),
 		})
 		.first()
-	await expect(
-		previewSection.getByRole('button', {
-			name: 'All selected attendees',
-			exact: true,
-		}),
-	).toHaveAttribute('aria-pressed', 'true')
 	const hostOnlySlotCell = previewSection
 		.locator('[data-schedule-grid-shell] table:visible')
 		.first()
