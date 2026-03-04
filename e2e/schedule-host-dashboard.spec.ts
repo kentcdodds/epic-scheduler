@@ -23,9 +23,13 @@ test('host dashboard can update host name', async ({ page }) => {
 		throw new Error('Expected host route share and access tokens.')
 	}
 
-	const hostNameInput = page.getByLabel('Host name')
-	await expect(hostNameInput).toHaveValue('Host Original')
+	await page.getByLabel('Edit host name for Host Original').click()
+	const hostNameInput = page.getByLabel(
+		'Submission name input for Host Original',
+	)
+	await expect(hostNameInput).toBeVisible()
 	await hostNameInput.fill('Host Renamed')
+	await hostNameInput.press('Enter')
 
 	await expect
 		.poll(
@@ -56,7 +60,7 @@ test('host dashboard can update host name', async ({ page }) => {
 		.toBe('Host Renamed')
 
 	await page.reload()
-	await expect(page.getByLabel('Host name')).toHaveValue('Host Renamed')
+	await expect(page.getByLabel('Edit host name for Host Renamed')).toBeVisible()
 })
 
 test('host dashboard can rename an attendee from edit mode', async ({
@@ -120,11 +124,11 @@ test('host dashboard can rename an attendee from edit mode', async ({
 		await attendeeContext.close()
 	}
 
-	await page.getByLabel('Edit submission for Alex').click()
+	await page.getByLabel('Edit submission name for Alex').click()
 	const attendeeNameInput = page.getByLabel('Submission name input for Alex')
 	await expect(attendeeNameInput).toBeVisible()
 	await attendeeNameInput.fill('Alex Renamed')
-	await page.getByLabel('Update submission name for Alex').click()
+	await attendeeNameInput.press('Enter')
 
 	await expect
 		.poll(
@@ -154,7 +158,9 @@ test('host dashboard can rename an attendee from edit mode', async ({
 		.toBe(true)
 
 	await page.reload()
-	await expect(page.getByText('Alex Renamed')).toBeVisible()
+	await expect(
+		page.getByLabel('Edit submission name for Alex Renamed'),
+	).toBeVisible()
 })
 
 test('all-attendees preview mode shows partial slot availability counts', async ({
