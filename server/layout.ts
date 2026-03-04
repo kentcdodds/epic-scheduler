@@ -37,6 +37,15 @@ const scrollRestorationScript = html.raw`<script>
 		const storedY =
 			positions && typeof positions === 'object' ? positions[key] : null
 		if (typeof storedY === 'number') {
+			const root = document.getElementById('root')
+			if (root && storedY > 0) {
+				const minHeight = storedY + window.innerHeight
+				root.style.minHeight = String(minHeight) + 'px'
+				root.setAttribute(
+					'data-scroll-restoration-min-height',
+					String(minHeight),
+				)
+			}
 			window.scrollTo(0, storedY)
 		}
 	} catch {
