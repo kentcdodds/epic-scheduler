@@ -23,7 +23,7 @@ updates, and MCP tools so teams can coordinate overlap with a single share link.
 
 ```bash
 bun install
-cp .env.test .env
+cp .env.example .env
 bun run migrate:local
 bun run dev
 ```
@@ -39,7 +39,7 @@ verification commands.
 bunx degit kentcdodds/epic-scheduler my-epic-scheduler-app
 cd my-epic-scheduler-app
 bun install
-cp .env.test .env
+cp .env.example .env
 bun run migrate:local
 bun run dev
 ```

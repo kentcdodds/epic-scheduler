@@ -13,7 +13,7 @@ Quick notes for getting a local epic-scheduler environment running.
 
 ## Local development
 
-- Copy `.env.test` to `.env` before starting any work, then update secrets as
+- Copy `.env.example` to `.env` before starting any work, then update secrets as
   needed.
 - `bun run dev`.
 - If you only need the client bundle or worker, use:

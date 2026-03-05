@@ -45,6 +45,8 @@ Avoid `page.locator('css')` unless no accessible alternative exists.
 
 - `bun run test:e2e`
 - `bun run test:e2e e2e/home.spec.ts`
+- If `.env` is missing, `test:e2e` copies `.env.example` to `.env` before
+  Playwright starts.
 
 ## Documentation policy
 
