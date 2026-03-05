@@ -9,7 +9,7 @@ Primary docs:
 
 - https://developers.cloudflare.com/agents/
 
-Installed in this repo as `agents` in `package.json` (currently `^0.4.1`).
+Installed in this repo as `agents` in `package.json` (currently `^0.7.4`).
 
 ## Quick pointers for this repo
 
@@ -17,6 +17,9 @@ Installed in this repo as `agents` in `package.json` (currently `^0.4.1`).
   `MCP.serve(...)` in `worker/index.ts`.
 - This project is not organized around the React hook APIs from the SDK; for
   non-React clients, use `AgentClient` from `agents/client`.
+- Keep `@modelcontextprotocol/sdk` aligned with the version required by the
+  installed `agents` package to avoid MCP type/runtime mismatches (currently
+  `1.26.0`).
 
 ## Required configuration (Durable Objects + SQLite)
 
