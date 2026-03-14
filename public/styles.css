@@ -167,6 +167,28 @@ a {
 	color: var(--color-primary-text);
 }
 
+select {
+	font: inherit;
+	color: var(--color-text);
+	background-color: var(--color-background);
+}
+
+select option,
+select optgroup {
+	color: var(--color-text);
+	background-color: var(--color-surface);
+}
+
+:root[data-theme='dark'] select {
+	color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) select {
+		color-scheme: dark;
+	}
+}
+
 :focus-visible {
 	outline: 2px solid var(--color-primary);
 	outline-offset: 2px;
