@@ -246,6 +246,12 @@ test('mobile blocked slot tap updates active ring and details', async ({
 		async function tapSlotButton(
 			button: Awaited<ReturnType<typeof mobilePage.locator>>,
 		) {
+			await button.evaluate((element) => {
+				element.scrollIntoView({
+					block: 'center',
+					inline: 'center',
+				})
+			})
 			await button.tap()
 		}
 
