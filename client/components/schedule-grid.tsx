@@ -14,7 +14,6 @@ import {
 import {
 	formatSlotLabel,
 	parseDateInputToLocalDate,
-	toDayKey,
 } from '#client/schedule-utils.ts'
 
 const gridNavigationKeys = new Set([
@@ -41,19 +40,18 @@ type ScheduleGridProps = {
 	unselectedSlotLabel?: string
 	selectedBackground?: string
 	pending?: boolean
-	mobileDayKey?: string | null
 	slotAvailability: Record<string, ScheduleGridSlotAvailability>
 	maxAvailabilityCount: number
 	activeSlot: string | null
 	rangeAnchor: string | null
 	readOnly?: boolean
 	desktopHorizontalOverflow?: 'page' | 'local'
-	onMobileDayChange?: (dayKey: string) => void
 	onCellPointerDown?: (slot: string, event: PointerEvent) => void
 	onCellPointerEnter?: (slot: string, event: PointerEvent) => void
 	onCellPointerMove?: (slot: string, event: PointerEvent) => void
 	onCellPointerUp?: (slot: string, event: PointerEvent) => void
 	onCellClick?: (slot: string, event: MouseEvent) => void
+	onCellDragHandlePointerDown?: (slot: string, event: PointerEvent) => void
 	onCellKeyboardActivate?: (slot: string) => void
 	onCellFocus?: (slot: string) => void
 	onCellHover?: (slot: string | null) => void
@@ -268,28 +266,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		missingSlotCellCount,
 	} = grid
 	const hasMissingSlots = missingSlotCellCount > 0
-	const activeDayKey = toDayKey(props.activeSlot)
-	const defaultMobileDayKey =
-		activeDayKey && dayKeys.includes(activeDayKey)
-			? activeDayKey
-			: (dayKeys[0] ?? null)
-	const resolvedMobileDayKey =
-		props.mobileDayKey && dayKeys.includes(props.mobileDayKey)
-			? props.mobileDayKey
-			: defaultMobileDayKey
-	const mobileDayIndex = resolvedMobileDayKey
-		? dayKeys.indexOf(resolvedMobileDayKey)
-		: -1
-	const previousDayKey =
-		mobileDayIndex > 0 ? (dayKeys[mobileDayIndex - 1] ?? null) : null
-	const nextDayKey =
-		mobileDayIndex >= 0 && mobileDayIndex < dayKeys.length - 1
-			? (dayKeys[mobileDayIndex + 1] ?? null)
-			: null
-	const mobileVisibleDayKeys = resolvedMobileDayKey
-		? [resolvedMobileDayKey]
-		: dayKeys
-	const desktopVisibleDayKeys = dayKeys
 	const desktopHorizontalOverflow = props.desktopHorizontalOverflow ?? 'page'
 	const useStackedDayHeader = props.dayHeaderLayout === 'stacked'
 	const useNarrowDayColumns = props.dayColumnWidth === 'narrow'
@@ -317,11 +293,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		return currentScroller !== relatedScroller
 	}
 
-	function renderGridTable(visibleDayKeys: Array<string>, compact: boolean) {
-		const fitToContent = !!props.fitToContentWidth && !compact
+	function renderGridTable(visibleDayKeys: Array<string>) {
+		const fitToContent = !!props.fitToContentWidth
 		const tableCaption = props.readOnly
 			? 'Availability grid. Use arrow keys to move between time slots. Press Enter or Space to focus slot details.'
-			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range.'
+			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range. On touch devices, tap a slot and drag the handle to extend the selection.'
 
 		function handleCellKeyDown(event: KeyboardEvent) {
 			if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -372,22 +348,20 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 					maxWidth: fitToContent ? '100%' : undefined,
 					marginInline: fitToContent ? 'auto' : undefined,
 					...(desktopHorizontalOverflow === 'local'
-						? {
-								overflowX: 'auto',
-							}
+						? { overflowX: 'auto' }
 						: {
 								[mq.tablet]: {
 									overflowX: 'auto',
 								},
 							}),
 					backgroundColor: colors.surface,
-					[mq.mobile]: compact
-						? {
-								borderRadius: 0,
-								borderInline: 'none',
-								overflowX: 'hidden',
-							}
-						: {},
+					[mq.mobile]: {
+						borderRadius: 0,
+						borderInline: 'none',
+						maxHeight: '70vh',
+						overflowX: 'auto',
+						overflowY: 'auto',
+					},
 				}}
 			>
 				<table
@@ -396,9 +370,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 						borderSpacing: 0,
 						minWidth: fitToContent
 							? `${timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem}rem`
-							: compact
-								? '100%'
-								: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
+							: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
 						width: fitToContent ? 'max-content' : '100%',
 						maxWidth: '100%',
 						tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
@@ -424,14 +396,12 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									width: `${timeColumnWidthRem}rem`,
 									minWidth: `${timeColumnWidthRem}rem`,
 									maxWidth: `${timeColumnWidthRem}rem`,
-									[mq.mobile]: compact
-										? {
-												minWidth: '4.8rem',
-												maxWidth: '4.8rem',
-												width: '4.8rem',
-												paddingInline: spacing.xs,
-											}
-										: {},
+									[mq.mobile]: {
+										minWidth: '4.8rem',
+										maxWidth: '4.8rem',
+										width: '4.8rem',
+										paddingInline: spacing.xs,
+									},
 								}}
 							>
 								Time
@@ -540,11 +510,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													backgroundColor:
 														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
 													height: '2.25rem',
-													[mq.mobile]: compact
-														? {
-																height: '2.65rem',
-															}
-														: {},
+													[mq.mobile]: {
+														height: '2.65rem',
+													},
 												}}
 											>
 												<span
@@ -558,11 +526,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														fontWeight: typography.fontWeight.medium,
 														letterSpacing: '0.04em',
 														userSelect: 'none',
-														[mq.mobile]: compact
-															? {
-																	minHeight: '2.65rem',
-																}
-															: {},
+														[mq.mobile]: {
+															minHeight: '2.65rem',
+														},
 													}}
 												>
 													N/A
@@ -662,6 +628,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									]
 										.filter((value): value is string => !!value)
 										.join(', ')
+									const shouldShowDragHandle =
+										!!props.onCellDragHandlePointerDown &&
+										interactive &&
+										isSelected &&
+										isActive
 
 									return (
 										<td
@@ -709,12 +680,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														outline: `2px solid ${colors.primary}`,
 														outlineOffset: '-2px',
 													},
-													[mq.mobile]: compact
-														? {
-																minHeight: '2.65rem',
-																fontSize: typography.fontSize.sm,
-															}
-														: {},
+													[mq.mobile]: {
+														minHeight: '2.65rem',
+														fontSize: typography.fontSize.sm,
+													},
 												}}
 												on={{
 													pointerdown:
@@ -761,6 +730,38 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 												<span css={{ position: 'relative', zIndex: 1 }}>
 													{availability.count > 0 ? availability.count : ''}
 												</span>
+												{shouldShowDragHandle ? (
+													<span
+														aria-hidden="true"
+														on={{
+															pointerdown: (event) => {
+																event.preventDefault()
+																event.stopPropagation()
+																props.onCellDragHandlePointerDown?.(slot, event)
+															},
+															click: (event) => {
+																event.preventDefault()
+																event.stopPropagation()
+															},
+														}}
+														css={{
+															position: 'absolute',
+															right: '0.2rem',
+															bottom: '0.2rem',
+															width: '0.65rem',
+															height: '0.65rem',
+															borderRadius: radius.full,
+															backgroundColor: colors.primary,
+															border: `2px solid ${colors.surface}`,
+															boxShadow:
+																'0 0 0 1px color-mix(in srgb, var(--color-primary) 65%, transparent)',
+															zIndex: 2,
+															touchAction: 'none',
+															pointerEvents: 'auto',
+															cursor: 'nwse-resize',
+														}}
+													/>
+												) : null}
 											</button>
 										</td>
 									)
@@ -807,136 +808,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 					(for example daylight-saving transitions).
 				</p>
 			) : null}
-			<div
-				css={{
-					display: 'none',
-					[mq.mobile]: {
-						display: 'grid',
-						gap: spacing.sm,
-					},
-				}}
-			>
-				<div
-					role="status"
-					aria-live="polite"
-					css={{
-						position: 'sticky',
-						top: 0,
-						zIndex: 6,
-						display: 'grid',
-						gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-						alignItems: 'center',
-						gap: spacing.sm,
-						padding: `${spacing.xs} ${spacing.md}`,
-						border: `1px solid ${colors.border}`,
-						borderRadius: radius.md,
-						backgroundColor: colors.surface,
-						boxShadow:
-							'0 6px 18px color-mix(in srgb, var(--color-text) 10%, transparent)',
-					}}
-				>
-					<button
-						type="button"
-						disabled={!previousDayKey}
-						aria-label="Show previous day"
-						on={{
-							click: () => {
-								if (!previousDayKey) return
-								props.onMobileDayChange?.(previousDayKey)
-							},
-						}}
-						css={{
-							display: 'inline-flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							width: '2rem',
-							height: '2rem',
-							borderRadius: radius.full,
-							border: `1px solid ${colors.border}`,
-							backgroundColor: previousDayKey
-								? colors.surface
-								: colors.background,
-							color: previousDayKey ? colors.text : colors.textMuted,
-							fontSize: typography.fontSize.base,
-							fontWeight: typography.fontWeight.bold,
-							cursor: previousDayKey ? 'pointer' : 'not-allowed',
-						}}
-					>
-						{'<'}
-					</button>
-					<div css={{ minWidth: 0, textAlign: 'center' }}>
-						<p
-							css={{
-								margin: 0,
-								color: colors.text,
-								fontWeight: typography.fontWeight.semibold,
-								fontSize: typography.fontSize.sm,
-								whiteSpace: 'nowrap',
-								overflow: 'hidden',
-								textOverflow: 'ellipsis',
-							}}
-						>
-							{resolvedMobileDayKey ? dayLabels[resolvedMobileDayKey] : ''}
-						</p>
-						<p
-							css={{
-								margin: 0,
-								color: colors.textMuted,
-								fontSize: typography.fontSize.xs,
-							}}
-						>
-							Day {Math.max(1, mobileDayIndex + 1)} of {dayKeys.length}
-						</p>
-					</div>
-					<button
-						type="button"
-						disabled={!nextDayKey}
-						aria-label="Show next day"
-						on={{
-							click: () => {
-								if (!nextDayKey) return
-								props.onMobileDayChange?.(nextDayKey)
-							},
-						}}
-						css={{
-							display: 'inline-flex',
-							alignItems: 'center',
-							justifyContent: 'center',
-							width: '2rem',
-							height: '2rem',
-							borderRadius: radius.full,
-							border: `1px solid ${colors.border}`,
-							backgroundColor: nextDayKey ? colors.surface : colors.background,
-							color: nextDayKey ? colors.text : colors.textMuted,
-							fontSize: typography.fontSize.base,
-							fontWeight: typography.fontWeight.bold,
-							cursor: nextDayKey ? 'pointer' : 'not-allowed',
-						}}
-					>
-						{'>'}
-					</button>
-				</div>
-			</div>
-			<div
-				css={{
-					display: 'grid',
-					[mq.mobile]: {
-						display: 'none',
-					},
-				}}
-			>
-				{renderGridTable(desktopVisibleDayKeys, false)}
-			</div>
-			<div
-				css={{
-					display: 'none',
-					[mq.mobile]: {
-						display: 'grid',
-					},
-				}}
-			>
-				{renderGridTable(mobileVisibleDayKeys, true)}
-			</div>
+			<div css={{ display: 'grid' }}>{renderGridTable(dayKeys)}</div>
 		</div>
 	)
 }

@@ -11,12 +11,6 @@ import {
 	getRectangularSlotSelection,
 } from '#client/schedule-utils.ts'
 import {
-	detectTapRangeMode,
-	getTapRangeStartMessage,
-	isTapRangeStartMessage,
-	resolveTapRangeModeFromPointer,
-} from '#client/tap-range-mode.ts'
-import {
 	colors,
 	mq,
 	radius,
@@ -54,16 +48,13 @@ export function HomeRoute(handle: Handle) {
 	let rangeStartUtc = ''
 	let rangeEndUtc = ''
 	let selectedSlots = new Set<string>()
-	let rangeAnchor: string | null = null
-	let tapRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
 	let activeSlot: string | null = null
-	let mobileDayKey: string | null = null
+	let lastPointerWasTouch = false
 	let status: RequestStatus = 'idle'
 	let message: string | null = null
-	let useTapRangeMode = detectTapRangeMode()
 	let didInitializeSelection = false
 	let scheduleTitleError: string | null = null
 	let hostNameError: string | null = null
@@ -92,10 +83,6 @@ export function HomeRoute(handle: Handle) {
 		selectedSlots = new Set(
 			Array.from(selectedSlots).filter((slot) => validSlots.has(slot)),
 		)
-		if (rangeAnchor && !validSlots.has(rangeAnchor)) {
-			rangeAnchor = null
-			tapRangeAction = null
-		}
 		if (keyboardRangeAnchor && !validSlots.has(keyboardRangeAnchor)) {
 			keyboardRangeAnchor = null
 			keyboardRangeAction = null
@@ -193,24 +180,6 @@ export function HomeRoute(handle: Handle) {
 		selectedSlots.delete(slot)
 	}
 
-	function applyRange(
-		startSlot: string,
-		endSlot: string,
-		shouldSelect: boolean,
-	) {
-		const startIndex = generatedSlots.indexOf(startSlot)
-		const endIndex = generatedSlots.indexOf(endSlot)
-		if (startIndex < 0 || endIndex < 0) return
-
-		const min = Math.min(startIndex, endIndex)
-		const max = Math.max(startIndex, endIndex)
-		for (let index = min; index <= max; index += 1) {
-			const slot = generatedSlots[index]
-			if (!slot) continue
-			setSlotSelection(slot, shouldSelect)
-		}
-	}
-
 	function clearKeyboardRangeSelection() {
 		keyboardRangeAnchor = null
 		keyboardRangeAction = null
@@ -265,8 +234,6 @@ export function HomeRoute(handle: Handle) {
 		const shouldSelect = !selectedSlots.has(slot)
 		setSlotSelection(slot, shouldSelect)
 		activeSlot = slot
-		rangeAnchor = null
-		tapRangeAction = null
 		clearKeyboardRangeSelection()
 		setMessage('idle', null)
 	}
@@ -275,7 +242,6 @@ export function HomeRoute(handle: Handle) {
 		requestRender: () => {
 			handle.update()
 		},
-		canUpdateSelection: () => !useTapRangeMode,
 		getSelectionSlots: (startSlot, endSlot) => {
 			return new Set(
 				getRectangularSlotSelection({
@@ -400,27 +366,25 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
 		clearKeyboardRangeSelection()
-		const nextMode = resolveTapRangeModeFromPointer({
-			currentMode: useTapRangeMode,
-			pointerType: event.pointerType,
-		})
-		if (nextMode !== useTapRangeMode) {
-			useTapRangeMode = nextMode
-			rangeAnchor = null
-			tapRangeAction = null
-			if (isTapRangeStartMessage(message)) {
-				setMessage('idle', null)
-			} else {
-				handle.update()
-			}
-		}
-		if (useTapRangeMode) return
+		if (event.pointerType === 'touch') return
 		if (!validateRequiredSubmissionFields()) return
 		pointerSelection.startSelection({
 			slot,
 			event,
 			mode: selectedSlots.has(slot) ? 'remove' : 'add',
+		})
+	}
+
+	function onCellDragHandlePointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
+		clearKeyboardRangeSelection()
+		if (!validateRequiredSubmissionFields()) return
+		pointerSelection.startSelection({
+			slot,
+			event,
+			mode: 'add',
 		})
 	}
 
@@ -433,23 +397,9 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	function onCellClick(slot: string) {
-		if (!useTapRangeMode) return
+		if (!lastPointerWasTouch) return
 		if (!validateRequiredSubmissionFields()) return
-
-		if (!rangeAnchor) {
-			rangeAnchor = slot
-			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
-			activeSlot = slot
-			setMessage('idle', getTapRangeStartMessage(tapRangeAction))
-			return
-		}
-
-		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
-		applyRange(rangeAnchor, slot, shouldSelect)
-		rangeAnchor = null
-		tapRangeAction = null
-		activeSlot = slot
-		setMessage('idle', null)
+		toggleSlotSelection(slot)
 	}
 
 	function onCellKeyboardActivate(slot: string) {
@@ -482,7 +432,7 @@ export function HomeRoute(handle: Handle) {
 		const pendingSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
 			: 'included in pending keyboard range selection'
-		const gridRangeAnchor = keyboardRangeAnchor ?? rangeAnchor
+		const gridRangeAnchor = keyboardRangeAnchor
 
 		return (
 			<section
@@ -859,16 +809,12 @@ export function HomeRoute(handle: Handle) {
 						selectedSlots,
 						selectionSlots: pendingSelectionSlots,
 						selectionSlotLabel: pendingSelectionLabel,
-						mobileDayKey,
 						slotAvailability,
 						maxAvailabilityCount: 1,
 						activeSlot,
 						rangeAnchor: gridRangeAnchor,
-						onMobileDayChange: (dayKey) => {
-							mobileDayKey = dayKey
-							handle.update()
-						},
 						onCellPointerDown,
+						onCellDragHandlePointerDown: onCellDragHandlePointerDown,
 						onCellPointerEnter: (slot, _event) => {
 							onCellPointerEnter(slot)
 						},
@@ -876,7 +822,6 @@ export function HomeRoute(handle: Handle) {
 							onCellPointerUp()
 						},
 						onCellClick: (slot, _event) => {
-							if (!useTapRangeMode) return
 							onCellClick(slot)
 						},
 						onCellKeyboardActivate: onCellKeyboardActivate,
@@ -926,8 +871,6 @@ export function HomeRoute(handle: Handle) {
 									pointerSelection.cleanup()
 									selectedSlots = buildDefaultSelection(generatedSlots)
 									clearKeyboardRangeSelection()
-									rangeAnchor = null
-									tapRangeAction = null
 									setMessage('idle', null)
 								},
 							}}

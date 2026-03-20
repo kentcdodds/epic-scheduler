@@ -12,12 +12,6 @@ import {
 	getRectangularSlotSelection,
 	toDayKey,
 } from '#client/schedule-utils.ts'
-import {
-	detectTapRangeMode,
-	getTapRangeStartMessage,
-	isTapRangeStartMessage,
-	resolveTapRangeModeFromPointer,
-} from '#client/tap-range-mode.ts'
 import { visuallyHiddenCss } from '#client/styles/visually-hidden.ts'
 import { normalizeName, type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import {
@@ -164,13 +158,6 @@ function getSnapshotDateRangeInputs(snapshot: ScheduleSnapshot) {
 			? ''
 			: formatDateInputValue(inclusiveRangeEndDate),
 	}
-}
-
-const previewTapRangeStartMessage =
-	'Range start selected. Tap another slot to choose range.'
-
-function isPreviewTapRangeStartMessage(message: string | null) {
-	return message === previewTapRangeStartMessage
 }
 
 function toRangeEndSlotExclusive(slot: string, intervalMinutes: number) {
@@ -447,19 +434,14 @@ export function ScheduleHostRoute(handle: Handle) {
 	let focusedPreviewAttendeeId: string | null = null
 	let deleteConfirmationAttendeeId: string | null = null
 	let activePreviewSlot: string | null = null
+	let activeHostSlot: string | null = null
 	let previewHoverTooltipSlot: string | null = null
 	let previewHoverTooltipPointerX: number | null = null
 	let previewHoverTooltipPointerY: number | null = null
 	let previewSelectedSlots = new Set<string>()
-	let previewRangeAnchor: string | null = null
-	let usePreviewTapRangeMode = detectTapRangeMode()
-	let previewSelectionStatus: string | null = null
-	let hostTapRangeAnchor: string | null = null
-	let hostTapRangeAction: 'add' | 'remove' | null = null
-	let useHostTapRangeMode = detectTapRangeMode()
-	let hostTapRangeSelectionStatus: string | null = null
+	let lastPreviewPointerWasTouch = false
+	let lastHostPointerWasTouch = false
 	let onMobileViewport = isMobileViewport()
-	let mobileDayKey: string | null = null
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
@@ -576,12 +558,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		keyboardRangeSlots = new Set<string>()
 	}
 
-	function clearHostTapRangeSelection() {
-		hostTapRangeAnchor = null
-		hostTapRangeAction = null
-		hostTapRangeSelectionStatus = null
-	}
-
 	function setDeleteConfirmationAttendee(nextAttendeeId: string | null) {
 		if (deleteConfirmationAttendeeId === nextAttendeeId) return
 		deleteConfirmationAttendeeId = nextAttendeeId
@@ -647,21 +623,21 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			return changed
 		},
+		onSelectionPreviewSlot: (slot) => {
+			activeHostSlot = slot
+		},
 	})
 
 	const previewSelection = createPointerDragSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		canUpdateSelection: () => !usePreviewTapRangeMode,
 		getSelectionSlots: (startSlot, endSlot) =>
 			getPreviewSelectionSlots(startSlot, endSlot),
 		applySelection: ({ slots }) => {
 			const nextSelection = new Set(slots)
 			if (areSetsEqual(previewSelectedSlots, nextSelection)) return false
 			previewSelectedSlots = nextSelection
-			previewRangeAnchor = null
-			previewSelectionStatus = null
 			return true
 		},
 		onSelectionPreviewSlot: (slot) => {
@@ -687,7 +663,6 @@ export function ScheduleHostRoute(handle: Handle) {
 		clearClipboardMessageTimer()
 		clearMobileViewportListener()
 		clearKeyboardRangeSelection()
-		clearHostTapRangeSelection()
 		clearPreviewHoverTooltip()
 		hostSelection.cleanup()
 		previewSelection.cleanup()
@@ -827,16 +802,6 @@ export function ScheduleHostRoute(handle: Handle) {
 				.filter((attendee) => !attendee.isHost)
 				.map((attendee) => attendee.id),
 		)
-		const nextDayKeys = Array.from(
-			new Set(
-				nextSnapshot.slots
-					.map((slot) => toDayKey(slot))
-					.filter((value): value is string => value !== null),
-			),
-		)
-		if (!mobileDayKey || !nextDayKeys.includes(mobileDayKey)) {
-			mobileDayKey = nextDayKeys[0] ?? null
-		}
 		excludedAttendeeIds = new Set(
 			Array.from(excludedAttendeeIds).filter((id) => validAttendeeIds.has(id)),
 		)
@@ -878,11 +843,8 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (activePreviewSlot && !nextSnapshot.slots.includes(activePreviewSlot)) {
 			activePreviewSlot = null
 		}
-		if (
-			hostTapRangeAnchor &&
-			!nextSnapshot.slots.includes(hostTapRangeAnchor)
-		) {
-			clearHostTapRangeSelection()
+		if (activeHostSlot && !nextSnapshot.slots.includes(activeHostSlot)) {
+			activeHostSlot = null
 		}
 		if (
 			previewHoverTooltipSlot &&
@@ -914,16 +876,6 @@ export function ScheduleHostRoute(handle: Handle) {
 				selectablePreviewSlots.has(slot),
 			),
 		)
-		if (previewRangeAnchor && !selectablePreviewSlots.has(previewRangeAnchor)) {
-			previewRangeAnchor = null
-			previewSelectionStatus = null
-		}
-		if (previewSelectedSlots.size === 0) {
-			previewRangeAnchor = null
-			if (isPreviewTapRangeStartMessage(previewSelectionStatus)) {
-				previewSelectionStatus = null
-			}
-		}
 		handle.update()
 	}
 
@@ -1315,38 +1267,10 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function toggleBlockedSlot(slot: string) {
 		const changed = setBlockedSlotState(slot, !blockedSlots.has(slot))
+		activeHostSlot = slot
 		if (changed) {
 			handle.update()
 		}
-	}
-
-	function applyBlockedSlotRange(
-		startSlot: string,
-		endSlot: string,
-		shouldBeBlocked: boolean,
-	) {
-		const currentSnapshot = snapshot
-		if (!currentSnapshot) return false
-		const slotsInRange = getRectangularSlotSelection({
-			slots: currentSnapshot.slots,
-			startSlot,
-			endSlot,
-		})
-		let changed = false
-		for (const slot of slotsInRange) {
-			const currentlyBlocked = blockedSlots.has(slot)
-			if (currentlyBlocked === shouldBeBlocked) continue
-			changed = true
-			if (shouldBeBlocked) {
-				blockedSlots.add(slot)
-			} else {
-				blockedSlots.delete(slot)
-			}
-		}
-		if (!changed) return false
-		changeVersion += 1
-		queueHostSettingsSave()
-		return true
 	}
 
 	function updateKeyboardRangePreview(params: {
@@ -1388,14 +1312,12 @@ export function ScheduleHostRoute(handle: Handle) {
 			setBlockedSlotState(slot, shouldBeBlocked)
 		}
 		clearKeyboardRangeSelection()
-		clearHostTapRangeSelection()
 		handle.update()
 		return true
 	}
 
 	function handleHostUnavailableKeyboardActivate(slot: string) {
 		if (applyKeyboardRangeSelection()) return
-		clearHostTapRangeSelection()
 		toggleBlockedSlot(slot)
 	}
 
@@ -1404,26 +1326,26 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handleHostUnavailablePointerDown(slot: string, event: PointerEvent) {
+		lastHostPointerWasTouch = event.pointerType === 'touch'
 		clearKeyboardRangeSelection()
-		const nextMode = resolveTapRangeModeFromPointer({
-			currentMode: useHostTapRangeMode,
-			pointerType: event.pointerType,
-		})
-		if (nextMode !== useHostTapRangeMode) {
-			useHostTapRangeMode = nextMode
-			if (isTapRangeStartMessage(hostTapRangeSelectionStatus)) {
-				hostTapRangeSelectionStatus = null
-			}
-			hostTapRangeAnchor = null
-			hostTapRangeAction = null
-			handle.update()
-		}
-		if (useHostTapRangeMode) return
-		clearHostTapRangeSelection()
+		if (event.pointerType === 'touch') return
 		hostSelection.startSelection({
 			slot,
 			event,
 			mode: blockedSlots.has(slot) ? 'remove' : 'add',
+		})
+	}
+
+	function handleHostUnavailableDragHandlePointerDown(
+		slot: string,
+		event: PointerEvent,
+	) {
+		lastHostPointerWasTouch = event.pointerType === 'touch'
+		clearKeyboardRangeSelection()
+		hostSelection.startSelection({
+			slot,
+			event,
+			mode: 'add',
 		})
 	}
 
@@ -1432,21 +1354,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function handleHostUnavailableCellClick(slot: string, event: MouseEvent) {
-		if (!useHostTapRangeMode && event.detail > 0) return
-		if (!useHostTapRangeMode) return
-		if (!hostTapRangeAnchor) {
-			hostTapRangeAnchor = slot
-			hostTapRangeAction = blockedSlots.has(slot) ? 'remove' : 'add'
-			hostTapRangeSelectionStatus = getTapRangeStartMessage(
-				hostTapRangeAction ?? 'add',
-			)
-			handle.update()
-			return
-		}
-		const shouldBeBlocked = (hostTapRangeAction ?? 'add') === 'add'
-		applyBlockedSlotRange(hostTapRangeAnchor, slot, shouldBeBlocked)
-		clearHostTapRangeSelection()
-		handle.update()
+		if (event.detail === 0) return
+		if (!lastHostPointerWasTouch) return
+		toggleBlockedSlot(slot)
 	}
 
 	function setPreviewSelectedRange(nextSlots: ReadonlySet<string>) {
@@ -1457,11 +1367,9 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function clearPreviewSelectedRange() {
-		const hadSelection = previewSelectedSlots.size > 0 || !!previewRangeAnchor
+		const hadSelection = previewSelectedSlots.size > 0
 		const didClearTooltip = clearPreviewHoverTooltip()
 		previewSelectedSlots = new Set<string>()
-		previewRangeAnchor = null
-		previewSelectionStatus = null
 		activePreviewSlot = null
 		if (hadSelection || didClearTooltip) {
 			handle.update()
@@ -1479,31 +1387,36 @@ export function ScheduleHostRoute(handle: Handle) {
 		)
 	}
 
-	function updatePreviewTapMode(pointerType: string) {
-		const nextMode = resolveTapRangeModeFromPointer({
-			currentMode: usePreviewTapRangeMode,
-			pointerType,
-		})
-		if (nextMode === usePreviewTapRangeMode) return false
-		usePreviewTapRangeMode = nextMode
-		previewRangeAnchor = null
-		if (isPreviewTapRangeStartMessage(previewSelectionStatus)) {
-			previewSelectionStatus = null
-		}
-		return true
-	}
-
 	function handlePreviewPointerDown(slot: string, event: PointerEvent) {
+		lastPreviewPointerWasTouch = event.pointerType === 'touch'
 		const didClearTooltip = clearPreviewHoverTooltip()
-		const didChangeTapMode = updatePreviewTapMode(event.pointerType)
-		if (usePreviewTapRangeMode) {
-			if (didClearTooltip || didChangeTapMode) {
+		if (event.pointerType === 'touch') {
+			if (didClearTooltip) {
 				handle.update()
 			}
 			return
 		}
 		if (blockedSlots.has(slot)) {
-			if (didClearTooltip || didChangeTapMode) {
+			if (didClearTooltip) {
+				handle.update()
+			}
+			return
+		}
+		previewSelection.startSelection({
+			slot,
+			event,
+			mode: 'add',
+		})
+	}
+
+	function handlePreviewDragHandlePointerDown(
+		slot: string,
+		event: PointerEvent,
+	) {
+		lastPreviewPointerWasTouch = event.pointerType === 'touch'
+		const didClearTooltip = clearPreviewHoverTooltip()
+		if (blockedSlots.has(slot)) {
+			if (didClearTooltip) {
 				handle.update()
 			}
 			return
@@ -1570,9 +1483,8 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function handlePreviewSelectionClick(slot: string, event: MouseEvent) {
 		const didClearTooltip = clearPreviewHoverTooltip()
-		// In non-tap mode, pointer drag handles selection and clicks (`event.detail > 0`)
-		// should be ignored. Keep keyboard activation (`event.detail === 0`) working.
-		if (!usePreviewTapRangeMode && event.detail > 0) {
+		if (event.detail === 0) return
+		if (!lastPreviewPointerWasTouch) {
 			if (didClearTooltip) {
 				handle.update()
 			}
@@ -1584,28 +1496,9 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			return
 		}
-		if (usePreviewTapRangeMode) {
-			if (!previewRangeAnchor) {
-				previewRangeAnchor = slot
-				previewSelectionStatus = previewTapRangeStartMessage
-				setPreviewSelectedRange(new Set([slot]))
-				activePreviewSlot = slot
-				handle.update()
-				return
-			}
-			const nextSlots = getPreviewSelectionSlots(previewRangeAnchor, slot)
-			setPreviewSelectedRange(nextSlots)
-			previewRangeAnchor = null
-			previewSelectionStatus = null
-			activePreviewSlot = slot
-			handle.update()
-			return
-		}
 		const changed = setPreviewSelectedRange(new Set([slot]))
-		previewRangeAnchor = null
-		previewSelectionStatus = null
 		activePreviewSlot = slot
-		if (changed) {
+		if (changed || didClearTooltip) {
 			handle.update()
 		}
 	}
@@ -1680,17 +1573,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		deleteConfirmationAttendeeId = null
 		focusedPreviewAttendeeId = null
 		activePreviewSlot = null
+		activeHostSlot = null
 		previewHoverTooltipSlot = null
 		clearPreviewHoverTooltipPointerPosition()
 		previewSelectedSlots = new Set<string>()
-		previewRangeAnchor = null
-		usePreviewTapRangeMode = detectTapRangeMode()
-		previewSelectionStatus = null
-		hostTapRangeAnchor = null
-		hostTapRangeAction = null
-		useHostTapRangeMode = detectTapRangeMode()
-		hostTapRangeSelectionStatus = null
-		mobileDayKey = null
+		lastPreviewPointerWasTouch = false
+		lastHostPointerWasTouch = false
 		clearKeyboardRangeSelection()
 		hostSelection.cleanup()
 		previewSelection.cleanup()
@@ -1782,7 +1670,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		const pendingBlockedSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
 			: 'included in pending keyboard range selection'
-		const hostRangeAnchor = keyboardRangeAnchor ?? hostTapRangeAnchor
+		const hostRangeAnchor = keyboardRangeAnchor
 		const previewSelectionSource = previewSelection.state.mode
 			? previewSelection.state.slots
 			: previewSelectedSlots
@@ -2266,11 +2154,6 @@ export function ScheduleHostRoute(handle: Handle) {
 											Selecting {previewSelection.state.slots.size} slot
 											{previewSelection.state.slots.size === 1 ? '' : 's'} —
 											release to apply or press Escape to cancel.
-										</p>
-									) : null}
-									{previewSelectionStatus ? (
-										<p role="status" aria-live="polite" css={visuallyHiddenCss}>
-											{previewSelectionStatus}
 										</p>
 									) : null}
 									<div
@@ -2914,7 +2797,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									<p css={{ margin: 0, color: colors.textMuted }}>
 										Green slots mean everyone currently included can attend.{' '}
 										{onMobileViewport
-											? 'Tap one slot for the start and another for the end.'
+											? 'Tap a slot to select it, then drag the dot to extend the window.'
 											: 'Drag to select a window.'}
 									</p>
 									{renderScheduleGrid({
@@ -2944,15 +2827,13 @@ export function ScheduleHostRoute(handle: Handle) {
 										slotAvailability: previewAvailability,
 										maxAvailabilityCount: previewMaxCount,
 										activeSlot: activePreviewSlot,
-										rangeAnchor: previewRangeAnchor,
-										mobileDayKey,
+										rangeAnchor: null,
 										pending: false,
-										onMobileDayChange: (dayKey) => {
-											mobileDayKey = dayKey
-											handle.update()
-										},
 										onCellPointerDown: (slot, event) => {
 											handlePreviewPointerDown(slot, event)
+										},
+										onCellDragHandlePointerDown: (slot, event) => {
+											handlePreviewDragHandlePointerDown(slot, event)
 										},
 										onCellPointerEnter: (slot, event) => {
 											handlePreviewPointerEnter(slot, event)
@@ -3068,7 +2949,7 @@ export function ScheduleHostRoute(handle: Handle) {
 								</h2>
 								<p css={{ margin: 0, color: colors.textMuted }}>
 									{onMobileViewport
-										? 'Tap one slot to start a range and tap another to apply.'
+										? 'Tap a slot to toggle it, then drag the dot to extend the selection.'
 										: 'Click and drag to select a range, then release to apply. Use arrow keys to move between slots and press Enter or Space to toggle one slot. Press Escape to cancel an in-progress drag.'}
 								</p>
 								{renderScheduleGrid({
@@ -3087,16 +2968,14 @@ export function ScheduleHostRoute(handle: Handle) {
 										'color-mix(in srgb, var(--color-error) 34%, var(--color-surface))',
 									slotAvailability: blockedAvailability,
 									maxAvailabilityCount: 1,
-									activeSlot: null,
+									activeSlot: activeHostSlot,
 									rangeAnchor: hostRangeAnchor,
-									mobileDayKey,
 									pending: hasPendingLocalChanges,
-									onMobileDayChange: (dayKey) => {
-										mobileDayKey = dayKey
-										handle.update()
-									},
 									onCellPointerDown: (slot, event) => {
 										handleHostUnavailablePointerDown(slot, event)
+									},
+									onCellDragHandlePointerDown: (slot, event) => {
+										handleHostUnavailableDragHandlePointerDown(slot, event)
 									},
 									onCellPointerEnter: (slot, _event) => {
 										handleHostUnavailablePointerEnter(slot)
@@ -3128,11 +3007,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										{isPointerRangePending
 											? 'release to apply or press Escape to cancel.'
 											: 'press Enter or Space to apply.'}
-									</p>
-								) : null}
-								{hostTapRangeSelectionStatus ? (
-									<p role="status" aria-live="polite" css={visuallyHiddenCss}>
-										{hostTapRangeSelectionStatus}
 									</p>
 								) : null}
 							</section>
