@@ -1359,6 +1359,11 @@ export function ScheduleHostRoute(handle: Handle) {
 		toggleBlockedSlot(slot)
 	}
 
+	function handleHostUnavailableFocus(slot: string) {
+		activeHostSlot = slot
+		handle.update()
+	}
+
 	function setPreviewSelectedRange(nextSlots: ReadonlySet<string>) {
 		const nextSelection = new Set(nextSlots)
 		if (areSetsEqual(previewSelectedSlots, nextSelection)) return false
@@ -2990,6 +2995,7 @@ export function ScheduleHostRoute(handle: Handle) {
 									onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
 										updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
 									},
+									onCellFocus: handleHostUnavailableFocus,
 								})}
 								{isPointerRangePending || keyboardRangeSlots.size > 0 ? (
 									<p role="status" aria-live="polite" css={visuallyHiddenCss}>
