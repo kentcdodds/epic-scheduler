@@ -252,7 +252,14 @@ test('mobile blocked slot tap updates active ring and details', async ({
 					inline: 'center',
 				})
 			})
-			await button.tap()
+			const box = await button.boundingBox()
+			if (!box) {
+				throw new Error('Expected tapped slot button to have a bounding box.')
+			}
+			await mobilePage.touchscreen.tap(
+				box.x + box.width / 2,
+				box.y + box.height / 2,
+			)
 		}
 
 		await mobilePage.goto(
