@@ -1483,8 +1483,8 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function handlePreviewSelectionClick(slot: string, event: MouseEvent) {
 		const didClearTooltip = clearPreviewHoverTooltip()
-		if (event.detail === 0) return
-		if (!lastPreviewPointerWasTouch) {
+		const isKeyboardActivation = event.detail === 0
+		if (!lastPreviewPointerWasTouch && !isKeyboardActivation) {
 			if (didClearTooltip) {
 				handle.update()
 			}
