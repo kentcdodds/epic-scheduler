@@ -667,6 +667,13 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 												borderLeft: hasWeekSeparator
 													? `${weekSeparatorWidth} solid ${colors.surface}`
 													: undefined,
+												...(shouldShowDragHandle
+													? {
+															position: 'relative' as const,
+															zIndex: 3,
+															overflow: 'visible',
+														}
+													: {}),
 											}}
 										>
 											<button
@@ -769,8 +776,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														}}
 														css={{
 															position: 'absolute',
-															right: '0.1rem',
-															bottom: '0.1rem',
+															right: 0,
+															bottom: 0,
+															transform: 'translate(50%, 50%)',
 															width: `${1.5 * cellSizeScale}rem`,
 															height: `${1.5 * cellSizeScale}rem`,
 															display: 'grid',
@@ -783,8 +791,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													>
 														<span
 															css={{
-																width: `${0.65 * cellSizeScale}rem`,
-																height: `${0.65 * cellSizeScale}rem`,
+																width: '0.5rem',
+																height: '0.5rem',
 																borderRadius: radius.full,
 																backgroundColor: colors.primary,
 																border: `2px solid ${colors.surface}`,
