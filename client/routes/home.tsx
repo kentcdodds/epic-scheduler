@@ -569,6 +569,16 @@ export function HomeRoute(handle: Handle) {
 						border: `1px solid ${colors.border}`,
 						backgroundColor: colors.surface,
 						boxShadow: shadows.sm,
+						[mq.mobile]: {
+							// Full-bleed within the padded app shell so the scheduler form
+							// matches the viewport width on small screens.
+							width: '100vw',
+							maxWidth: '100vw',
+							marginInline: 'calc(50% - 50vw)',
+							borderRadius: 0,
+							borderInline: 'none',
+							boxShadow: 'none',
+						},
 					}}
 				>
 					<div

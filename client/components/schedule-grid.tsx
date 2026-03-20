@@ -517,6 +517,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 						marginInline: fitToContent ? 'auto' : undefined,
 						backgroundColor: colors.surface,
 						[mq.mobile]: {
+							// Fill the viewport-wide shell; table min-width drives horizontal scroll.
+							width: '100%',
+							maxWidth: '100%',
+							marginInline: 0,
 							borderRadius: 0,
 							borderInline: 'none',
 							borderTop: 'none',
@@ -998,6 +1002,13 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 				gap: spacing.sm,
 				opacity: props.pending ? 0.6 : 1,
 				transition: 'opacity 120ms ease',
+				[mq.mobile]: {
+					// Break out of padded ancestors so the grid aligns with the viewport;
+					// inner `[data-schedule-grid-scroller]` still scrolls when the table is wider.
+					width: '100vw',
+					maxWidth: '100vw',
+					marginInline: 'calc(50% - 50vw)',
+				},
 			}}
 		>
 			{hasMissingSlots ? (
