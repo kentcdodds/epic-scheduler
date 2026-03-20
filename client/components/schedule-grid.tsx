@@ -525,6 +525,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 							paddingBottom: shouldReserveDragHandleSpace
 								? `${dragHandleOverflowRem}rem`
 								: undefined,
+							paddingRight: shouldReserveDragHandleSpace
+								? `${dragHandleOverflowRem}rem`
+								: undefined,
 							WebkitOverflowScrolling: 'touch',
 						},
 					}}
