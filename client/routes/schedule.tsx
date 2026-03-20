@@ -704,6 +704,7 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function ensureSlotIsEditable(slot: string) {
+		activeSlot = slot
 		const blockedSlots = getBlockedSlots()
 		if (blockedSlots.has(slot)) {
 			handle.update()
@@ -713,7 +714,6 @@ export function ScheduleRoute(handle: Handle) {
 		if (!normalizedName) {
 			return false
 		}
-		activeSlot = slot
 		return true
 	}
 

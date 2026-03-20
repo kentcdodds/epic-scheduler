@@ -156,3 +156,127 @@ test('changing to a smaller interval expands selected availability', async ({
 	await page.getByLabel('Slot interval').selectOption('30')
 	await expect(selectedCount).toContainText('2 selected slots')
 })
+
+test('mobile blocked slot tap updates active ring and details', async ({
+	browser,
+	request,
+}) => {
+	const hourMs = 3_600_000
+	const dayMs = 24 * hourMs
+	const rangeStart = new Date(Math.ceil(Date.now() / hourMs) * hourMs + hourMs)
+	const blockedSlot = rangeStart.toISOString()
+	const editableSlot = new Date(rangeStart.getTime() + hourMs).toISOString()
+	const visiblePeerSlot = new Date(rangeStart.getTime() + dayMs).toISOString()
+	const rangeEnd = new Date(rangeStart.getTime() + dayMs + hourMs)
+
+	const createResponse = await request.post('/api/schedules', {
+		data: {
+			title: 'Blocked slot focus feedback',
+			hostName: 'Host',
+			hostTimeZone: 'UTC',
+			intervalMinutes: 60,
+			rangeStartUtc: rangeStart.toISOString(),
+			rangeEndUtc: rangeEnd.toISOString(),
+			selectedSlots: [],
+			blockedSlots: [blockedSlot],
+		},
+	})
+	expect(createResponse.ok()).toBe(true)
+	const createPayload = (await createResponse.json()) as {
+		ok?: boolean
+		shareToken?: string
+	}
+	expect(createPayload.ok).toBe(true)
+	if (
+		typeof createPayload.shareToken !== 'string' ||
+		createPayload.shareToken.trim().length === 0
+	) {
+		throw new Error('Expected /api/schedules to return a non-empty shareToken')
+	}
+
+	const context = await browser.newContext({
+		hasTouch: true,
+		isMobile: true,
+		viewport: { width: 390, height: 844 },
+	})
+
+	try {
+		const mobilePage = await context.newPage()
+		const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8788'
+		async function tapButtonCenter(
+			button: Awaited<ReturnType<typeof mobilePage.locator>>,
+		) {
+			const box = await button.boundingBox()
+			if (!box) {
+				throw new Error('Expected tapped slot button to have a bounding box.')
+			}
+			await mobilePage.touchscreen.tap(
+				box.x + box.width / 2,
+				box.y + box.height / 2,
+			)
+		}
+
+		await mobilePage.goto(
+			`${baseUrl}/s/${createPayload.shareToken}?name=${encodeURIComponent('Alex')}`,
+		)
+
+		await expect(
+			mobilePage.getByRole('heading', { name: 'Blocked slot focus feedback' }),
+		).toBeVisible()
+
+		const blockedSlotButton = mobilePage.locator(
+			`button[data-slot="${blockedSlot}"]`,
+		)
+		const editableSlotButton = mobilePage.locator(
+			`button[data-slot="${editableSlot}"]`,
+		)
+		const visiblePeerSlotButton = mobilePage.locator(
+			`button[data-slot="${visiblePeerSlot}"]`,
+		)
+		await expect(blockedSlotButton).toBeVisible()
+		await expect(editableSlotButton).toBeVisible()
+		await expect(visiblePeerSlotButton).toBeVisible()
+
+		const blockedSlotTitle = await blockedSlotButton.getAttribute('title')
+		if (!blockedSlotTitle) {
+			throw new Error('Expected blocked slot button to expose a title label.')
+		}
+		const blockedSlotLabel = blockedSlotTitle.split('\n')[0]
+		const editableSlotTitle = await editableSlotButton.getAttribute('title')
+		if (!editableSlotTitle) {
+			throw new Error('Expected editable slot button to expose a title label.')
+		}
+		const editableSlotLabel = editableSlotTitle.split('\n')[0]
+		const slotDetails = mobilePage
+			.locator('section')
+			.filter({
+				has: mobilePage.getByRole('heading', { name: 'Slot details' }),
+			})
+			.first()
+
+		await tapButtonCenter(editableSlotButton)
+		await expect(slotDetails).toContainText(editableSlotLabel)
+		await tapButtonCenter(blockedSlotButton)
+
+		await expect(slotDetails).toContainText(blockedSlotLabel)
+		await expect(slotDetails).toContainText(
+			'This slot is unavailable because the host blocked it.',
+		)
+		await expect
+			.poll(() =>
+				blockedSlotButton.evaluate((element) =>
+					getComputedStyle(element).boxShadow.includes('inset'),
+				),
+			)
+			.toBe(true)
+		await expect
+			.poll(() =>
+				editableSlotButton.evaluate(
+					(element) => getComputedStyle(element).boxShadow !== 'none',
+				),
+			)
+			.toBe(false)
+	} finally {
+		await context.close()
+	}
+})
