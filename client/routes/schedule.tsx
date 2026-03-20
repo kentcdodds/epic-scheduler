@@ -779,7 +779,8 @@ export function ScheduleRoute(handle: Handle) {
 		pointerSelection.finishSelection(false)
 	}
 
-	function handleCellClick(slot: string) {
+	function handleCellClick(slot: string, event: MouseEvent) {
+		if (event.detail === 0) return
 		if (!lastPointerWasTouch) return
 		toggleSingleSlot(slot)
 	}
@@ -1206,12 +1207,12 @@ export function ScheduleRoute(handle: Handle) {
 							onCellPointerUp: (_slot, _event) => {
 								handleCellPointerUp()
 							},
-							onCellClick: (slot, _event) => {
+							onCellClick: (slot, event) => {
 								const didClearTooltip = clearSubmissionHoverTooltip()
 								if (didClearTooltip) {
 									handle.update()
 								}
-								handleCellClick(slot)
+								handleCellClick(slot, event)
 							},
 							onCellKeyboardActivate: handleCellKeyboardActivate,
 							onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {

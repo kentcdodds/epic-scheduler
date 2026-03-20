@@ -396,7 +396,8 @@ export function HomeRoute(handle: Handle) {
 		pointerSelection.finishSelection(false)
 	}
 
-	function onCellClick(slot: string) {
+	function onCellClick(slot: string, event: MouseEvent) {
+		if (event.detail === 0) return
 		if (!lastPointerWasTouch) return
 		if (!validateRequiredSubmissionFields()) return
 		toggleSlotSelection(slot)
@@ -821,8 +822,8 @@ export function HomeRoute(handle: Handle) {
 						onCellPointerUp: (_slot, _event) => {
 							onCellPointerUp()
 						},
-						onCellClick: (slot, _event) => {
-							onCellClick(slot)
+						onCellClick: (slot, event) => {
+							onCellClick(slot, event)
 						},
 						onCellKeyboardActivate: onCellKeyboardActivate,
 						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {

@@ -269,8 +269,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const desktopHorizontalOverflow = props.desktopHorizontalOverflow ?? 'page'
 	const useStackedDayHeader = props.dayHeaderLayout === 'stacked'
 	const useNarrowDayColumns = props.dayColumnWidth === 'narrow'
-	const dayColumnWidthRem = useNarrowDayColumns ? 6.2 : 8
-	const timeColumnWidthRem = useNarrowDayColumns ? 5 : 5.6
+	const cellSizeScale = 2 / 3
+	const dayColumnWidthRem = (useNarrowDayColumns ? 6.2 : 8) * cellSizeScale
+	const timeColumnWidthRem = (useNarrowDayColumns ? 5 : 5.6) * cellSizeScale
+	const cellHeightRem = 2.25 * cellSizeScale
+	const cellHeightMobileRem = 2.65 * cellSizeScale
 	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
@@ -295,9 +298,27 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 
 	function renderGridTable(visibleDayKeys: Array<string>) {
 		const fitToContent = !!props.fitToContentWidth
-		const tableCaption = props.readOnly
-			? 'Availability grid. Use arrow keys to move between time slots. Press Enter or Space to focus slot details.'
-			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range. On touch devices, tap a slot to toggle it, then drag the handle to apply that toggle across more slots.'
+		const keyboardRangeInstruction =
+			!props.readOnly && props.onCellKeyboardNavigate
+				? 'Hold Shift while moving to preview a range.'
+				: null
+		const keyboardActivateInstruction = props.onCellKeyboardActivate
+			? props.readOnly
+				? 'Press Enter or Space to focus slot details.'
+				: 'Press Enter or Space to apply toggles.'
+			: null
+		const pointerInstruction = props.readOnly
+			? null
+			: 'On pointer devices, drag to select a range. On touch devices, tap a slot to toggle it, then drag the handle to apply that toggle across more slots.'
+		const tableCaption = [
+			props.readOnly ? 'Availability grid.' : 'Editable availability grid.',
+			'Use arrow keys to move between time slots.',
+			keyboardRangeInstruction,
+			keyboardActivateInstruction,
+			pointerInstruction,
+		]
+			.filter((value): value is string => !!value)
+			.join(' ')
 
 		function handleCellKeyDown(event: KeyboardEvent) {
 			if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -509,9 +530,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														: undefined,
 													backgroundColor:
 														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
-													height: '2.25rem',
+													height: `${cellHeightRem}rem`,
 													[mq.mobile]: {
-														height: '2.65rem',
+														height: `${cellHeightMobileRem}rem`,
 													},
 												}}
 											>
@@ -520,14 +541,14 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													css={{
 														display: 'grid',
 														placeItems: 'center',
-														minHeight: '2.25rem',
+														minHeight: `${cellHeightRem}rem`,
 														color: colors.textMuted,
 														fontSize: typography.fontSize.xs,
 														fontWeight: typography.fontWeight.medium,
 														letterSpacing: '0.04em',
 														userSelect: 'none',
 														[mq.mobile]: {
-															minHeight: '2.65rem',
+															minHeight: `${cellHeightMobileRem}rem`,
 														},
 													}}
 												>
@@ -659,7 +680,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													placeItems: 'center',
 													position: 'relative',
 													width: '100%',
-													minHeight: '2.25rem',
+													minHeight: `${cellHeightRem}rem`,
 													padding: spacing.xs,
 													border: 'none',
 													background,
@@ -680,7 +701,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														outlineOffset: '-2px',
 													},
 													[mq.mobile]: {
-														minHeight: '2.65rem',
+														minHeight: `${cellHeightMobileRem}rem`,
 														fontSize: typography.fontSize.sm,
 													},
 												}}
@@ -745,21 +766,31 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														}}
 														css={{
 															position: 'absolute',
-															right: '0.2rem',
-															bottom: '0.2rem',
-															width: '0.65rem',
-															height: '0.65rem',
-															borderRadius: radius.full,
-															backgroundColor: colors.primary,
-															border: `2px solid ${colors.surface}`,
-															boxShadow:
-																'0 0 0 1px color-mix(in srgb, var(--color-primary) 65%, transparent)',
+															right: '0.15rem',
+															bottom: '0.15rem',
+															width: '1.5rem',
+															height: '1.5rem',
+															display: 'grid',
+															placeItems: 'center',
 															zIndex: 2,
 															touchAction: 'none',
 															pointerEvents: 'auto',
 															cursor: 'nwse-resize',
 														}}
-													/>
+													>
+														<span
+															css={{
+																width: '0.65rem',
+																height: '0.65rem',
+																borderRadius: radius.full,
+																backgroundColor: colors.primary,
+																border: `2px solid ${colors.surface}`,
+																boxShadow:
+																	'0 0 0 1px color-mix(in srgb, var(--color-primary) 65%, transparent)',
+																pointerEvents: 'none',
+															}}
+														/>
+													</span>
 												) : null}
 											</button>
 										</td>
