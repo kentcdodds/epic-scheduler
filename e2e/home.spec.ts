@@ -366,6 +366,54 @@ test('mobile blocked slot tap updates active ring and details', async ({
 		})
 		await expect(slotDetails).toContainText(editableSlotLabel)
 		await tapSlotButton(blockedSlotButton)
+		writeDebugLog({
+			hypothesisId: 'A',
+			location: 'e2e/home.spec.ts:372',
+			message: 'Post-blocked-tap browser events',
+			data: {
+				events: await mobilePage.evaluate(() => {
+					const win = window as Window & {
+						__slotTapDebug?: Array<Record<string, unknown>>
+					}
+					return win.__slotTapDebug ?? []
+				}),
+			},
+		})
+		writeDebugLog({
+			hypothesisId: 'D',
+			location: 'e2e/home.spec.ts:385',
+			message: 'Post-blocked-tap visual state',
+			data: await mobilePage.evaluate(
+				([blockedSlotValue, editableSlotValue]) => {
+					const detailsHeading = Array.from(
+						document.querySelectorAll('h2'),
+					).find((element) => element.textContent?.trim() === 'Slot details')
+					const detailsSection = detailsHeading?.closest('section')
+					const blockedButton = document.querySelector(
+						`button[data-slot="${blockedSlotValue}"]`,
+					)
+					const editableButton = document.querySelector(
+						`button[data-slot="${editableSlotValue}"]`,
+					)
+					return {
+						detailsText: detailsSection?.textContent?.trim() ?? null,
+						blockedBoxShadow:
+							blockedButton instanceof HTMLElement
+								? getComputedStyle(blockedButton).boxShadow
+								: null,
+						editableBoxShadow:
+							editableButton instanceof HTMLElement
+								? getComputedStyle(editableButton).boxShadow
+								: null,
+						activeElement:
+							document.activeElement instanceof HTMLButtonElement
+								? document.activeElement.dataset.slot ?? null
+								: null,
+					}
+				},
+				[blockedSlot, editableSlot],
+			),
+		})
 
 		await expect(slotDetails).toContainText(blockedSlotLabel)
 		await expect(slotDetails).toContainText(
