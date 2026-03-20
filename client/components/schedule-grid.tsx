@@ -831,7 +831,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													data-slot={slot}
 													aria-label={ariaLabel}
 													aria-pressed={
-														props.readOnly || isDisabled ? undefined : isSelected
+														props.readOnly || isDisabled
+															? undefined
+															: isSelected
 													}
 													aria-disabled={isDisabled ? 'true' : undefined}
 													title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}`}
@@ -883,7 +885,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 																	? () => props.onCellHover?.(slot)
 																	: undefined,
 														pointermove: props.onCellPointerMove
-															? (event) => props.onCellPointerMove?.(slot, event)
+															? (event) =>
+																	props.onCellPointerMove?.(slot, event)
 															: undefined,
 														pointerleave: props.onCellHover
 															? (event) => {
@@ -918,7 +921,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 																pointerdown: (event) => {
 																	event.preventDefault()
 																	event.stopPropagation()
-																	props.onCellDragHandlePointerDown?.(slot, event)
+																	props.onCellDragHandlePointerDown?.(
+																		slot,
+																		event,
+																	)
 																},
 																click: (event) => {
 																	event.preventDefault()

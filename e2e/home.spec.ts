@@ -60,7 +60,9 @@ test('slot selection does not require title or name before submit', async ({
 	await expect(scheduleTitleError).toHaveCount(0)
 	await expect(hostNameError).toHaveCount(0)
 
-	const firstGridCell = page.locator('[data-schedule-grid-shell] table button').first()
+	const firstGridCell = page
+		.locator('[data-schedule-grid-shell] table button')
+		.first()
 	await expect(firstGridCell).toBeVisible()
 	await firstGridCell.click()
 
@@ -80,7 +82,9 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 	await expect(grid).toBeVisible()
 
 	const dateHeaderCell = page
-		.locator('[data-schedule-grid-mobile-header] [data-schedule-grid-day-header]')
+		.locator(
+			'[data-schedule-grid-mobile-header] [data-schedule-grid-day-header]',
+		)
 		.first()
 	await expect(dateHeaderCell).toBeVisible()
 
@@ -90,9 +94,12 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 		throw new Error('Expected schedule grid to be measurable.')
 	}
 
-	await page.evaluate((targetScrollY) => {
-		window.scrollTo({ top: targetScrollY, behavior: 'instant' })
-	}, Math.max(0, gridBox.y + 120))
+	await page.evaluate(
+		(targetScrollY) => {
+			window.scrollTo({ top: targetScrollY, behavior: 'instant' })
+		},
+		Math.max(0, gridBox.y + 120),
+	)
 
 	const stickyHeaderTop = await dateHeaderCell.evaluate((element) => {
 		return Math.round(element.getBoundingClientRect().top)
@@ -101,7 +108,9 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 	expect(stickyHeaderTop).toBeLessThanOrEqual(48)
 })
 
-test('mobile long date ranges keep page width constrained', async ({ page }) => {
+test('mobile long date ranges keep page width constrained', async ({
+	page,
+}) => {
 	await page.setViewportSize({ width: 390, height: 844 })
 	await page.goto('/')
 	await page.getByLabel('End date').fill('2026-04-20')
@@ -137,7 +146,9 @@ test('changing to a smaller interval expands selected availability', async ({
 	await expect(selectedCount).toContainText('0 selected slots')
 
 	await page.getByLabel('Slot interval').selectOption('60')
-	const firstGridCell = page.locator('[data-schedule-grid-shell] table button').first()
+	const firstGridCell = page
+		.locator('[data-schedule-grid-shell] table button')
+		.first()
 	await expect(firstGridCell).toBeVisible()
 	await firstGridCell.click()
 	await expect(selectedCount).toContainText('1 selected slot')
