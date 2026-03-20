@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
 	buildGridModel,
 	createSlotRangeFromDateInputs,
+	remapSelectedSlotsForIntervalChange,
 } from './schedule-utils.ts'
 
 const inNewYorkTimeZone =
@@ -47,3 +48,28 @@ testInNewYork(
 		expect(grid.timeLabels['01:30']).not.toBe(grid.timeLabels['01:30#2'])
 	},
 )
+
+test('interval remap expands selected slots when moving to finer granularity', () => {
+	const hourlyRange = createSlotRangeFromDateInputs({
+		startDateInput: '2026-03-20',
+		endDateInput: '2026-03-20',
+		intervalMinutes: 60,
+	})
+	const halfHourRange = createSlotRangeFromDateInputs({
+		startDateInput: '2026-03-20',
+		endDateInput: '2026-03-20',
+		intervalMinutes: 30,
+	})
+
+	const remapped = remapSelectedSlotsForIntervalChange({
+		previousSelectedSlots: new Set([hourlyRange.slots[9]!]),
+		previousIntervalMinutes: 60,
+		nextSlots: halfHourRange.slots,
+		nextIntervalMinutes: 30,
+	})
+
+	expect(Array.from(remapped).sort()).toEqual([
+		halfHourRange.slots[18]!,
+		halfHourRange.slots[19]!,
+	])
+})

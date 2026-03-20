@@ -2,6 +2,12 @@
 
 Cross-cutting UX expectations for interactive surfaces in this codebase.
 
+## Mobile schedule grid width
+
+- On small breakpoints, `renderScheduleGrid` uses a viewport-bleed shell so the
+  grid’s left/right edges align with the viewport; the scroll container still
+  uses horizontal overflow when the table is wider than the screen.
+
 ## Avoid layout shift by default
 
 - Reserve space for async feedback, validation, and errors instead of mounting

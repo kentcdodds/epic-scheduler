@@ -14,7 +14,7 @@ export type PointerDragSelectionState = {
 	slots: Set<string>
 }
 
-type PointerDragSelectionControllerParams = {
+export type PointerDragSelectionControllerParams = {
 	requestRender: () => void
 	getSelectionSlots: (startSlot: string, endSlot: string) => Set<string>
 	applySelection: (args: {

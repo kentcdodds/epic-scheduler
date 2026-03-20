@@ -3,19 +3,17 @@ import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { navigate } from '#client/client-router.tsx'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { setDocumentTitle } from '#client/document-title.ts'
-import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
+import {
+	applyBooleanSelectionToSet,
+	createRectangularGridSelectionController,
+} from '#client/grid-selection-controller.ts'
 import {
 	addDays,
 	createSlotRangeFromDateInputs,
 	formatDateInputValue,
 	getRectangularSlotSelection,
+	remapSelectedSlotsForIntervalChange,
 } from '#client/schedule-utils.ts'
-import {
-	detectTapRangeMode,
-	getTapRangeStartMessage,
-	isTapRangeStartMessage,
-	resolveTapRangeModeFromPointer,
-} from '#client/tap-range-mode.ts'
 import {
 	colors,
 	mq,
@@ -54,16 +52,13 @@ export function HomeRoute(handle: Handle) {
 	let rangeStartUtc = ''
 	let rangeEndUtc = ''
 	let selectedSlots = new Set<string>()
-	let rangeAnchor: string | null = null
-	let tapRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
 	let activeSlot: string | null = null
-	let mobileDayKey: string | null = null
+	let lastPointerWasTouch = false
 	let status: RequestStatus = 'idle'
 	let message: string | null = null
-	let useTapRangeMode = detectTapRangeMode()
 	let didInitializeSelection = false
 	let scheduleTitleError: string | null = null
 	let hostNameError: string | null = null
@@ -72,7 +67,7 @@ export function HomeRoute(handle: Handle) {
 	const hostNameRequiredMessage =
 		'Host name is required before making a submission.'
 
-	function syncSlots() {
+	function syncSlots(previousIntervalMinutes = intervalMinutes) {
 		const nextRange = createSlotRangeFromDateInputs({
 			startDateInput,
 			endDateInput,
@@ -88,22 +83,24 @@ export function HomeRoute(handle: Handle) {
 			return
 		}
 
+		selectedSlots = remapSelectedSlotsForIntervalChange({
+			previousSelectedSlots: selectedSlots,
+			previousIntervalMinutes,
+			nextSlots: generatedSlots,
+			nextIntervalMinutes: intervalMinutes,
+		})
 		const validSlots = new Set(generatedSlots)
-		selectedSlots = new Set(
-			Array.from(selectedSlots).filter((slot) => validSlots.has(slot)),
-		)
-		if (rangeAnchor && !validSlots.has(rangeAnchor)) {
-			rangeAnchor = null
-			tapRangeAction = null
-		}
 		if (keyboardRangeAnchor && !validSlots.has(keyboardRangeAnchor)) {
 			keyboardRangeAnchor = null
 			keyboardRangeAction = null
 			keyboardRangeSlots = new Set<string>()
 		} else if (keyboardRangeSlots.size > 0) {
-			keyboardRangeSlots = new Set(
-				Array.from(keyboardRangeSlots).filter((slot) => validSlots.has(slot)),
-			)
+			keyboardRangeSlots = remapSelectedSlotsForIntervalChange({
+				previousSelectedSlots: keyboardRangeSlots,
+				previousIntervalMinutes,
+				nextSlots: generatedSlots,
+				nextIntervalMinutes: intervalMinutes,
+			})
 			if (keyboardRangeSlots.size === 0) {
 				keyboardRangeAnchor = null
 				keyboardRangeAction = null
@@ -172,12 +169,13 @@ export function HomeRoute(handle: Handle) {
 		endDateInput?: string
 		intervalMinutes?: number
 	}) {
+		const previousIntervalMinutes = intervalMinutes
 		if (next.startDateInput !== undefined) startDateInput = next.startDateInput
 		if (next.endDateInput !== undefined) endDateInput = next.endDateInput
 		if (next.intervalMinutes !== undefined)
 			intervalMinutes = next.intervalMinutes
 		try {
-			syncSlots()
+			syncSlots(previousIntervalMinutes)
 			setMessage('idle', null)
 		} catch (error) {
 			const text = error instanceof Error ? error.message : 'Invalid range.'
@@ -191,24 +189,6 @@ export function HomeRoute(handle: Handle) {
 			return
 		}
 		selectedSlots.delete(slot)
-	}
-
-	function applyRange(
-		startSlot: string,
-		endSlot: string,
-		shouldSelect: boolean,
-	) {
-		const startIndex = generatedSlots.indexOf(startSlot)
-		const endIndex = generatedSlots.indexOf(endSlot)
-		if (startIndex < 0 || endIndex < 0) return
-
-		const min = Math.min(startIndex, endIndex)
-		const max = Math.max(startIndex, endIndex)
-		for (let index = min; index <= max; index += 1) {
-			const slot = generatedSlots[index]
-			if (!slot) continue
-			setSlotSelection(slot, shouldSelect)
-		}
 	}
 
 	function clearKeyboardRangeSelection() {
@@ -265,36 +245,21 @@ export function HomeRoute(handle: Handle) {
 		const shouldSelect = !selectedSlots.has(slot)
 		setSlotSelection(slot, shouldSelect)
 		activeSlot = slot
-		rangeAnchor = null
-		tapRangeAction = null
 		clearKeyboardRangeSelection()
 		setMessage('idle', null)
 	}
 
-	const pointerSelection = createPointerDragSelectionController({
+	const pointerSelection = createRectangularGridSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		canUpdateSelection: () => !useTapRangeMode,
-		getSelectionSlots: (startSlot, endSlot) => {
-			return new Set(
-				getRectangularSlotSelection({
-					slots: generatedSlots,
-					startSlot,
-					endSlot,
-				}),
-			)
-		},
+		getAllSlots: () => generatedSlots,
 		applySelection: ({ mode, slots }) => {
-			const shouldSelect = mode === 'add'
-			let changed = false
-			for (const slot of slots) {
-				const wasSelected = selectedSlots.has(slot)
-				if (wasSelected === shouldSelect) continue
-				setSlotSelection(slot, shouldSelect)
-				changed = true
-			}
-			return changed
+			return applyBooleanSelectionToSet({
+				selection: selectedSlots,
+				slots,
+				shouldSelect: mode === 'add',
+			})
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activeSlot = slot
@@ -400,27 +365,23 @@ export function HomeRoute(handle: Handle) {
 	}
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
 		clearKeyboardRangeSelection()
-		const nextMode = resolveTapRangeModeFromPointer({
-			currentMode: useTapRangeMode,
-			pointerType: event.pointerType,
-		})
-		if (nextMode !== useTapRangeMode) {
-			useTapRangeMode = nextMode
-			rangeAnchor = null
-			tapRangeAction = null
-			if (isTapRangeStartMessage(message)) {
-				setMessage('idle', null)
-			} else {
-				handle.update()
-			}
-		}
-		if (useTapRangeMode) return
-		if (!validateRequiredSubmissionFields()) return
+		if (event.pointerType === 'touch') return
 		pointerSelection.startSelection({
 			slot,
 			event,
 			mode: selectedSlots.has(slot) ? 'remove' : 'add',
+		})
+	}
+
+	function onCellDragHandlePointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
+		clearKeyboardRangeSelection()
+		pointerSelection.startSelection({
+			slot,
+			event,
+			mode: selectedSlots.has(slot) ? 'add' : 'remove',
 		})
 	}
 
@@ -432,24 +393,10 @@ export function HomeRoute(handle: Handle) {
 		pointerSelection.finishSelection(false)
 	}
 
-	function onCellClick(slot: string) {
-		if (!useTapRangeMode) return
-		if (!validateRequiredSubmissionFields()) return
-
-		if (!rangeAnchor) {
-			rangeAnchor = slot
-			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
-			activeSlot = slot
-			setMessage('idle', getTapRangeStartMessage(tapRangeAction))
-			return
-		}
-
-		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
-		applyRange(rangeAnchor, slot, shouldSelect)
-		rangeAnchor = null
-		tapRangeAction = null
-		activeSlot = slot
-		setMessage('idle', null)
+	function onCellClick(slot: string, event: MouseEvent) {
+		if (event.detail === 0) return
+		if (!lastPointerWasTouch) return
+		toggleSlotSelection(slot)
 	}
 
 	function onCellKeyboardActivate(slot: string) {
@@ -482,7 +429,7 @@ export function HomeRoute(handle: Handle) {
 		const pendingSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
 			: 'included in pending keyboard range selection'
-		const gridRangeAnchor = keyboardRangeAnchor ?? rangeAnchor
+		const gridRangeAnchor = keyboardRangeAnchor
 
 		return (
 			<section
@@ -622,8 +569,160 @@ export function HomeRoute(handle: Handle) {
 						border: `1px solid ${colors.border}`,
 						backgroundColor: colors.surface,
 						boxShadow: shadows.sm,
+						[mq.mobile]: {
+							// Full-bleed within the padded app shell so the scheduler form
+							// matches the viewport width on small screens.
+							width: '100vw',
+							maxWidth: '100vw',
+							marginInline: 'calc(50% - 50vw)',
+							borderRadius: 0,
+							borderInline: 'none',
+							boxShadow: 'none',
+						},
 					}}
 				>
+					<div
+						css={{
+							display: 'grid',
+							gap: spacing.md,
+							gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+							[mq.mobile]: {
+								gridTemplateColumns: '1fr',
+							},
+						}}
+					>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Slot interval
+							</span>
+							<select
+								name="interval"
+								on={{
+									change: (event) => {
+										const value = Number.parseInt(event.currentTarget.value, 10)
+										updateDateRange({ intervalMinutes: value })
+									},
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							>
+								<option value="15" selected={intervalMinutes === 15}>
+									15 minutes
+								</option>
+								<option value="30" selected={intervalMinutes === 30}>
+									30 minutes
+								</option>
+								<option value="60" selected={intervalMinutes === 60}>
+									1 hour
+								</option>
+							</select>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Start date
+							</span>
+							<input
+								type="date"
+								name="startDate"
+								value={startDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											startDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								End date
+							</span>
+							<input
+								type="date"
+								name="endDate"
+								value={endDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											endDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+					</div>
+
+					<div
+						css={{
+							display: 'flex',
+							flexWrap: 'wrap',
+							gap: spacing.sm,
+							alignItems: 'center',
+						}}
+					>
+						<p
+							role="status"
+							aria-live="polite"
+							css={{ margin: 0, color: secondaryTextColor }}
+						>
+							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
+						</p>
+						<p css={{ margin: 0, color: secondaryTextColor }}>
+							Times are shown in your browser timezone: {browserTimeZone}
+						</p>
+					</div>
+
+					{renderScheduleGrid({
+						slots: generatedSlots,
+						selectedSlots,
+						selectionSlots: pendingSelectionSlots,
+						selectionSlotLabel: pendingSelectionLabel,
+						slotAvailability,
+						maxAvailabilityCount: 1,
+						activeSlot,
+						rangeAnchor: gridRangeAnchor,
+						onCellPointerDown,
+						onCellDragHandlePointerDown: onCellDragHandlePointerDown,
+						onCellPointerEnter: (slot, _event) => {
+							onCellPointerEnter(slot)
+						},
+						onCellPointerUp: (_slot, _event) => {
+							onCellPointerUp()
+						},
+						onCellClick: (slot, event) => {
+							onCellClick(slot, event)
+						},
+						onCellKeyboardActivate: onCellKeyboardActivate,
+						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
+							updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
+						},
+						onCellFocus,
+					})}
+
 					<div
 						css={{
 							display: 'grid',
@@ -746,148 +845,6 @@ export function HomeRoute(handle: Handle) {
 
 					<div
 						css={{
-							display: 'grid',
-							gap: spacing.md,
-							gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-							[mq.mobile]: {
-								gridTemplateColumns: '1fr',
-							},
-						}}
-					>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								Slot interval
-							</span>
-							<select
-								name="interval"
-								value={String(intervalMinutes)}
-								on={{
-									change: (event) => {
-										const value = Number.parseInt(event.currentTarget.value, 10)
-										updateDateRange({ intervalMinutes: value })
-									},
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							>
-								<option value="15">15 minutes</option>
-								<option value="30">30 minutes</option>
-								<option value="60">1 hour</option>
-							</select>
-						</label>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								Start date
-							</span>
-							<input
-								type="date"
-								name="startDate"
-								value={startDateInput}
-								on={{
-									change: (event) =>
-										updateDateRange({
-											startDateInput: event.currentTarget.value,
-										}),
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							/>
-						</label>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								End date
-							</span>
-							<input
-								type="date"
-								name="endDate"
-								value={endDateInput}
-								on={{
-									change: (event) =>
-										updateDateRange({
-											endDateInput: event.currentTarget.value,
-										}),
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							/>
-						</label>
-					</div>
-
-					<div
-						css={{
-							display: 'flex',
-							flexWrap: 'wrap',
-							gap: spacing.sm,
-							alignItems: 'center',
-						}}
-					>
-						<p
-							role="status"
-							aria-live="polite"
-							css={{ margin: 0, color: secondaryTextColor }}
-						>
-							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
-						</p>
-						<p css={{ margin: 0, color: secondaryTextColor }}>
-							Times are shown in your browser timezone: {browserTimeZone}
-						</p>
-					</div>
-
-					{renderScheduleGrid({
-						slots: generatedSlots,
-						selectedSlots,
-						selectionSlots: pendingSelectionSlots,
-						selectionSlotLabel: pendingSelectionLabel,
-						mobileDayKey,
-						slotAvailability,
-						maxAvailabilityCount: 1,
-						activeSlot,
-						rangeAnchor: gridRangeAnchor,
-						onMobileDayChange: (dayKey) => {
-							mobileDayKey = dayKey
-							handle.update()
-						},
-						onCellPointerDown,
-						onCellPointerEnter: (slot, _event) => {
-							onCellPointerEnter(slot)
-						},
-						onCellPointerUp: (_slot, _event) => {
-							onCellPointerUp()
-						},
-						onCellClick: (slot, _event) => {
-							if (!useTapRangeMode) return
-							onCellClick(slot)
-						},
-						onCellKeyboardActivate: onCellKeyboardActivate,
-						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
-							updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
-						},
-						onCellFocus,
-					})}
-
-					<div
-						css={{
 							display: 'flex',
 							gap: spacing.sm,
 							flexWrap: 'wrap',
@@ -926,8 +883,6 @@ export function HomeRoute(handle: Handle) {
 									pointerSelection.cleanup()
 									selectedSlots = buildDefaultSelection(generatedSlots)
 									clearKeyboardRangeSelection()
-									rangeAnchor = null
-									tapRangeAction = null
 									setMessage('idle', null)
 								},
 							}}

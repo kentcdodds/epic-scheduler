@@ -98,6 +98,13 @@
 		--spacing-section: var(--spacing-md);
 		--spacing-header: var(--spacing-md);
 	}
+
+	/* Prevent iOS from zooming when focusing small form controls. */
+	input,
+	textarea,
+	select {
+		font-size: 16px !important;
+	}
 }
 
 :root[data-theme='dark'] {

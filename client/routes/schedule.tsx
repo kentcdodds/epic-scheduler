@@ -2,7 +2,10 @@ import { type Handle } from 'remix/component'
 import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
+import {
+	applyBooleanSelectionToSet,
+	createRectangularGridSelectionController,
+} from '#client/grid-selection-controller.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
@@ -14,12 +17,6 @@ import {
 	formatSlotForAttendeeTimeZone,
 	getRectangularSlotSelection,
 } from '#client/schedule-utils.ts'
-import {
-	detectTapRangeMode,
-	getTapRangeStartMessage,
-	isTapRangeStartMessage,
-	resolveTapRangeModeFromPointer,
-} from '#client/tap-range-mode.ts'
 import { type ScheduleSnapshot, normalizeName } from '#shared/schedule-store.ts'
 import {
 	colors,
@@ -57,13 +54,10 @@ export function ScheduleRoute(handle: Handle) {
 	let hoverTooltipSlot: string | null = null
 	let hoverTooltipPointerX: number | null = null
 	let hoverTooltipPointerY: number | null = null
-	let rangeAnchor: string | null = null
-	let tapRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
-	let mobileDayKey: string | null = null
-	let useTapRangeMode = detectTapRangeMode()
+	let lastPointerWasTouch = false
 	let statusMessage: string | null = null
 	let statusError = false
 	let attendeeNameError: string | null = null
@@ -242,32 +236,18 @@ export function ScheduleRoute(handle: Handle) {
 		return didChange
 	}
 
-	const pointerSelection = createPointerDragSelectionController({
+	const pointerSelection = createRectangularGridSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		canUpdateSelection: () => !useTapRangeMode,
-		getSelectionSlots: (startSlot, endSlot) => {
-			if (!snapshot) return new Set<string>()
-			const blockedSlots = getBlockedSlots()
-			return new Set(
-				getRectangularSlotSelection({
-					slots: snapshot.slots,
-					startSlot,
-					endSlot,
-				}).filter((slot) => !blockedSlots.has(slot)),
-			)
-		},
+		getAllSlots: () => snapshot?.slots ?? null,
+		includeSlot: (slot) => !getBlockedSlots().has(slot),
 		applySelection: ({ mode, slots }) => {
-			const shouldSelect = mode === 'add'
-			let changed = false
-			for (const slot of slots) {
-				const wasSelected = selectedSlots.has(slot)
-				if (wasSelected === shouldSelect) continue
-				setSlotSelection(slot, shouldSelect)
-				changed = true
-			}
-			return changed
+			return applyBooleanSelectionToSet({
+				selection: selectedSlots,
+				slots,
+				shouldSelect: mode === 'add',
+			})
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activeSlot = slot
@@ -374,10 +354,6 @@ export function ScheduleRoute(handle: Handle) {
 				if (keyboardRangeSlots.size === 0) {
 					clearKeyboardRangeSelection()
 				}
-			}
-			if (rangeAnchor && !currentSnapshot.slots.includes(rangeAnchor)) {
-				rangeAnchor = null
-				tapRangeAction = null
 			}
 			if (activeSlot && !currentSnapshot.slots.includes(activeSlot)) {
 				activeSlot = null
@@ -553,8 +529,6 @@ export function ScheduleRoute(handle: Handle) {
 			snapshot = payload.snapshot
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			selectedSlots = new Set(persistedSelectedSlots)
-			rangeAnchor = null
-			tapRangeAction = null
 			pendingRenameSourceName = null
 			hasDirtyChanges = false
 			pendingSave = false
@@ -637,8 +611,6 @@ export function ScheduleRoute(handle: Handle) {
 			snapshot = payload.snapshot
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			selectedSlots = new Set(persistedSelectedSlots)
-			rangeAnchor = null
-			tapRangeAction = null
 			pendingRenameSourceName = null
 			hasDirtyChanges = false
 			pendingSave = false
@@ -664,25 +636,6 @@ export function ScheduleRoute(handle: Handle) {
 			return
 		}
 		selectedSlots.delete(slot)
-	}
-
-	function applyRange(
-		startSlot: string,
-		endSlot: string,
-		shouldSelect: boolean,
-	) {
-		if (!snapshot) return
-		const startIndex = snapshot.slots.indexOf(startSlot)
-		const endIndex = snapshot.slots.indexOf(endSlot)
-		if (startIndex < 0 || endIndex < 0) return
-		const min = Math.min(startIndex, endIndex)
-		const max = Math.max(startIndex, endIndex)
-		const blockedSlots = getBlockedSlots()
-		for (let index = min; index <= max; index += 1) {
-			const slot = snapshot.slots[index]
-			if (!slot || blockedSlots.has(slot)) continue
-			setSlotSelection(slot, shouldSelect)
-		}
 	}
 
 	function updateKeyboardRangePreview(params: {
@@ -744,8 +697,6 @@ export function ScheduleRoute(handle: Handle) {
 		if (!ensureSlotIsEditable(slot)) return
 		const shouldSelect = !selectedSlots.has(slot)
 		setSlotSelection(slot, shouldSelect)
-		rangeAnchor = null
-		tapRangeAction = null
 		clearKeyboardRangeSelection()
 		activeSlot = slot
 		setStatus(null, false)
@@ -753,7 +704,6 @@ export function ScheduleRoute(handle: Handle) {
 	}
 
 	function ensureSlotIsEditable(slot: string) {
-		activeSlot = slot
 		const blockedSlots = getBlockedSlots()
 		if (blockedSlots.has(slot)) {
 			handle.update()
@@ -763,34 +713,36 @@ export function ScheduleRoute(handle: Handle) {
 		if (!normalizedName) {
 			return false
 		}
+		activeSlot = slot
 		return true
 	}
 
 	function handleCellPointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
 		if (clearSubmissionHoverTooltip()) {
 			handle.update()
 		}
 		clearKeyboardRangeSelection()
-		const nextMode = resolveTapRangeModeFromPointer({
-			currentMode: useTapRangeMode,
-			pointerType: event.pointerType,
-		})
-		if (nextMode !== useTapRangeMode) {
-			useTapRangeMode = nextMode
-			rangeAnchor = null
-			tapRangeAction = null
-			if (isTapRangeStartMessage(statusMessage)) {
-				setStatus(null, false)
-			} else {
-				handle.update()
-			}
-		}
-		if (useTapRangeMode) return
+		if (event.pointerType === 'touch') return
 		if (!ensureSlotIsEditable(slot)) return
 		pointerSelection.startSelection({
 			slot,
 			event,
 			mode: selectedSlots.has(slot) ? 'remove' : 'add',
+		})
+	}
+
+	function handleCellDragHandlePointerDown(slot: string, event: PointerEvent) {
+		lastPointerWasTouch = event.pointerType === 'touch'
+		if (clearSubmissionHoverTooltip()) {
+			handle.update()
+		}
+		clearKeyboardRangeSelection()
+		if (!ensureSlotIsEditable(slot)) return
+		pointerSelection.startSelection({
+			slot,
+			event,
+			mode: selectedSlots.has(slot) ? 'add' : 'remove',
 		})
 	}
 
@@ -817,23 +769,10 @@ export function ScheduleRoute(handle: Handle) {
 		pointerSelection.finishSelection(false)
 	}
 
-	function handleCellClick(slot: string) {
-		if (!useTapRangeMode) return
-		if (!ensureSlotIsEditable(slot)) return
-		if (!rangeAnchor) {
-			rangeAnchor = slot
-			tapRangeAction = selectedSlots.has(slot) ? 'remove' : 'add'
-			activeSlot = slot
-			setStatus(getTapRangeStartMessage(tapRangeAction))
-			return
-		}
-		const shouldSelect = (tapRangeAction ?? 'add') === 'add'
-		applyRange(rangeAnchor, slot, shouldSelect)
-		rangeAnchor = null
-		tapRangeAction = null
-		activeSlot = slot
-		setStatus(null, false)
-		markDirty()
+	function handleCellClick(slot: string, event: MouseEvent) {
+		if (event.detail === 0) return
+		if (!lastPointerWasTouch) return
+		toggleSingleSlot(slot)
 	}
 
 	function handleCellKeyboardActivate(slot: string) {
@@ -896,10 +835,7 @@ export function ScheduleRoute(handle: Handle) {
 		activeSlot = null
 		hoverTooltipSlot = null
 		clearHoverTooltipPointerPosition()
-		rangeAnchor = null
-		tapRangeAction = null
 		clearKeyboardRangeSelection()
-		mobileDayKey = null
 		hasDirtyChanges = false
 		changeVersion = 0
 		pendingSave = false
@@ -908,6 +844,7 @@ export function ScheduleRoute(handle: Handle) {
 		isRenamingSubmission = false
 		pendingRenameSourceName = null
 		connectionState = 'offline'
+		lastPointerWasTouch = false
 		pointerSelection.cleanup()
 		isLoading = true
 		initialNameLoaded = false
@@ -939,7 +876,7 @@ export function ScheduleRoute(handle: Handle) {
 		const pendingSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
 			: 'included in pending keyboard range selection'
-		const gridRangeAnchor = keyboardRangeAnchor ?? rangeAnchor
+		const gridRangeAnchor = keyboardRangeAnchor
 		const normalizedAttendeeName = normalizeName(attendeeName)
 		const persistedAttendee = getPersistedAttendee(attendeeName)
 		const hasPersistedSubmission = hasPersistedSubmissionForName(attendeeName)
@@ -1106,7 +1043,8 @@ export function ScheduleRoute(handle: Handle) {
 							},
 						}}
 					>
-						Mobile: tap one slot to start a range, then tap another to apply it.
+						Mobile: tap a slot to toggle it, then drag the dot to extend a
+						selection.
 					</p>
 				</header>
 
@@ -1240,17 +1178,13 @@ export function ScheduleRoute(handle: Handle) {
 							hideDisabledOnlyRowsAndColumns: true,
 							selectionSlots: pendingSelectionSlots,
 							selectionSlotLabel: pendingSelectionLabel,
-							mobileDayKey,
 							slotAvailability,
 							maxAvailabilityCount,
 							activeSlot,
 							rangeAnchor: gridRangeAnchor,
 							pending: pendingSync,
-							onMobileDayChange: (dayKey) => {
-								mobileDayKey = dayKey
-								handle.update()
-							},
 							onCellPointerDown: handleCellPointerDown,
+							onCellDragHandlePointerDown: handleCellDragHandlePointerDown,
 							onCellPointerEnter: (slot, _event) => {
 								handleCellPointerEnter(slot)
 							},
@@ -1263,15 +1197,12 @@ export function ScheduleRoute(handle: Handle) {
 							onCellPointerUp: (_slot, _event) => {
 								handleCellPointerUp()
 							},
-							onCellClick: (slot, _event) => {
+							onCellClick: (slot, event) => {
 								const didClearTooltip = clearSubmissionHoverTooltip()
-								if (!useTapRangeMode) {
-									if (didClearTooltip) {
-										handle.update()
-									}
-									return
+								if (didClearTooltip) {
+									handle.update()
 								}
-								handleCellClick(slot)
+								handleCellClick(slot, event)
 							},
 							onCellKeyboardActivate: handleCellKeyboardActivate,
 							onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
