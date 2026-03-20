@@ -1,18 +1,4 @@
-import { appendFileSync } from 'node:fs'
-
 import { expect, test } from '@playwright/test'
-
-function writeDebugLog(params: {
-	hypothesisId: string
-	location: string
-	message: string
-	data: Record<string, unknown>
-}) {
-	appendFileSync(
-		'/opt/cursor/logs/debug.log',
-		`${JSON.stringify({ ...params, timestamp: Date.now() })}\n`,
-	)
-}
 
 test('home page renders scheduler creation flow', async ({ page }) => {
 	await page.goto('/')
@@ -217,35 +203,10 @@ test('mobile blocked slot tap updates active ring and details', async ({
 	try {
 		const mobilePage = await context.newPage()
 		const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8788'
-		await mobilePage.addInitScript(() => {
-			const win = window as Window & {
-				__slotTapDebug?: Array<Record<string, unknown>>
-			}
-			win.__slotTapDebug = []
-			for (const type of ['pointerdown', 'click', 'focusin']) {
-				document.addEventListener(
-					type,
-					(event) => {
-						const target =
-							event.target instanceof Element
-								? event.target.closest('button[data-slot]')
-								: null
-						if (!(target instanceof HTMLButtonElement)) return
-						win.__slotTapDebug?.push({
-							type,
-							slot: target.dataset.slot ?? null,
-							detail: 'detail' in event ? event.detail : null,
-							pointerType:
-								'pointerType' in event ? event.pointerType : null,
-						})
-					},
-					true,
-				)
-			}
-		})
 		async function tapSlotButton(
 			button: Awaited<ReturnType<typeof mobilePage.locator>>,
 		) {
+			// Keep the raw touch tap so blocked cells remain tappable in the test.
 			await button.evaluate((element) => {
 				element.scrollIntoView({
 					block: 'center',
@@ -300,133 +261,9 @@ test('mobile blocked slot tap updates active ring and details', async ({
 			})
 			.first()
 
-		writeDebugLog({
-			hypothesisId: 'C',
-			location: 'e2e/home.spec.ts:257',
-			message: 'Pre-tap slot metadata',
-			data: {
-				blockedSlot,
-				editableSlot,
-				visiblePeerSlot,
-				blockedSlotLabel,
-				editableSlotLabel,
-			},
-		})
-		writeDebugLog({
-			hypothesisId: 'B',
-			location: 'e2e/home.spec.ts:268',
-			message: 'Pre-tap hit test',
-			data: await editableSlotButton.evaluate((element) => {
-				const rect = element.getBoundingClientRect()
-				const centerX = rect.left + rect.width / 2
-				const centerY = rect.top + rect.height / 2
-				const hitTarget = document.elementFromPoint(centerX, centerY)
-				return {
-					slot: element.dataset.slot ?? null,
-					rect: {
-						left: Math.round(rect.left),
-						top: Math.round(rect.top),
-						width: Math.round(rect.width),
-						height: Math.round(rect.height),
-					},
-					center: { x: Math.round(centerX), y: Math.round(centerY) },
-					hitTag: hitTarget?.tagName ?? null,
-					hitSlot:
-						hitTarget instanceof Element
-							? hitTarget.closest('button[data-slot]')?.getAttribute('data-slot')
-							: null,
-					ariaDisabled: element.getAttribute('aria-disabled'),
-				}
-			}),
-		})
-
 		await tapSlotButton(editableSlotButton)
-		writeDebugLog({
-			hypothesisId: 'A',
-			location: 'e2e/home.spec.ts:294',
-			message: 'Post-tap browser events',
-			data: {
-				events: await mobilePage.evaluate(() => {
-					const win = window as Window & {
-						__slotTapDebug?: Array<Record<string, unknown>>
-					}
-					return win.__slotTapDebug ?? []
-				}),
-			},
-		})
-		writeDebugLog({
-			hypothesisId: 'D',
-			location: 'e2e/home.spec.ts:307',
-			message: 'Post-tap slot details state',
-			data: await mobilePage.evaluate(() => {
-				const detailsHeading = Array.from(
-					document.querySelectorAll('h2'),
-				).find((element) => element.textContent?.trim() === 'Slot details')
-				const detailsSection = detailsHeading?.closest('section')
-				const activeElement =
-					document.activeElement instanceof HTMLButtonElement
-						? {
-								slot: document.activeElement.dataset.slot ?? null,
-								title: document.activeElement.title.split('\n')[0] ?? null,
-							}
-						: null
-				return {
-					detailsVisible: !!detailsSection,
-					detailsText: detailsSection?.textContent?.trim() ?? null,
-					activeElement,
-				}
-			}),
-		})
 		await expect(slotDetails).toContainText(editableSlotLabel)
 		await tapSlotButton(blockedSlotButton)
-		writeDebugLog({
-			hypothesisId: 'A',
-			location: 'e2e/home.spec.ts:372',
-			message: 'Post-blocked-tap browser events',
-			data: {
-				events: await mobilePage.evaluate(() => {
-					const win = window as Window & {
-						__slotTapDebug?: Array<Record<string, unknown>>
-					}
-					return win.__slotTapDebug ?? []
-				}),
-			},
-		})
-		writeDebugLog({
-			hypothesisId: 'D',
-			location: 'e2e/home.spec.ts:385',
-			message: 'Post-blocked-tap visual state',
-			data: await mobilePage.evaluate(
-				([blockedSlotValue, editableSlotValue]) => {
-					const detailsHeading = Array.from(
-						document.querySelectorAll('h2'),
-					).find((element) => element.textContent?.trim() === 'Slot details')
-					const detailsSection = detailsHeading?.closest('section')
-					const blockedButton = document.querySelector(
-						`button[data-slot="${blockedSlotValue}"]`,
-					)
-					const editableButton = document.querySelector(
-						`button[data-slot="${editableSlotValue}"]`,
-					)
-					return {
-						detailsText: detailsSection?.textContent?.trim() ?? null,
-						blockedBoxShadow:
-							blockedButton instanceof HTMLElement
-								? getComputedStyle(blockedButton).boxShadow
-								: null,
-						editableBoxShadow:
-							editableButton instanceof HTMLElement
-								? getComputedStyle(editableButton).boxShadow
-								: null,
-						activeElement:
-							document.activeElement instanceof HTMLButtonElement
-								? document.activeElement.dataset.slot ?? null
-								: null,
-					}
-				},
-				[blockedSlot, editableSlot],
-			),
-		})
 
 		await expect(slotDetails).toContainText(blockedSlotLabel)
 		await expect(slotDetails).toContainText(
