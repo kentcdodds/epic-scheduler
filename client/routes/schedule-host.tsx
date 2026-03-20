@@ -1502,8 +1502,13 @@ export function ScheduleHostRoute(handle: Handle) {
 			return
 		}
 		const changed = setPreviewSelectedRange(new Set([slot]))
+		const previousActiveSlot = activePreviewSlot
 		activePreviewSlot = slot
-		if (changed || didClearTooltip) {
+		if (
+			changed ||
+			didClearTooltip ||
+			activePreviewSlot !== previousActiveSlot
+		) {
 			handle.update()
 		}
 	}
