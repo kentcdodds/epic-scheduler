@@ -272,6 +272,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const cellSizeScale = 2 / 3
 	const dayColumnWidthRem = (useNarrowDayColumns ? 6.2 : 8) * cellSizeScale
 	const timeColumnWidthRem = (useNarrowDayColumns ? 5 : 5.6) * cellSizeScale
+	const mobileTimeColumnWidthRem = 4.8 * cellSizeScale
 	const cellHeightRem = 2.25 * cellSizeScale
 	const cellHeightMobileRem = 2.65 * cellSizeScale
 	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
@@ -418,9 +419,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									minWidth: `${timeColumnWidthRem}rem`,
 									maxWidth: `${timeColumnWidthRem}rem`,
 									[mq.mobile]: {
-										minWidth: '4.8rem',
-										maxWidth: '4.8rem',
-										width: '4.8rem',
+										minWidth: `${mobileTimeColumnWidthRem}rem`,
+										maxWidth: `${mobileTimeColumnWidthRem}rem`,
+										width: `${mobileTimeColumnWidthRem}rem`,
 										paddingInline: spacing.xs,
 									},
 								}}
@@ -451,7 +452,9 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											fontSize: typography.fontSize.sm,
 											color: colors.text,
 											borderBottom: `1px solid ${colors.border}`,
-											width: useNarrowDayColumns ? '6.2rem' : undefined,
+											width: useNarrowDayColumns
+												? `${dayColumnWidthRem}rem`
+												: undefined,
 											borderLeft: hasWeekSeparator
 												? `${weekSeparatorWidth} solid ${colors.surface}`
 												: undefined,
