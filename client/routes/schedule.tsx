@@ -2,7 +2,10 @@ import { type Handle } from 'remix/component'
 import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
-import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
+import {
+	applyBooleanSelectionToSet,
+	createRectangularGridSelectionController,
+} from '#client/grid-selection-controller.ts'
 import { getSelectionDiff } from '#client/schedule-selection-utils.ts'
 import {
 	createSlotAvailability,
@@ -233,31 +236,18 @@ export function ScheduleRoute(handle: Handle) {
 		return didChange
 	}
 
-	const pointerSelection = createPointerDragSelectionController({
+	const pointerSelection = createRectangularGridSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		getSelectionSlots: (startSlot, endSlot) => {
-			if (!snapshot) return new Set<string>()
-			const blockedSlots = getBlockedSlots()
-			return new Set(
-				getRectangularSlotSelection({
-					slots: snapshot.slots,
-					startSlot,
-					endSlot,
-				}).filter((slot) => !blockedSlots.has(slot)),
-			)
-		},
+		getAllSlots: () => snapshot?.slots ?? null,
+		includeSlot: (slot) => !getBlockedSlots().has(slot),
 		applySelection: ({ mode, slots }) => {
-			const shouldSelect = mode === 'add'
-			let changed = false
-			for (const slot of slots) {
-				const wasSelected = selectedSlots.has(slot)
-				if (wasSelected === shouldSelect) continue
-				setSlotSelection(slot, shouldSelect)
-				changed = true
-			}
-			return changed
+			return applyBooleanSelectionToSet({
+				selection: selectedSlots,
+				slots,
+				shouldSelect: mode === 'add',
+			})
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activeSlot = slot

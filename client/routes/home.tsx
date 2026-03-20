@@ -3,7 +3,10 @@ import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { navigate } from '#client/client-router.tsx'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
 import { setDocumentTitle } from '#client/document-title.ts'
-import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
+import {
+	applyBooleanSelectionToSet,
+	createRectangularGridSelectionController,
+} from '#client/grid-selection-controller.ts'
 import {
 	addDays,
 	createSlotRangeFromDateInputs,
@@ -246,29 +249,17 @@ export function HomeRoute(handle: Handle) {
 		setMessage('idle', null)
 	}
 
-	const pointerSelection = createPointerDragSelectionController({
+	const pointerSelection = createRectangularGridSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		getSelectionSlots: (startSlot, endSlot) => {
-			return new Set(
-				getRectangularSlotSelection({
-					slots: generatedSlots,
-					startSlot,
-					endSlot,
-				}),
-			)
-		},
+		getAllSlots: () => generatedSlots,
 		applySelection: ({ mode, slots }) => {
-			const shouldSelect = mode === 'add'
-			let changed = false
-			for (const slot of slots) {
-				const wasSelected = selectedSlots.has(slot)
-				if (wasSelected === shouldSelect) continue
-				setSlotSelection(slot, shouldSelect)
-				changed = true
-			}
-			return changed
+			return applyBooleanSelectionToSet({
+				selection: selectedSlots,
+				slots,
+				shouldSelect: mode === 'add',
+			})
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activeSlot = slot

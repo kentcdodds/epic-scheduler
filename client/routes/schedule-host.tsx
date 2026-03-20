@@ -2,6 +2,9 @@ import { type Handle } from 'remix/component'
 import { getBrowserTimeZone } from '#client/browser-time-zone.ts'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { renderScheduleGrid } from '#client/components/schedule-grid.tsx'
+import {
+	createRectangularGridSelectionController,
+} from '#client/grid-selection-controller.ts'
 import { createPointerDragSelectionController } from '#client/pointer-drag-selection.ts'
 import {
 	createSlotRangeFromDateInputs,
@@ -600,20 +603,11 @@ export function ScheduleHostRoute(handle: Handle) {
 		clearPreviewHoverTooltipPointerPosition()
 		return didChange
 	}
-	const hostSelection = createPointerDragSelectionController({
+	const hostSelection = createRectangularGridSelectionController({
 		requestRender: () => {
 			handle.update()
 		},
-		getSelectionSlots: (startSlot, endSlot) => {
-			if (!snapshot) return new Set<string>()
-			return new Set(
-				getRectangularSlotSelection({
-					slots: snapshot.slots,
-					startSlot,
-					endSlot,
-				}),
-			)
-		},
+		getAllSlots: () => snapshot?.slots ?? null,
 		applySelection: ({ mode, slots }) => {
 			const shouldBeBlocked = mode === 'add'
 			let changed = false
