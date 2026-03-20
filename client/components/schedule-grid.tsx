@@ -407,7 +407,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									position: 'sticky',
 									left: 0,
 									top: 0,
-									zIndex: 3,
+									zIndex: 6,
 									backgroundColor: colors.surface,
 									padding: `${spacing.sm} ${spacing.sm}`,
 									textAlign: 'left',
@@ -443,7 +443,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										css={{
 											position: 'sticky',
 											top: 0,
-											zIndex: 2,
+											zIndex: 5,
 											backgroundColor: colors.surface,
 											padding: useNarrowDayColumns
 												? `${spacing.xs} ${spacing.xs}`
@@ -495,7 +495,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									css={{
 										position: 'sticky',
 										left: 0,
-										zIndex: 1,
+										zIndex: 4,
 										backgroundColor: colors.surface,
 										padding: `${spacing.xs} ${spacing.sm}`,
 										fontSize: typography.fontSize.xs,
@@ -690,6 +690,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													placeItems: 'center',
 													position: 'relative',
 													width: '100%',
+													height: '100%',
 													minHeight: `${cellHeightRem}rem`,
 													padding: spacing.xs,
 													border: 'none',
