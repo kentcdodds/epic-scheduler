@@ -80,8 +80,8 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 	await expect(grid).toBeVisible()
 
 	const dateHeaderCell = page
-		.locator('[data-schedule-grid-shell] thead th[scope="col"]')
-		.nth(1)
+		.locator('[data-schedule-grid-mobile-header] [data-schedule-grid-day-header]')
+		.first()
 	await expect(dateHeaderCell).toBeVisible()
 
 	const gridBox = await grid.boundingBox()
@@ -99,6 +99,29 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 	})
 	expect(stickyHeaderTop).toBeGreaterThanOrEqual(0)
 	expect(stickyHeaderTop).toBeLessThanOrEqual(48)
+})
+
+test('mobile long date ranges keep page width constrained', async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.goto('/')
+	await page.getByLabel('End date').fill('2026-04-20')
+
+	const pageWidths = await page.evaluate(() => {
+		return {
+			innerWidth: window.innerWidth,
+			scrollWidth: document.documentElement.scrollWidth,
+		}
+	})
+	expect(pageWidths.scrollWidth).toBeLessThanOrEqual(pageWidths.innerWidth + 1)
+
+	const scrollerWidths = await page
+		.locator('[data-schedule-grid-scroller]')
+		.first()
+		.evaluate((element) => ({
+			clientWidth: element.clientWidth,
+			scrollWidth: element.scrollWidth,
+		}))
+	expect(scrollerWidths.scrollWidth).toBeGreaterThan(scrollerWidths.clientWidth)
 })
 
 test('changing to a smaller interval expands selected availability', async ({

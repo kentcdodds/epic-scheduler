@@ -128,6 +128,29 @@ function formatStackedDayHeader(dayKey: string, fallbackLabel: string) {
 	}
 }
 
+function renderSingleLineDayHeader(label: string) {
+	const commaIndex = label.indexOf(', ')
+	if (commaIndex < 0) return label
+	const firstLine = label.slice(0, commaIndex + 1)
+	const secondLine = label.slice(commaIndex + 2)
+	return (
+		<span
+			css={{
+				display: 'inline-flex',
+				flexWrap: 'wrap',
+				justifyContent: 'center',
+				columnGap: '0.25ch',
+				rowGap: 0,
+				maxWidth: '100%',
+				lineHeight: 1.15,
+			}}
+		>
+			<span css={{ whiteSpace: 'nowrap' }}>{firstLine}</span>
+			<span css={{ whiteSpace: 'nowrap' }}>{secondLine}</span>
+		</span>
+	)
+}
+
 function isStartOfWeek(dayKey: string) {
 	const date = parseDateInputToLocalDate(dayKey)
 	if (!date) return false
@@ -266,12 +289,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		missingSlotCellCount,
 	} = grid
 	const hasMissingSlots = missingSlotCellCount > 0
-	const desktopHorizontalOverflow = props.desktopHorizontalOverflow ?? 'page'
 	const useStackedDayHeader = props.dayHeaderLayout === 'stacked'
 	const useNarrowDayColumns = props.dayColumnWidth === 'narrow'
 	const cellSizeScale = 2 / 3
 	const dayColumnWidthRem = (useNarrowDayColumns ? 6.2 : 8) * cellSizeScale
-	const timeColumnWidthRem = (useNarrowDayColumns ? 5 : 5.6) * cellSizeScale
+	const timeColumnWidthRem = useNarrowDayColumns ? 4.4 : 4.8
 	const mobileTimeColumnWidthRem = 4.8
 	const cellHeightRem = 2.25 * cellSizeScale
 	const cellHeightMobileRem = 2.65 * cellSizeScale
@@ -299,6 +321,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 
 	function renderGridTable(visibleDayKeys: Array<string>) {
 		const fitToContent = !!props.fitToContentWidth
+		const desktopTableMinWidthRem =
+			timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem
+		const mobileTableMinWidthRem =
+			mobileTimeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem
 		const keyboardRangeInstruction =
 			!props.readOnly && props.onCellKeyboardNavigate
 				? 'Hold Shift while moving to preview a range.'
@@ -355,474 +381,589 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 			})
 		}
 
-		return (
-			<div
-				data-schedule-grid-scroller
-				on={{
-					pointerleave: props.onCellHover
-						? () => props.onCellHover?.(null)
-						: undefined,
-				}}
-				css={{
-					border: `1px solid ${colors.border}`,
-					borderRadius: radius.lg,
-					width: fitToContent ? 'fit-content' : undefined,
-					maxWidth: fitToContent ? '100%' : undefined,
-					marginInline: fitToContent ? 'auto' : undefined,
-					...(desktopHorizontalOverflow === 'local'
-						? { overflowX: 'auto' }
-						: {
-								[mq.tablet]: {
-									overflowX: 'auto',
-								},
-							}),
-					backgroundColor: colors.surface,
-					[mq.mobile]: {
-						borderRadius: 0,
-						borderInline: 'none',
-						overflowX: 'visible',
-					},
-				}}
-			>
-				<table
+		function syncMobileHeaderScroll(event: Event) {
+			const currentTarget = event.currentTarget
+			if (!(currentTarget instanceof HTMLElement)) return
+			const shell = currentTarget.closest('[data-schedule-grid-shell]')
+			if (!(shell instanceof HTMLElement)) return
+			shell.style.setProperty(
+				'--mobile-grid-scroll-left',
+				`${currentTarget.scrollLeft}px`,
+			)
+		}
+
+		function renderDayHeaderContent(dayKey: string) {
+			const stackedDayHeader = useStackedDayHeader
+				? formatStackedDayHeader(dayKey, dayLabels[dayKey] ?? dayKey)
+				: null
+			return stackedDayHeader ? (
+				<span
 					css={{
-						borderCollapse: 'separate',
-						borderSpacing: 0,
-						minWidth: fitToContent
-							? `${timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem}rem`
-							: `max(${40 * cellSizeScale}rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
-						width: fitToContent ? 'max-content' : '100%',
-						maxWidth: '100%',
-						tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
+						display: 'grid',
+						justifyItems: 'center',
+						gap: '0.1rem',
+						lineHeight: 1.15,
 					}}
 				>
-					<caption css={visuallyHiddenCss}>{tableCaption}</caption>
-					<thead>
-						<tr>
-							<th
-								scope="col"
-								css={{
-									position: 'sticky',
-									left: 0,
-									top: 0,
-									zIndex: 6,
-									backgroundColor: colors.surface,
-									padding: `${spacing.sm} ${spacing.sm}`,
-									textAlign: 'left',
-									fontSize: typography.fontSize.sm,
-									color: colors.textMuted,
-									borderBottom: `1px solid ${colors.border}`,
-									borderRight: `1px solid ${colors.border}`,
-									width: `${timeColumnWidthRem}rem`,
-									minWidth: `${timeColumnWidthRem}rem`,
-									maxWidth: `${timeColumnWidthRem}rem`,
-									whiteSpace: 'nowrap',
-									userSelect: 'none',
-									[mq.mobile]: {
-										minWidth: `${mobileTimeColumnWidthRem}rem`,
-										maxWidth: `${mobileTimeColumnWidthRem}rem`,
-										width: `${mobileTimeColumnWidthRem}rem`,
-										paddingInline: spacing.xs,
-									},
-								}}
-							>
-								Time
-							</th>
-							{visibleDayKeys.map((dayKey, dayColumnIndex) => {
-								const hasWeekSeparator =
-									props.showWeekSeparators &&
-									dayColumnIndex > 0 &&
-									isStartOfWeek(dayKey)
-								const stackedDayHeader = useStackedDayHeader
-									? formatStackedDayHeader(dayKey, dayLabels[dayKey] ?? dayKey)
-									: null
-								return (
-									<th
-										key={dayKey}
-										scope="col"
-										css={{
-											position: 'sticky',
-											top: 0,
-											zIndex: 5,
-											backgroundColor: colors.surface,
-											padding: useNarrowDayColumns
-												? `${spacing.xs} ${spacing.xs}`
-												: `${spacing.sm} ${spacing.sm}`,
-											textAlign: 'center',
-											fontSize: typography.fontSize.sm,
-											color: colors.text,
-											borderBottom: `1px solid ${colors.border}`,
-											userSelect: 'none',
-											width: useNarrowDayColumns
-												? `${dayColumnWidthRem}rem`
-												: undefined,
-											borderLeft: hasWeekSeparator
-												? `${weekSeparatorWidth} solid ${colors.surface}`
-												: undefined,
-										}}
-									>
-										{stackedDayHeader ? (
-											<span
-												css={{
-													display: 'grid',
-													justifyItems: 'center',
-													gap: '0.1rem',
-													lineHeight: 1.15,
-												}}
-											>
-												<span>{stackedDayHeader.monthDay}</span>
-												<span
-													css={{
-														fontSize: typography.fontSize.xs,
-														color: colors.textMuted,
-													}}
-												>
-													{stackedDayHeader.weekday}
-												</span>
-											</span>
-										) : (
-											dayLabels[dayKey]
-										)}
-									</th>
-								)
-							})}
-						</tr>
-					</thead>
-					<tbody>
-						{timeKeys.map((timeKey) => (
-							<tr key={timeKey}>
+					<span>{stackedDayHeader.monthDay}</span>
+					<span
+						css={{
+							fontSize: typography.fontSize.xs,
+							color: colors.textMuted,
+						}}
+					>
+						{stackedDayHeader.weekday}
+					</span>
+				</span>
+			) : (
+				renderSingleLineDayHeader(dayLabels[dayKey] ?? dayKey)
+			)
+		}
+
+		return (
+			<>
+				<div
+					data-schedule-grid-mobile-header
+					css={{
+						display: 'none',
+						[mq.mobile]: {
+							display: 'block',
+							position: 'sticky',
+							top: 0,
+							zIndex: 7,
+							backgroundColor: colors.surface,
+							border: `1px solid ${colors.border}`,
+							borderInline: 'none',
+							overflow: 'hidden',
+						},
+					}}
+				>
+					<div
+						data-schedule-grid-mobile-header-track
+						css={{
+							display: 'grid',
+							gridTemplateColumns: `${mobileTimeColumnWidthRem}rem repeat(${visibleDayKeys.length}, ${dayColumnWidthRem}rem)`,
+							width: `${mobileTableMinWidthRem}rem`,
+							transform:
+								'translateX(calc(-1 * var(--mobile-grid-scroll-left, 0px)))',
+						}}
+					>
+						<div
+							css={{
+								display: 'grid',
+								placeItems: 'center start',
+								padding: `${spacing.sm} ${spacing.xs}`,
+								fontSize: typography.fontSize.sm,
+								color: colors.textMuted,
+								backgroundColor: colors.surface,
+								borderBottom: `1px solid ${colors.border}`,
+								borderRight: `1px solid ${colors.border}`,
+								whiteSpace: 'nowrap',
+								userSelect: 'none',
+							}}
+						>
+							Time
+						</div>
+						{visibleDayKeys.map((dayKey, dayColumnIndex) => {
+							const hasWeekSeparator =
+								props.showWeekSeparators &&
+								dayColumnIndex > 0 &&
+								isStartOfWeek(dayKey)
+							return (
+								<div
+									key={`${dayKey}:mobile-header`}
+									data-schedule-grid-day-header
+									css={{
+										display: 'grid',
+										placeItems: 'center',
+										padding: useNarrowDayColumns
+											? `${spacing.xs} ${spacing.xs}`
+											: `${spacing.sm} ${spacing.sm}`,
+										textAlign: 'center',
+										fontSize: typography.fontSize.sm,
+										color: colors.text,
+										backgroundColor: colors.surface,
+										borderBottom: `1px solid ${colors.border}`,
+										borderLeft: hasWeekSeparator
+											? `${weekSeparatorWidth} solid ${colors.surface}`
+											: undefined,
+										userSelect: 'none',
+									}}
+								>
+									{renderDayHeaderContent(dayKey)}
+								</div>
+							)
+						})}
+					</div>
+				</div>
+				<div
+					data-schedule-grid-scroller
+					on={{
+						pointerleave: props.onCellHover
+							? () => props.onCellHover?.(null)
+							: undefined,
+						scroll: syncMobileHeaderScroll,
+					}}
+					css={{
+						border: `1px solid ${colors.border}`,
+						borderRadius: radius.lg,
+						overflow: 'hidden',
+						overflowX: 'auto',
+						overflowY: 'hidden',
+						width: fitToContent ? 'fit-content' : undefined,
+						maxWidth: fitToContent ? '100%' : undefined,
+						marginInline: fitToContent ? 'auto' : undefined,
+						backgroundColor: colors.surface,
+						[mq.mobile]: {
+							borderRadius: 0,
+							borderInline: 'none',
+							borderTop: 'none',
+							overflowX: 'auto',
+							overflowY: 'visible',
+							WebkitOverflowScrolling: 'touch',
+						},
+					}}
+				>
+					<table
+						css={{
+							borderCollapse: 'separate',
+							borderSpacing: 0,
+							minWidth: fitToContent
+								? `${desktopTableMinWidthRem}rem`
+								: `max(${40 * cellSizeScale}rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
+							width: fitToContent ? 'max-content' : '100%',
+							maxWidth: '100%',
+							tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
+							[mq.mobile]: {
+								width: `${mobileTableMinWidthRem}rem`,
+								minWidth: `${mobileTableMinWidthRem}rem`,
+								maxWidth: 'none',
+							},
+						}}
+					>
+						<caption css={visuallyHiddenCss}>{tableCaption}</caption>
+						<thead
+							css={{
+								[mq.mobile]: {
+									display: 'none',
+								},
+							}}
+						>
+							<tr>
 								<th
-									scope="row"
+									scope="col"
 									css={{
 										position: 'sticky',
 										left: 0,
-										zIndex: 4,
+										top: 0,
+										zIndex: 6,
 										backgroundColor: colors.surface,
-										padding: `${spacing.xs} ${spacing.sm}`,
-										fontSize: typography.fontSize.xs,
-										color: colors.textMuted,
-										borderRight: `1px solid ${colors.border}`,
-										borderBottom: `1px solid ${colors.border}`,
+										padding: `${spacing.sm} ${spacing.sm}`,
 										textAlign: 'left',
-										fontWeight: typography.fontWeight.medium,
+										fontSize: typography.fontSize.sm,
+										color: colors.textMuted,
+										borderBottom: `1px solid ${colors.border}`,
+										borderRight: `1px solid ${colors.border}`,
 										width: `${timeColumnWidthRem}rem`,
 										minWidth: `${timeColumnWidthRem}rem`,
 										maxWidth: `${timeColumnWidthRem}rem`,
-									whiteSpace: 'nowrap',
-									userSelect: 'none',
-									[mq.mobile]: {
-										width: `${mobileTimeColumnWidthRem}rem`,
-										minWidth: `${mobileTimeColumnWidthRem}rem`,
-										maxWidth: `${mobileTimeColumnWidthRem}rem`,
-										paddingInline: spacing.xs,
-									},
+										whiteSpace: 'nowrap',
+										userSelect: 'none',
+										[mq.mobile]: {
+											minWidth: `${mobileTimeColumnWidthRem}rem`,
+											maxWidth: `${mobileTimeColumnWidthRem}rem`,
+											width: `${mobileTimeColumnWidthRem}rem`,
+											paddingInline: spacing.xs,
+										},
 									}}
 								>
-									{timeLabels[timeKey]}
+									Time
 								</th>
 								{visibleDayKeys.map((dayKey, dayColumnIndex) => {
-									const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
 									const hasWeekSeparator =
 										props.showWeekSeparators &&
 										dayColumnIndex > 0 &&
 										isStartOfWeek(dayKey)
-									if (!slot) {
-										const missingSlotExplanation = `No slot at ${timeLabels[timeKey]} on ${dayLabels[dayKey]}. This can happen around daylight-saving transitions or at schedule range boundaries.`
+									return (
+										<th
+											key={dayKey}
+											scope="col"
+											css={{
+												position: 'sticky',
+												top: 0,
+												zIndex: 5,
+												backgroundColor: colors.surface,
+												padding: useNarrowDayColumns
+													? `${spacing.xs} ${spacing.xs}`
+													: `${spacing.sm} ${spacing.sm}`,
+												textAlign: 'center',
+												fontSize: typography.fontSize.sm,
+												color: colors.text,
+												borderBottom: `1px solid ${colors.border}`,
+												userSelect: 'none',
+												width: useNarrowDayColumns
+													? `${dayColumnWidthRem}rem`
+													: undefined,
+												borderLeft: hasWeekSeparator
+													? `${weekSeparatorWidth} solid ${colors.surface}`
+													: undefined,
+											}}
+										>
+											{renderDayHeaderContent(dayKey)}
+										</th>
+									)
+								})}
+							</tr>
+						</thead>
+						<tbody>
+							{timeKeys.map((timeKey) => (
+								<tr key={timeKey}>
+									<th
+										scope="row"
+										css={{
+											position: 'sticky',
+											left: 0,
+											zIndex: 4,
+											backgroundColor: colors.surface,
+											padding: `0 ${spacing.sm}`,
+											fontSize: typography.fontSize.xs,
+											color: colors.textMuted,
+											borderRight: `1px solid ${colors.border}`,
+											borderBottom: `1px solid ${colors.border}`,
+											textAlign: 'left',
+											fontWeight: typography.fontWeight.medium,
+											width: `${timeColumnWidthRem}rem`,
+											minWidth: `${timeColumnWidthRem}rem`,
+											maxWidth: `${timeColumnWidthRem}rem`,
+											height: `${cellHeightRem}rem`,
+											minHeight: `${cellHeightRem}rem`,
+											whiteSpace: 'nowrap',
+											userSelect: 'none',
+											[mq.mobile]: {
+												width: `${mobileTimeColumnWidthRem}rem`,
+												minWidth: `${mobileTimeColumnWidthRem}rem`,
+												maxWidth: `${mobileTimeColumnWidthRem}rem`,
+												height: `${cellHeightMobileRem}rem`,
+												minHeight: `${cellHeightMobileRem}rem`,
+												paddingInline: spacing.xs,
+											},
+										}}
+									>
+										{timeLabels[timeKey]}
+									</th>
+									{visibleDayKeys.map((dayKey, dayColumnIndex) => {
+										const slot = cellByDayAndTime[dayKey]?.[timeKey] ?? null
+										const hasWeekSeparator =
+											props.showWeekSeparators &&
+											dayColumnIndex > 0 &&
+											isStartOfWeek(dayKey)
+										if (!slot) {
+											const missingSlotExplanation = `No slot at ${timeLabels[timeKey]} on ${dayLabels[dayKey]}. This can happen around daylight-saving transitions or at schedule range boundaries.`
+											return (
+												<td
+													key={`${dayKey}:${timeKey}:empty`}
+													data-missing-slot-cell="true"
+													title={missingSlotExplanation}
+													css={{
+														padding: 0,
+														borderBottom: `1px solid ${colors.border}`,
+														borderRight: `1px solid ${colors.border}`,
+														borderLeft: hasWeekSeparator
+															? `${weekSeparatorWidth} solid ${colors.surface}`
+															: undefined,
+														backgroundColor:
+															'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
+														height: `${cellHeightRem}rem`,
+														[mq.mobile]: {
+															width: `${dayColumnWidthRem}rem`,
+															minWidth: `${dayColumnWidthRem}rem`,
+															maxWidth: `${dayColumnWidthRem}rem`,
+															height: `${cellHeightMobileRem}rem`,
+														},
+													}}
+												>
+													<span
+														aria-label={missingSlotExplanation}
+														css={{
+															display: 'grid',
+															placeItems: 'center',
+															minHeight: `${cellHeightRem}rem`,
+															color: colors.textMuted,
+															fontSize: typography.fontSize.xs,
+															fontWeight: typography.fontWeight.medium,
+															letterSpacing: '0.04em',
+															userSelect: 'none',
+															[mq.mobile]: {
+																minHeight: `${cellHeightMobileRem}rem`,
+															},
+														}}
+													>
+														N/A
+													</span>
+												</td>
+											)
+										}
+
+										const availability = props.slotAvailability[slot] ?? {
+											count: 0,
+											availableNames: [],
+										}
+										const isSelected = props.selectedSlots.has(slot)
+										const isDisabled = props.disabledSlots?.has(slot) ?? false
+										const isHighlighted =
+											props.highlightedSlots?.has(slot) ?? false
+										const isPendingSelection =
+											props.selectionSlots?.has(slot) ?? false
+										const isOutlined = props.outlinedSlots?.has(slot) ?? false
+										const isAccented = props.accentedSlots?.has(slot) ?? false
+										const isRangeAnchor = props.rangeAnchor === slot
+										const isActive = props.activeSlot === slot
+										const background = getCellBackground({
+											count: availability.count,
+											maxCount: props.maxAvailabilityCount,
+											isSelected,
+											isDisabled,
+											isHighlighted,
+											selectedBackground: props.selectedBackground,
+										})
+										const slotLabel = formatSlotLabel(slot, 'long')
+										const availabilitySelectionLabel = toSelectionLabel({
+											selected: isSelected,
+											selectedSlotLabel: props.selectedSlotLabel,
+											unselectedSlotLabel: props.unselectedSlotLabel,
+										})
+										const attendeeLabel =
+											availability.count > 0
+												? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
+												: 'no attendees available'
+										const attendeeNamesLabel =
+											availability.availableNames.length === 0
+												? ''
+												: availability.availableNames.length <= 3
+													? `, available attendees: ${availability.availableNames.join(', ')}`
+													: `, available attendees include ${availability.availableNames
+															.slice(0, 3)
+															.join(', ')}, and ${
+															availability.availableNames.length - 3
+														} more`
+										const highlightedLabel =
+											isHighlighted && props.highlightedSlotLabel
+												? `, ${props.highlightedSlotLabel}`
+												: ''
+										const pendingSelectionLabel =
+											isPendingSelection && props.selectionSlotLabel
+												? `, ${props.selectionSlotLabel}`
+												: isPendingSelection
+													? ', included in pending selection'
+													: ''
+										const disabledLabel = isDisabled
+											? ', unavailable for scheduling'
+											: ''
+										const outlinedSelectionLabel =
+											isOutlined && props.outlinedSlotLabel
+												? `, ${props.outlinedSlotLabel}`
+												: isOutlined
+													? ', selected range'
+													: ''
+										const accentedSelectionLabel =
+											isAccented && props.accentedSlotLabel
+												? `, ${props.accentedSlotLabel}`
+												: isAccented
+													? ', highlighted for focused attendee'
+													: ''
+										const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${outlinedSelectionLabel}${accentedSelectionLabel}${disabledLabel}`
+										const interactive = !props.readOnly && !isDisabled
+										const pendingSelectionOverlay = isPendingSelection
+											? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
+											: null
+										const accentedSlotRing = isAccented
+											? `inset 0 0 0 2px ${colors.success}`
+											: null
+										const outlinedSlotRing =
+											isOutlined && !isAccented
+												? `inset 0 0 0 2px ${colors.primary}`
+												: null
+										const activeSlotRing =
+											isRangeAnchor || isActive
+												? `inset 0 0 0 2px ${colors.primary}`
+												: null
+										const combinedBoxShadow = [
+											pendingSelectionOverlay,
+											accentedSlotRing,
+											outlinedSlotRing,
+											activeSlotRing,
+										]
+											.filter((value): value is string => !!value)
+											.join(', ')
+										const shouldShowDragHandle =
+											!!props.onCellDragHandlePointerDown &&
+											interactive &&
+											isActive
+
 										return (
 											<td
-												key={`${dayKey}:${timeKey}:empty`}
-												data-missing-slot-cell="true"
-												title={missingSlotExplanation}
+												key={`${dayKey}:${timeKey}`}
 												css={{
 													padding: 0,
+													height: `${cellHeightRem}rem`,
 													borderBottom: `1px solid ${colors.border}`,
 													borderRight: `1px solid ${colors.border}`,
 													borderLeft: hasWeekSeparator
 														? `${weekSeparatorWidth} solid ${colors.surface}`
 														: undefined,
-													backgroundColor:
-														'color-mix(in srgb, var(--color-background) 88%, var(--color-surface))',
-													height: `${cellHeightRem}rem`,
+													...(shouldShowDragHandle
+														? {
+																position: 'relative' as const,
+																zIndex: 3,
+																overflow: 'visible',
+															}
+														: {}),
 													[mq.mobile]: {
+														width: `${dayColumnWidthRem}rem`,
+														minWidth: `${dayColumnWidthRem}rem`,
+														maxWidth: `${dayColumnWidthRem}rem`,
 														height: `${cellHeightMobileRem}rem`,
 													},
 												}}
 											>
-												<span
-													aria-label={missingSlotExplanation}
+												<button
+													type="button"
+													data-slot={slot}
+													aria-label={ariaLabel}
+													aria-pressed={
+														props.readOnly || isDisabled ? undefined : isSelected
+													}
+													aria-disabled={isDisabled ? 'true' : undefined}
+													title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}`}
 													css={{
 														display: 'grid',
 														placeItems: 'center',
-														minHeight: `${cellHeightRem}rem`,
-														color: colors.textMuted,
+														position: 'relative',
+														width: '100%',
+														height: `${cellHeightRem}rem`,
+														padding: spacing.xs,
+														border: 'none',
+														background,
+														backgroundImage: isDisabled
+															? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-text) 11%, transparent) 0 5px, transparent 5px 10px)'
+															: undefined,
+														color: colors.text,
+														cursor:
+															props.readOnly || isDisabled
+																? 'default'
+																: 'pointer',
+														userSelect: 'none',
 														fontSize: typography.fontSize.xs,
 														fontWeight: typography.fontWeight.medium,
-														letterSpacing: '0.04em',
-														userSelect: 'none',
+														boxShadow: combinedBoxShadow || undefined,
+														opacity: isDisabled ? 0.58 : 1,
+														'&:focus-visible': {
+															outline: `2px solid ${colors.primary}`,
+															outlineOffset: '-2px',
+														},
 														[mq.mobile]: {
-															minHeight: `${cellHeightMobileRem}rem`,
+															height: `${cellHeightMobileRem}rem`,
+															fontSize: typography.fontSize.sm,
 														},
 													}}
+													on={{
+														pointerdown:
+															interactive && props.onCellPointerDown
+																? (event) =>
+																		props.onCellPointerDown?.(slot, event)
+																: undefined,
+														pointerenter:
+															interactive &&
+															(props.onCellPointerEnter || props.onCellHover)
+																? (event) => {
+																		props.onCellPointerEnter?.(slot, event)
+																		props.onCellHover?.(slot)
+																	}
+																: props.onCellHover
+																	? () => props.onCellHover?.(slot)
+																	: undefined,
+														pointermove: props.onCellPointerMove
+															? (event) => props.onCellPointerMove?.(slot, event)
+															: undefined,
+														pointerleave: props.onCellHover
+															? (event) => {
+																	if (!shouldClearHoverOnPointerLeave(event)) {
+																		return
+																	}
+																	props.onCellHover?.(null)
+																}
+															: undefined,
+														pointerup: props.onCellPointerUp
+															? (event) => props.onCellPointerUp?.(slot, event)
+															: undefined,
+														click: props.onCellClick
+															? (event) => props.onCellClick?.(slot, event)
+															: undefined,
+														focus: props.onCellFocus
+															? () => props.onCellFocus?.(slot)
+															: undefined,
+														blur: props.onCellHover
+															? () => props.onCellHover?.(null)
+															: undefined,
+														keydown: handleCellKeyDown,
+													}}
 												>
-													N/A
-												</span>
+													<span css={{ position: 'relative', zIndex: 1 }}>
+														{availability.count > 0 ? availability.count : ''}
+													</span>
+													{shouldShowDragHandle ? (
+														<span
+															aria-hidden="true"
+															on={{
+																pointerdown: (event) => {
+																	event.preventDefault()
+																	event.stopPropagation()
+																	props.onCellDragHandlePointerDown?.(slot, event)
+																},
+																click: (event) => {
+																	event.preventDefault()
+																	event.stopPropagation()
+																},
+															}}
+															css={{
+																position: 'absolute',
+																right: 0,
+																bottom: 0,
+																transform: 'translate(50%, 50%)',
+																width: `${1.5 * cellSizeScale}rem`,
+																height: `${1.5 * cellSizeScale}rem`,
+																display: 'grid',
+																placeItems: 'center',
+																zIndex: 2,
+																touchAction: 'none',
+																pointerEvents: 'auto',
+																cursor: 'nwse-resize',
+															}}
+														>
+															<span
+																css={{
+																	width: '0.5rem',
+																	height: '0.5rem',
+																	borderRadius: radius.full,
+																	backgroundColor: colors.primary,
+																	border: `2px solid ${colors.surface}`,
+																	boxShadow:
+																		'0 0 0 1px color-mix(in srgb, var(--color-primary) 65%, transparent)',
+																	pointerEvents: 'none',
+																}}
+															/>
+														</span>
+													) : null}
+												</button>
 											</td>
 										)
-									}
-
-									const availability = props.slotAvailability[slot] ?? {
-										count: 0,
-										availableNames: [],
-									}
-									const isSelected = props.selectedSlots.has(slot)
-									const isDisabled = props.disabledSlots?.has(slot) ?? false
-									const isHighlighted =
-										props.highlightedSlots?.has(slot) ?? false
-									const isPendingSelection =
-										props.selectionSlots?.has(slot) ?? false
-									const isOutlined = props.outlinedSlots?.has(slot) ?? false
-									const isAccented = props.accentedSlots?.has(slot) ?? false
-									const isRangeAnchor = props.rangeAnchor === slot
-									const isActive = props.activeSlot === slot
-									const background = getCellBackground({
-										count: availability.count,
-										maxCount: props.maxAvailabilityCount,
-										isSelected,
-										isDisabled,
-										isHighlighted,
-										selectedBackground: props.selectedBackground,
-									})
-									const slotLabel = formatSlotLabel(slot, 'long')
-									const availabilitySelectionLabel = toSelectionLabel({
-										selected: isSelected,
-										selectedSlotLabel: props.selectedSlotLabel,
-										unselectedSlotLabel: props.unselectedSlotLabel,
-									})
-									const attendeeLabel =
-										availability.count > 0
-											? `${availability.count} attendee${availability.count === 1 ? '' : 's'} available`
-											: 'no attendees available'
-									const attendeeNamesLabel =
-										availability.availableNames.length === 0
-											? ''
-											: availability.availableNames.length <= 3
-												? `, available attendees: ${availability.availableNames.join(', ')}`
-												: `, available attendees include ${availability.availableNames
-														.slice(0, 3)
-														.join(', ')}, and ${
-														availability.availableNames.length - 3
-													} more`
-									const highlightedLabel =
-										isHighlighted && props.highlightedSlotLabel
-											? `, ${props.highlightedSlotLabel}`
-											: ''
-									const pendingSelectionLabel =
-										isPendingSelection && props.selectionSlotLabel
-											? `, ${props.selectionSlotLabel}`
-											: isPendingSelection
-												? ', included in pending selection'
-												: ''
-									const disabledLabel = isDisabled
-										? ', unavailable for scheduling'
-										: ''
-									const outlinedSelectionLabel =
-										isOutlined && props.outlinedSlotLabel
-											? `, ${props.outlinedSlotLabel}`
-											: isOutlined
-												? ', selected range'
-												: ''
-									const accentedSelectionLabel =
-										isAccented && props.accentedSlotLabel
-											? `, ${props.accentedSlotLabel}`
-											: isAccented
-												? ', highlighted for focused attendee'
-												: ''
-									const ariaLabel = `${slotLabel}, ${availabilitySelectionLabel}, ${attendeeLabel}${attendeeNamesLabel}${highlightedLabel}${pendingSelectionLabel}${outlinedSelectionLabel}${accentedSelectionLabel}${disabledLabel}`
-									const interactive = !props.readOnly && !isDisabled
-									const pendingSelectionOverlay = isPendingSelection
-										? `inset 0 0 0 999px color-mix(in srgb, ${colors.primary} 14%, transparent)`
-										: null
-									const accentedSlotRing = isAccented
-										? `inset 0 0 0 2px ${colors.success}`
-										: null
-									const outlinedSlotRing =
-										isOutlined && !isAccented
-											? `inset 0 0 0 2px ${colors.primary}`
-											: null
-									const activeSlotRing =
-										isRangeAnchor || isActive
-											? `inset 0 0 0 2px ${colors.primary}`
-											: null
-									const combinedBoxShadow = [
-										pendingSelectionOverlay,
-										accentedSlotRing,
-										outlinedSlotRing,
-										activeSlotRing,
-									]
-										.filter((value): value is string => !!value)
-										.join(', ')
-									const shouldShowDragHandle =
-										!!props.onCellDragHandlePointerDown &&
-										interactive &&
-										isActive
-
-									return (
-										<td
-											key={`${dayKey}:${timeKey}`}
-											css={{
-												padding: 0,
-												borderBottom: `1px solid ${colors.border}`,
-												borderRight: `1px solid ${colors.border}`,
-												borderLeft: hasWeekSeparator
-													? `${weekSeparatorWidth} solid ${colors.surface}`
-													: undefined,
-												...(shouldShowDragHandle
-													? {
-															position: 'relative' as const,
-															zIndex: 3,
-															overflow: 'visible',
-														}
-													: {}),
-											}}
-										>
-											<button
-												type="button"
-												data-slot={slot}
-												aria-label={ariaLabel}
-												aria-pressed={
-													props.readOnly || isDisabled ? undefined : isSelected
-												}
-												aria-disabled={isDisabled ? 'true' : undefined}
-												title={`${slotLabel}\n${attendeeLabel}${isDisabled ? '\nUnavailable for scheduling' : ''}`}
-												css={{
-													display: 'grid',
-													placeItems: 'center',
-													position: 'relative',
-													width: '100%',
-													height: '100%',
-													minHeight: `${cellHeightRem}rem`,
-													padding: spacing.xs,
-													border: 'none',
-													background,
-													backgroundImage: isDisabled
-														? 'repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-text) 11%, transparent) 0 5px, transparent 5px 10px)'
-														: undefined,
-													color: colors.text,
-													cursor:
-														props.readOnly || isDisabled
-															? 'default'
-															: 'pointer',
-													userSelect: 'none',
-													fontSize: typography.fontSize.xs,
-													fontWeight: typography.fontWeight.medium,
-													boxShadow: combinedBoxShadow || undefined,
-													opacity: isDisabled ? 0.58 : 1,
-													'&:focus-visible': {
-														outline: `2px solid ${colors.primary}`,
-														outlineOffset: '-2px',
-													},
-													[mq.mobile]: {
-														minHeight: `${cellHeightMobileRem}rem`,
-														fontSize: typography.fontSize.sm,
-													},
-												}}
-												on={{
-													pointerdown:
-														interactive && props.onCellPointerDown
-															? (event) =>
-																	props.onCellPointerDown?.(slot, event)
-															: undefined,
-													pointerenter:
-														interactive &&
-														(props.onCellPointerEnter || props.onCellHover)
-															? (event) => {
-																	props.onCellPointerEnter?.(slot, event)
-																	props.onCellHover?.(slot)
-																}
-															: props.onCellHover
-																? () => props.onCellHover?.(slot)
-																: undefined,
-													pointermove: props.onCellPointerMove
-														? (event) => props.onCellPointerMove?.(slot, event)
-														: undefined,
-													pointerleave: props.onCellHover
-														? (event) => {
-																if (!shouldClearHoverOnPointerLeave(event)) {
-																	return
-																}
-																props.onCellHover?.(null)
-															}
-														: undefined,
-													pointerup: props.onCellPointerUp
-														? (event) => props.onCellPointerUp?.(slot, event)
-														: undefined,
-													click: props.onCellClick
-														? (event) => props.onCellClick?.(slot, event)
-														: undefined,
-													focus: props.onCellFocus
-														? () => props.onCellFocus?.(slot)
-														: undefined,
-													blur: props.onCellHover
-														? () => props.onCellHover?.(null)
-														: undefined,
-													keydown: handleCellKeyDown,
-												}}
-											>
-												<span css={{ position: 'relative', zIndex: 1 }}>
-													{availability.count > 0 ? availability.count : ''}
-												</span>
-												{shouldShowDragHandle ? (
-													<span
-														aria-hidden="true"
-														on={{
-															pointerdown: (event) => {
-																event.preventDefault()
-																event.stopPropagation()
-																props.onCellDragHandlePointerDown?.(slot, event)
-															},
-															click: (event) => {
-																event.preventDefault()
-																event.stopPropagation()
-															},
-														}}
-														css={{
-															position: 'absolute',
-															right: 0,
-															bottom: 0,
-															transform: 'translate(50%, 50%)',
-															width: `${1.5 * cellSizeScale}rem`,
-															height: `${1.5 * cellSizeScale}rem`,
-															display: 'grid',
-															placeItems: 'center',
-															zIndex: 2,
-															touchAction: 'none',
-															pointerEvents: 'auto',
-															cursor: 'nwse-resize',
-														}}
-													>
-														<span
-															css={{
-																width: '0.5rem',
-																height: '0.5rem',
-																borderRadius: radius.full,
-																backgroundColor: colors.primary,
-																border: `2px solid ${colors.surface}`,
-																boxShadow:
-																	'0 0 0 1px color-mix(in srgb, var(--color-primary) 65%, transparent)',
-																pointerEvents: 'none',
-															}}
-														/>
-													</span>
-												) : null}
-											</button>
-										</td>
-									)
-								})}
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
+									})}
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</>
 		)
 	}
 
@@ -838,13 +979,11 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		<div
 			data-schedule-grid-shell
 			css={{
+				'--mobile-grid-scroll-left': '0px',
 				display: 'grid',
 				gap: spacing.sm,
 				opacity: props.pending ? 0.6 : 1,
 				transition: 'opacity 120ms ease',
-				[mq.mobile]: {
-					marginInline: 'calc(50% - 50vw)',
-				},
 			}}
 		>
 			{hasMissingSlots ? (
