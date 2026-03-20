@@ -133,6 +133,53 @@ export function createSlotRangeFromDateInputs(params: {
 	}
 }
 
+export function remapSelectedSlotsForIntervalChange(params: {
+	previousSelectedSlots: ReadonlySet<string>
+	previousIntervalMinutes: number
+	nextSlots: Array<string>
+	nextIntervalMinutes: number
+}) {
+	const nextSlotSet = new Set(params.nextSlots)
+	if (params.previousSelectedSlots.size === 0) {
+		return new Set<string>()
+	}
+	if (params.nextIntervalMinutes >= params.previousIntervalMinutes) {
+		return new Set(
+			Array.from(params.previousSelectedSlots).filter((slot) =>
+				nextSlotSet.has(slot),
+			),
+		)
+	}
+
+	const previousIntervalMs = params.previousIntervalMinutes * 60_000
+	const selectedRanges = Array.from(params.previousSelectedSlots)
+		.map((slot) => {
+			const startMs = Date.parse(slot)
+			if (Number.isNaN(startMs)) return null
+			return {
+				startMs,
+				endMs: startMs + previousIntervalMs,
+			}
+		})
+		.filter(
+			(value): value is { startMs: number; endMs: number } => value !== null,
+		)
+
+	const remappedSelection = new Set<string>()
+	for (const slot of params.nextSlots) {
+		const slotMs = Date.parse(slot)
+		if (Number.isNaN(slotMs)) continue
+		if (
+			selectedRanges.some(
+				(range) => slotMs >= range.startMs && slotMs < range.endMs,
+			)
+		) {
+			remappedSelection.add(slot)
+		}
+	}
+	return remappedSelection
+}
+
 export function buildGridModel(slots: Array<string>): GridModel {
 	const dayKeys: Array<string> = []
 	const dayLabels: Record<string, string> = {}

@@ -9,6 +9,7 @@ import {
 	createSlotRangeFromDateInputs,
 	formatDateInputValue,
 	getRectangularSlotSelection,
+	remapSelectedSlotsForIntervalChange,
 } from '#client/schedule-utils.ts'
 import {
 	colors,
@@ -63,7 +64,7 @@ export function HomeRoute(handle: Handle) {
 	const hostNameRequiredMessage =
 		'Host name is required before making a submission.'
 
-	function syncSlots() {
+	function syncSlots(previousIntervalMinutes = intervalMinutes) {
 		const nextRange = createSlotRangeFromDateInputs({
 			startDateInput,
 			endDateInput,
@@ -79,18 +80,24 @@ export function HomeRoute(handle: Handle) {
 			return
 		}
 
+		selectedSlots = remapSelectedSlotsForIntervalChange({
+			previousSelectedSlots: selectedSlots,
+			previousIntervalMinutes,
+			nextSlots: generatedSlots,
+			nextIntervalMinutes: intervalMinutes,
+		})
 		const validSlots = new Set(generatedSlots)
-		selectedSlots = new Set(
-			Array.from(selectedSlots).filter((slot) => validSlots.has(slot)),
-		)
 		if (keyboardRangeAnchor && !validSlots.has(keyboardRangeAnchor)) {
 			keyboardRangeAnchor = null
 			keyboardRangeAction = null
 			keyboardRangeSlots = new Set<string>()
 		} else if (keyboardRangeSlots.size > 0) {
-			keyboardRangeSlots = new Set(
-				Array.from(keyboardRangeSlots).filter((slot) => validSlots.has(slot)),
-			)
+			keyboardRangeSlots = remapSelectedSlotsForIntervalChange({
+				previousSelectedSlots: keyboardRangeSlots,
+				previousIntervalMinutes,
+				nextSlots: generatedSlots,
+				nextIntervalMinutes: intervalMinutes,
+			})
 			if (keyboardRangeSlots.size === 0) {
 				keyboardRangeAnchor = null
 				keyboardRangeAction = null
@@ -159,12 +166,13 @@ export function HomeRoute(handle: Handle) {
 		endDateInput?: string
 		intervalMinutes?: number
 	}) {
+		const previousIntervalMinutes = intervalMinutes
 		if (next.startDateInput !== undefined) startDateInput = next.startDateInput
 		if (next.endDateInput !== undefined) endDateInput = next.endDateInput
 		if (next.intervalMinutes !== undefined)
 			intervalMinutes = next.intervalMinutes
 		try {
-			syncSlots()
+			syncSlots(previousIntervalMinutes)
 			setMessage('idle', null)
 		} catch (error) {
 			const text = error instanceof Error ? error.message : 'Invalid range.'
@@ -369,7 +377,6 @@ export function HomeRoute(handle: Handle) {
 		lastPointerWasTouch = event.pointerType === 'touch'
 		clearKeyboardRangeSelection()
 		if (event.pointerType === 'touch') return
-		if (!validateRequiredSubmissionFields()) return
 		pointerSelection.startSelection({
 			slot,
 			event,
@@ -380,7 +387,6 @@ export function HomeRoute(handle: Handle) {
 	function onCellDragHandlePointerDown(slot: string, event: PointerEvent) {
 		lastPointerWasTouch = event.pointerType === 'touch'
 		clearKeyboardRangeSelection()
-		if (!validateRequiredSubmissionFields()) return
 		pointerSelection.startSelection({
 			slot,
 			event,
@@ -399,7 +405,6 @@ export function HomeRoute(handle: Handle) {
 	function onCellClick(slot: string, event: MouseEvent) {
 		if (event.detail === 0) return
 		if (!lastPointerWasTouch) return
-		if (!validateRequiredSubmissionFields()) return
 		toggleSlotSelection(slot)
 	}
 
@@ -579,6 +584,148 @@ export function HomeRoute(handle: Handle) {
 						css={{
 							display: 'grid',
 							gap: spacing.md,
+							gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+							[mq.mobile]: {
+								gridTemplateColumns: '1fr',
+							},
+						}}
+					>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Slot interval
+							</span>
+							<select
+								name="interval"
+								on={{
+									change: (event) => {
+										const value = Number.parseInt(event.currentTarget.value, 10)
+										updateDateRange({ intervalMinutes: value })
+									},
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							>
+								<option value="15" selected={intervalMinutes === 15}>
+									15 minutes
+								</option>
+								<option value="30" selected={intervalMinutes === 30}>
+									30 minutes
+								</option>
+								<option value="60" selected={intervalMinutes === 60}>
+									1 hour
+								</option>
+							</select>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								Start date
+							</span>
+							<input
+								type="date"
+								name="startDate"
+								value={startDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											startDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+						<label css={{ display: 'grid', gap: spacing.xs }}>
+							<span
+								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
+							>
+								End date
+							</span>
+							<input
+								type="date"
+								name="endDate"
+								value={endDateInput}
+								on={{
+									change: (event) =>
+										updateDateRange({
+											endDateInput: event.currentTarget.value,
+										}),
+								}}
+								css={{
+									padding: `${spacing.sm} ${spacing.md}`,
+									borderRadius: radius.md,
+									border: `1px solid ${colors.border}`,
+									backgroundColor: colors.background,
+									color: colors.text,
+								}}
+							/>
+						</label>
+					</div>
+
+					<div
+						css={{
+							display: 'flex',
+							flexWrap: 'wrap',
+							gap: spacing.sm,
+							alignItems: 'center',
+						}}
+					>
+						<p
+							role="status"
+							aria-live="polite"
+							css={{ margin: 0, color: secondaryTextColor }}
+						>
+							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
+						</p>
+						<p css={{ margin: 0, color: secondaryTextColor }}>
+							Times are shown in your browser timezone: {browserTimeZone}
+						</p>
+					</div>
+
+					{renderScheduleGrid({
+						slots: generatedSlots,
+						selectedSlots,
+						selectionSlots: pendingSelectionSlots,
+						selectionSlotLabel: pendingSelectionLabel,
+						slotAvailability,
+						maxAvailabilityCount: 1,
+						activeSlot,
+						rangeAnchor: gridRangeAnchor,
+						onCellPointerDown,
+						onCellDragHandlePointerDown: onCellDragHandlePointerDown,
+						onCellPointerEnter: (slot, _event) => {
+							onCellPointerEnter(slot)
+						},
+						onCellPointerUp: (_slot, _event) => {
+							onCellPointerUp()
+						},
+						onCellClick: (slot, event) => {
+							onCellClick(slot, event)
+						},
+						onCellKeyboardActivate: onCellKeyboardActivate,
+						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
+							updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
+						},
+						onCellFocus,
+					})}
+
+					<div
+						css={{
+							display: 'grid',
+							gap: spacing.md,
 							gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
 							[mq.mobile]: {
 								gridTemplateColumns: '1fr',
@@ -694,143 +841,6 @@ export function HomeRoute(handle: Handle) {
 							</p>
 						</label>
 					</div>
-
-					<div
-						css={{
-							display: 'grid',
-							gap: spacing.md,
-							gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-							[mq.mobile]: {
-								gridTemplateColumns: '1fr',
-							},
-						}}
-					>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								Slot interval
-							</span>
-							<select
-								name="interval"
-								value={String(intervalMinutes)}
-								on={{
-									change: (event) => {
-										const value = Number.parseInt(event.currentTarget.value, 10)
-										updateDateRange({ intervalMinutes: value })
-									},
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							>
-								<option value="15">15 minutes</option>
-								<option value="30">30 minutes</option>
-								<option value="60">1 hour</option>
-							</select>
-						</label>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								Start date
-							</span>
-							<input
-								type="date"
-								name="startDate"
-								value={startDateInput}
-								on={{
-									change: (event) =>
-										updateDateRange({
-											startDateInput: event.currentTarget.value,
-										}),
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							/>
-						</label>
-						<label css={{ display: 'grid', gap: spacing.xs }}>
-							<span
-								css={{ fontSize: typography.fontSize.sm, color: colors.text }}
-							>
-								End date
-							</span>
-							<input
-								type="date"
-								name="endDate"
-								value={endDateInput}
-								on={{
-									change: (event) =>
-										updateDateRange({
-											endDateInput: event.currentTarget.value,
-										}),
-								}}
-								css={{
-									padding: `${spacing.sm} ${spacing.md}`,
-									borderRadius: radius.md,
-									border: `1px solid ${colors.border}`,
-									backgroundColor: colors.background,
-									color: colors.text,
-								}}
-							/>
-						</label>
-					</div>
-
-					<div
-						css={{
-							display: 'flex',
-							flexWrap: 'wrap',
-							gap: spacing.sm,
-							alignItems: 'center',
-						}}
-					>
-						<p
-							role="status"
-							aria-live="polite"
-							css={{ margin: 0, color: secondaryTextColor }}
-						>
-							{selectedCount} selected slot{selectedCount === 1 ? '' : 's'}
-						</p>
-						<p css={{ margin: 0, color: secondaryTextColor }}>
-							Times are shown in your browser timezone: {browserTimeZone}
-						</p>
-					</div>
-
-					{renderScheduleGrid({
-						slots: generatedSlots,
-						selectedSlots,
-						selectionSlots: pendingSelectionSlots,
-						selectionSlotLabel: pendingSelectionLabel,
-						slotAvailability,
-						maxAvailabilityCount: 1,
-						activeSlot,
-						rangeAnchor: gridRangeAnchor,
-						onCellPointerDown,
-						onCellDragHandlePointerDown: onCellDragHandlePointerDown,
-						onCellPointerEnter: (slot, _event) => {
-							onCellPointerEnter(slot)
-						},
-						onCellPointerUp: (_slot, _event) => {
-							onCellPointerUp()
-						},
-						onCellClick: (slot, event) => {
-							onCellClick(slot, event)
-						},
-						onCellKeyboardActivate: onCellKeyboardActivate,
-						onCellKeyboardNavigate: ({ fromSlot, toSlot, shiftKey }) => {
-							updateKeyboardRangePreview({ fromSlot, toSlot, shiftKey })
-						},
-						onCellFocus,
-					})}
 
 					<div
 						css={{

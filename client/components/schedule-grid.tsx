@@ -272,7 +272,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const cellSizeScale = 2 / 3
 	const dayColumnWidthRem = (useNarrowDayColumns ? 6.2 : 8) * cellSizeScale
 	const timeColumnWidthRem = (useNarrowDayColumns ? 5 : 5.6) * cellSizeScale
-	const mobileTimeColumnWidthRem = 4.8 * cellSizeScale
+	const mobileTimeColumnWidthRem = 4.8
 	const cellHeightRem = 2.25 * cellSizeScale
 	const cellHeightMobileRem = 2.65 * cellSizeScale
 	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
@@ -380,9 +380,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 					[mq.mobile]: {
 						borderRadius: 0,
 						borderInline: 'none',
-						maxHeight: '70vh',
-						overflowX: 'auto',
-						overflowY: 'auto',
+						overflowX: 'visible',
 					},
 				}}
 			>
@@ -418,6 +416,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									width: `${timeColumnWidthRem}rem`,
 									minWidth: `${timeColumnWidthRem}rem`,
 									maxWidth: `${timeColumnWidthRem}rem`,
+									whiteSpace: 'nowrap',
+									userSelect: 'none',
 									[mq.mobile]: {
 										minWidth: `${mobileTimeColumnWidthRem}rem`,
 										maxWidth: `${mobileTimeColumnWidthRem}rem`,
@@ -452,6 +452,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 											fontSize: typography.fontSize.sm,
 											color: colors.text,
 											borderBottom: `1px solid ${colors.border}`,
+											userSelect: 'none',
 											width: useNarrowDayColumns
 												? `${dayColumnWidthRem}rem`
 												: undefined,
@@ -507,6 +508,14 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 										width: `${timeColumnWidthRem}rem`,
 										minWidth: `${timeColumnWidthRem}rem`,
 										maxWidth: `${timeColumnWidthRem}rem`,
+									whiteSpace: 'nowrap',
+									userSelect: 'none',
+									[mq.mobile]: {
+										width: `${mobileTimeColumnWidthRem}rem`,
+										minWidth: `${mobileTimeColumnWidthRem}rem`,
+										maxWidth: `${mobileTimeColumnWidthRem}rem`,
+										paddingInline: spacing.xs,
+									},
 									}}
 								>
 									{timeLabels[timeKey]}
@@ -703,6 +712,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														props.readOnly || isDisabled
 															? 'default'
 															: 'pointer',
+													userSelect: 'none',
 													fontSize: typography.fontSize.xs,
 													fontWeight: typography.fontWeight.medium,
 													boxShadow: combinedBoxShadow || undefined,
