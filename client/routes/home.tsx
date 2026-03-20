@@ -384,7 +384,7 @@ export function HomeRoute(handle: Handle) {
 		pointerSelection.startSelection({
 			slot,
 			event,
-			mode: 'add',
+			mode: selectedSlots.has(slot) ? 'add' : 'remove',
 		})
 	}
 

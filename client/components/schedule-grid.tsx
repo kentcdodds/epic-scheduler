@@ -297,7 +297,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 		const fitToContent = !!props.fitToContentWidth
 		const tableCaption = props.readOnly
 			? 'Availability grid. Use arrow keys to move between time slots. Press Enter or Space to focus slot details.'
-			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range. On touch devices, tap a slot and drag the handle to extend the selection.'
+			: 'Editable availability grid. Use arrow keys to move between time slots. Hold Shift while moving to preview a range. Press Enter or Space to apply toggles. On pointer devices, drag to select a range. On touch devices, tap a slot to toggle it, then drag the handle to apply that toggle across more slots.'
 
 		function handleCellKeyDown(event: KeyboardEvent) {
 			if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -631,7 +631,6 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 									const shouldShowDragHandle =
 										!!props.onCellDragHandlePointerDown &&
 										interactive &&
-										isSelected &&
 										isActive
 
 									return (

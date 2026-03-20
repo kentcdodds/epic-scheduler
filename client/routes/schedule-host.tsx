@@ -1345,7 +1345,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		hostSelection.startSelection({
 			slot,
 			event,
-			mode: 'add',
+			mode: blockedSlots.has(slot) ? 'add' : 'remove',
 		})
 	}
 
