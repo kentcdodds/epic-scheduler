@@ -392,7 +392,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 						borderSpacing: 0,
 						minWidth: fitToContent
 							? `${timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem}rem`
-							: `max(40rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
+							: `max(${40 * cellSizeScale}rem, ${dayKeys.length * dayColumnWidthRem}rem)`,
 						width: fitToContent ? 'max-content' : '100%',
 						maxWidth: '100%',
 						tableLayout: useNarrowDayColumns ? 'fixed' : undefined,
@@ -769,10 +769,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 														}}
 														css={{
 															position: 'absolute',
-															right: '0.15rem',
-															bottom: '0.15rem',
-															width: '1.5rem',
-															height: '1.5rem',
+															right: '0.1rem',
+															bottom: '0.1rem',
+															width: `${1.5 * cellSizeScale}rem`,
+															height: `${1.5 * cellSizeScale}rem`,
 															display: 'grid',
 															placeItems: 'center',
 															zIndex: 2,
@@ -783,8 +783,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 													>
 														<span
 															css={{
-																width: '0.65rem',
-																height: '0.65rem',
+																width: `${0.65 * cellSizeScale}rem`,
+																height: `${0.65 * cellSizeScale}rem`,
 																borderRadius: radius.full,
 																backgroundColor: colors.primary,
 																border: `2px solid ${colors.surface}`,

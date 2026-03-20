@@ -1426,11 +1426,23 @@ export function ScheduleHostRoute(handle: Handle) {
 			}
 			return
 		}
+		let anchorSlot = slot
+		if (previewSelectedSlots.size > 1) {
+			const sorted = Array.from(previewSelectedSlots).sort()
+			if (slot === sorted.at(-1)) {
+				anchorSlot = sorted[0]!
+			} else if (slot === sorted[0]) {
+				anchorSlot = sorted.at(-1)!
+			}
+		}
 		previewSelection.startSelection({
-			slot,
+			slot: anchorSlot,
 			event,
 			mode: 'add',
 		})
+		if (anchorSlot !== slot) {
+			previewSelection.updateSelectionToSlot(slot)
+		}
 	}
 
 	function updatePreviewHoverTooltip(slot: string, event: PointerEvent) {
