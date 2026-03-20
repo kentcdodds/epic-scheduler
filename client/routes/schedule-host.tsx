@@ -2827,7 +2827,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										selectionSlots: previewSelection.state.slots,
 										selectionSlotLabel:
 											'included in pending preview range selection',
-										desktopHorizontalOverflow: 'local',
 										dayHeaderLayout: 'stacked',
 										dayColumnWidth: 'narrow',
 										showWeekSeparators: true,
@@ -2969,7 +2968,6 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
-									desktopHorizontalOverflow: 'local',
 									dayHeaderLayout: 'stacked',
 									dayColumnWidth: 'narrow',
 									showWeekSeparators: true,

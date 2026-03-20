@@ -45,7 +45,6 @@ type ScheduleGridProps = {
 	activeSlot: string | null
 	rangeAnchor: string | null
 	readOnly?: boolean
-	desktopHorizontalOverflow?: 'page' | 'local'
 	onCellPointerDown?: (slot: string, event: PointerEvent) => void
 	onCellPointerEnter?: (slot: string, event: PointerEvent) => void
 	onCellPointerMove?: (slot: string, event: PointerEvent) => void
@@ -297,6 +296,7 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 	const mobileTimeColumnWidthRem = 4.8
 	const cellHeightRem = 2.25 * cellSizeScale
 	const cellHeightMobileRem = 2.65 * cellSizeScale
+	const dragHandleOverflowRem = 0.75 * cellSizeScale
 	const weekSeparatorWidth = props.showWeekSeparators ? '0.35rem' : '0'
 
 	function shouldClearHoverOnPointerLeave(event: PointerEvent) {
@@ -321,6 +321,8 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 
 	function renderGridTable(visibleDayKeys: Array<string>) {
 		const fitToContent = !!props.fitToContentWidth
+		const shouldReserveDragHandleSpace =
+			!!props.onCellDragHandlePointerDown && !props.readOnly
 		const desktopTableMinWidthRem =
 			timeColumnWidthRem + visibleDayKeys.length * dayColumnWidthRem
 		const mobileTableMinWidthRem =
@@ -519,7 +521,10 @@ export function renderScheduleGrid(props: ScheduleGridProps) {
 							borderInline: 'none',
 							borderTop: 'none',
 							overflowX: 'auto',
-							overflowY: 'visible',
+							overflowY: 'hidden',
+							paddingBottom: shouldReserveDragHandleSpace
+								? `${dragHandleOverflowRem}rem`
+								: undefined,
 							WebkitOverflowScrolling: 'touch',
 						},
 					}}
