@@ -7,6 +7,7 @@ export const sitePaths = {
 	features: '/meeting-scheduler-features',
 	blog: '/blog',
 	aboutMcp: '/about-mcp',
+	contact: '/contact',
 	privacy: '/privacy',
 	terms: '/terms',
 	pricing: '/pricing',
