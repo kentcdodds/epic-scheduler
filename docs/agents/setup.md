@@ -62,6 +62,13 @@ metadata.
 - `create_schedule` supports `disabledDays` on creation (weekday names or 0-6)
   and maps those days to blocked slots across the requested date range.
 
+## Apps SDK submission reviewer flow
+
+Epic Scheduler is link-based and does not use accounts or OAuth. When completing
+OpenAI Apps SDK submission fields that request demo credentials, provide the
+token-based reviewer instructions in
+`docs/agents/apps-sdk-reviewer-instructions.md` instead of a username/password.
+
 ## PR preview deployments
 
 The GitHub Actions preview workflow creates per-preview Cloudflare resources so
