@@ -8,6 +8,7 @@ export const routes = route({
 	features: '/meeting-scheduler-features',
 	blog: '/blog',
 	blogPost: '/blog/:slug',
+	contact: '/contact',
 	privacy: '/privacy',
 	terms: '/terms',
 	aboutMcp: '/about-mcp',

@@ -28,6 +28,7 @@ function getRouteAnnouncement(pathname: string) {
 	if (segments[0] === 'blog' && segments.length >= 2)
 		return 'Blog post page loaded.'
 	if (segments[0] === 'blog') return 'Blog page loaded.'
+	if (segments[0] === 'contact') return 'Contact page loaded.'
 	if (segments[0] === 'privacy') return 'Privacy page loaded.'
 	if (segments[0] === 'terms') return 'Terms page loaded.'
 	if (segments[0] === 'about-mcp') return 'About MCP page loaded.'

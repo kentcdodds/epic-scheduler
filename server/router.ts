@@ -31,6 +31,7 @@ export function createAppRouter(appEnv: AppEnv) {
 	router.map(routes.features, documentShell)
 	router.map(routes.blog, documentShell)
 	router.map(routes.blogPost, documentShell)
+	router.map(routes.contact, documentShell)
 	router.map(routes.privacy, documentShell)
 	router.map(routes.terms, documentShell)
 	router.map(routes.aboutMcp, documentShell)

@@ -9,6 +9,7 @@ export function getMarketingSitemapPaths(): Array<string> {
 		sitePaths.features,
 		sitePaths.blog,
 		...blogPosts.map((post) => `/blog/${post.slug}`),
+		sitePaths.contact,
 		sitePaths.privacy,
 		sitePaths.terms,
 		sitePaths.aboutMcp,
