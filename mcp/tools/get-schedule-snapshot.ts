@@ -1,9 +1,6 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import {
-	getScheduleSnapshot,
-	toScheduleSnapshotSummary,
-} from '#shared/schedule-store.ts'
+import { getScheduleSnapshot } from '#shared/schedule-store.ts'
 import { type MCP } from '#mcp/index.ts'
 
 const getScheduleSnapshotTool = {
@@ -44,7 +41,13 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 					}
 				}
 
-				const summary = toScheduleSnapshotSummary(snapshot)
+				const sanitizedSnapshot = {
+					...snapshot,
+					// MCP output should not leak internal attendee ids.
+					attendees: snapshot.attendees.map(
+						({ id: _id, ...attendee }) => attendee,
+					),
+				}
 				return {
 					content: [
 						{
@@ -54,7 +57,7 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 					],
 					structuredContent: {
 						ok: true,
-						snapshot: summary as unknown as Record<string, unknown>,
+						snapshot: sanitizedSnapshot as unknown as Record<string, unknown>,
 					},
 				}
 			} catch (error) {

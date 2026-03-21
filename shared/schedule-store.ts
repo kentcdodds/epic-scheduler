@@ -27,24 +27,6 @@ export type ScheduleSnapshot = {
 	availableNamesBySlot: Record<string, Array<string>>
 }
 
-export type ScheduleSnapshotSummary = {
-	schedule: {
-		title: string
-		intervalMinutes: ScheduleIntervalMinutes
-		rangeStartUtc: string
-		rangeEndUtc: string
-	}
-	slots: Array<string>
-	blockedSlots: Array<string>
-	attendees: Array<{
-		name: string
-		isHost: boolean
-		timeZone: string | null
-	}>
-	countsBySlot: Record<string, number>
-	availableNamesBySlot: Record<string, Array<string>>
-}
-
 type PreparedStatementLike = {
 	bind(...values: Array<unknown>): PreparedStatementLike
 	run(): Promise<unknown>
@@ -1077,27 +1059,5 @@ export async function getScheduleSnapshot(
 		availabilityByAttendee,
 		countsBySlot,
 		availableNamesBySlot,
-	}
-}
-
-export function toScheduleSnapshotSummary(
-	snapshot: ScheduleSnapshot,
-): ScheduleSnapshotSummary {
-	return {
-		schedule: {
-			title: snapshot.schedule.title,
-			intervalMinutes: snapshot.schedule.intervalMinutes,
-			rangeStartUtc: snapshot.schedule.rangeStartUtc,
-			rangeEndUtc: snapshot.schedule.rangeEndUtc,
-		},
-		slots: snapshot.slots,
-		blockedSlots: snapshot.blockedSlots,
-		attendees: snapshot.attendees.map((attendee) => ({
-			name: attendee.name,
-			isHost: attendee.isHost,
-			timeZone: attendee.timeZone,
-		})),
-		countsBySlot: snapshot.countsBySlot,
-		availableNamesBySlot: snapshot.availableNamesBySlot,
 	}
 }
