@@ -469,7 +469,6 @@ export function SupportRoute(_handle: Handle) {
 }
 
 const mcpPath = '/mcp'
-
 export function AboutMcpRoute(_handle: Handle) {
 	return () => {
 		setDocumentTitle(toAppTitle('About Epic Scheduler MCP'))
