@@ -508,7 +508,7 @@ export function AboutMcpRoute(_handle: Handle) {
 					<p>
 						Connect your MCP client to <code>{mcpPath}</code> on your deployment
 						origin (for example{' '}
-						<code>{`https://epic-schedule.com${mcpPath}`}</code>).
+						<code>{`https://epic-scheduler.com${mcpPath}`}</code>).
 					</p>
 				</section>
 				<section className="seo-section">
@@ -524,13 +524,13 @@ export function AboutMcpRoute(_handle: Handle) {
 						<code>{`{
   "mcpServers": {
     "epic-scheduler": {
-      "url": "https://epic-schedule.com${mcpPath}"
+      "url": "https://epic-scheduler.com${mcpPath}"
     }
   }
 }`}</code>
 					</pre>
 					<p>
-						Replace <code>epic-schedule.com</code> with the host where Epic
+						Replace <code>epic-scheduler.com</code> with the host where Epic
 						Scheduler is deployed.
 					</p>
 				</section>

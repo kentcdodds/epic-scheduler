@@ -85,7 +85,7 @@ export const blogPosts: Array<BlogPost> = [
 			<ol>
 				<li>
 					Start inspector and connect to
-					<code>https://epic-schedule.com/mcp</code>.
+					<code>https://epic-scheduler.com/mcp</code>.
 				</li>
 				<li>Confirm all scheduler tools are listed.</li>
 				<li>Run <code>create_schedule</code> once and copy the share token.</li>
@@ -141,7 +141,7 @@ export const blogPosts: Array<BlogPost> = [
 			<p>
 				<em
 					>Use Epic Scheduler to respond to this scheduling link as "Jordan
-					Lee": https://epic-schedule.com/s/abc123. I am available Tue/Thu
+					Lee": https://epic-scheduler.com/s/abc123. I am available Tue/Thu
 					9:00–11:30 AM PT and Wed 1:00–3:00 PM PT. Submit my availability and
 					summarize best overlap windows.</em
 				>
