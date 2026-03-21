@@ -24,6 +24,17 @@ export function renderScheduleUiShell(config: ScheduleUiShellConfig) {
 		config.widgetScriptPath,
 		canonicalBaseUrl,
 	).toString()
+	const title = escapeHtmlAttribute(config.title)
+	const rootClassName = escapeHtmlAttribute(config.rootClassName)
+	const rootDataAttribute = config.rootDataAttribute.trim()
+	const rootDataAttributeSuffix = rootDataAttribute.startsWith('data-')
+		? rootDataAttribute.slice('data-'.length)
+		: rootDataAttribute
+	const cardClassName = escapeHtmlAttribute(config.cardClassName)
+	const safeRootDataAttribute = `data-${rootDataAttributeSuffix.replaceAll(
+		/[^a-zA-Z0-9-]/g,
+		'',
+	)}`
 
 	return `
 <!doctype html>
@@ -31,7 +42,7 @@ export function renderScheduleUiShell(config: ScheduleUiShellConfig) {
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>${config.title}</title>
+		<title>${title}</title>
 		<link rel="stylesheet" href="${stylesheetHref}" />
 		<style>
 			:root {
@@ -178,11 +189,11 @@ export function renderScheduleUiShell(config: ScheduleUiShellConfig) {
 	</head>
 	<body>
 		<main
-			class="scheduler-shell ${config.rootClassName}"
-			${config.rootDataAttribute}
+			class="scheduler-shell ${rootClassName}"
+			${safeRootDataAttribute}
 			data-api-base-url="${escapeHtmlAttribute(canonicalBaseUrl)}"
 		>
-			<section class="scheduler-card ${config.cardClassName}">
+			<section class="scheduler-card ${cardClassName}">
 				${config.cardContents}
 			</section>
 		</main>
