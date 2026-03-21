@@ -27,8 +27,12 @@ Cross-cutting UX expectations for interactive surfaces in this codebase.
 ## Schedule grid day header
 
 - The grid uses **two tables** with the same `<colgroup>`: a header table (only
-  `thead`) inside `position: sticky; top: 0`, and a body table (`tbody` only) in
-  `[data-schedule-grid-scroller]`. Horizontal `scrollLeft` is synced between
+  `thead`) inside `position: sticky; top: 0`, and a body table (`tbody` only)
+  inside `[data-schedule-grid-scroller]`. The header block and the body block
+  each wrap their horizontal scroller in an outer `overflow: hidden` shell that
+  carries the matching `border-radius`, so combining radius with
+  `overflow-x: auto` on one element does not clip the table borders at the
+  corners. Horizontal `scrollLeft` is synced between
   `[data-schedule-grid-header-scroll]` and the body scroller so columns stay
   aligned without a duplicate CSS grid row. The header scroller hides its
   scrollbar (only the body scroller’s bar is visible).
@@ -38,6 +42,8 @@ Cross-cutting UX expectations for interactive surfaces in this codebase.
   scrollers use `scrollbar-gutter: stable` so the body’s visible scrollbar
   doesn’t change the inline size vs the header. The screen-reader caption lives
   on the body table only so the header table matches the body column model.
+- Day column titles are two lines from the day key via `Intl.DateTimeFormat`:
+  month + day on the first line, short weekday (muted) on the second.
 
 ## Mobile schedule grid width
 
