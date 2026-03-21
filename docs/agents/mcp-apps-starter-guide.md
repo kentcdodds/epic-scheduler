@@ -161,6 +161,15 @@ token values into widget CSS. If you do this in an MCP App resource, set
 - Request only required permissions in `_meta.ui.permissions`.
 - Avoid embedding secrets or private tokens in UI payloads.
 
+### Submission note: hostAccessToken
+
+`hostAccessToken` is a randomly generated, app-issued capability created when a
+schedule is created. It is scoped to a single schedule host dashboard (used in
+`/s/{shareToken}/{hostAccessToken}` and the `X-Host-Token` header) and is not a
+third-party password, OAuth token, or external credential. Epic Scheduler never
+requests external account passwords, and hosts can rotate access by creating a
+new schedule (which issues a new token).
+
 ## Quality checklist before merge
 
 - `bun run format`
