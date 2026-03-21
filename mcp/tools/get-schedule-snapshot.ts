@@ -1,6 +1,9 @@
 import { type ToolAnnotations } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import { getScheduleSnapshot } from '#shared/schedule-store.ts'
+import {
+	getScheduleSnapshot,
+	toScheduleSnapshotSummary,
+} from '#shared/schedule-store.ts'
 import { type MCP } from '#mcp/index.ts'
 
 const getScheduleSnapshotTool = {
@@ -41,6 +44,7 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 					}
 				}
 
+				const summary = toScheduleSnapshotSummary(snapshot)
 				return {
 					content: [
 						{
@@ -50,7 +54,7 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 					],
 					structuredContent: {
 						ok: true,
-						snapshot: snapshot as unknown as Record<string, unknown>,
+						snapshot: summary as unknown as Record<string, unknown>,
 					},
 				}
 			} catch (error) {

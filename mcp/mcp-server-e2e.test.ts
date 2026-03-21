@@ -387,7 +387,7 @@ test(
 					schedule?: { title?: string }
 					blockedSlots?: Array<string>
 					countsBySlot?: Record<string, number>
-					attendees?: Array<{ name?: string }>
+					attendees?: Array<{ name?: string; id?: unknown }>
 			  }
 			| undefined
 		expect(snapshot?.schedule?.title).toBe('Host-managed test schedule')
@@ -398,6 +398,11 @@ test(
 			.filter((name): name is string => typeof name === 'string')
 		expect(attendeeNames).toContain('Host')
 		expect(attendeeNames).toContain('Alex')
+		expect(
+			(snapshot?.attendees ?? []).every(
+				(attendee) => attendee.id === undefined,
+			),
+		).toBe(true)
 	},
 	{ timeout: defaultTimeoutMs },
 )
