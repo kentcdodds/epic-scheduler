@@ -160,6 +160,8 @@ token values into widget CSS. If you do this in an MCP App resource, set
   dedicated widget origin.
 - Request only required permissions in `_meta.ui.permissions`.
 - Avoid embedding secrets or private tokens in UI payloads.
+- Publish a privacy policy at `/privacy` and use that URL in OpenAI Platform app
+  submissions.
 
 ## Quality checklist before merge
 
