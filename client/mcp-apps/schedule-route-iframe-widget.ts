@@ -160,7 +160,7 @@ export function setupScheduleRouteIframeWidget(
 		}
 		if (hostAccessTokenElement) {
 			hostAccessTokenElement.textContent =
-				normalizedHostAccessToken ?? 'Not provided'
+				normalizedHostAccessToken || 'Not provided'
 		}
 
 		if (!normalizedShareToken) {
