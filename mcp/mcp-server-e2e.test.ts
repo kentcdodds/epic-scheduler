@@ -398,6 +398,9 @@ test(
 			.filter((name): name is string => typeof name === 'string')
 		expect(attendeeNames).toContain('Host')
 		expect(attendeeNames).toContain('Alex')
+		expect(
+			(snapshot?.attendees ?? []).every((attendee) => attendee.id === undefined),
+		).toBe(true)
 	},
 	{ timeout: defaultTimeoutMs },
 )
