@@ -3,25 +3,21 @@ import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { supportContact } from '#shared/support-details.ts'
 import { sitePaths, supportEmail } from '#shared/site-chrome.ts'
 
-function SupportEmailLink() {
-	return <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
-}
+const supportEmailLink = <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
 
-function MailingAddress() {
-	return (
-		<address>
-			epic-scheduler.com
-			<br />
-			Epic Scheduling
-			<br />
-			55 N Merchant St #562
-			<br />
-			American Fork, UT 84003
-			<br />
-			United States
-		</address>
-	)
-}
+const mailingAddress = (
+	<address>
+		epic-scheduler.com
+		<br />
+		Epic Scheduling
+		<br />
+		55 N Merchant St #562
+		<br />
+		American Fork, UT 84003
+		<br />
+		United States
+	</address>
+)
 
 export function HowItWorksRoute(_handle: Handle) {
 	return () => {
@@ -274,10 +270,8 @@ export function PrivacyRoute(_handle: Handle) {
 				</section>
 				<section className="seo-section">
 					<h2>Contact</h2>
-					<p>
-						Questions about this policy can be sent to <SupportEmailLink />.
-					</p>
-					<MailingAddress />
+					<p>Questions about this policy can be sent to {supportEmailLink}.</p>
+					{mailingAddress}
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">
@@ -333,10 +327,8 @@ export function TermsRoute(_handle: Handle) {
 				</section>
 				<section className="seo-section">
 					<h2>Contact</h2>
-					<p>
-						Questions about these terms can be sent to <SupportEmailLink />.
-					</p>
-					<MailingAddress />
+					<p>Questions about these terms can be sent to {supportEmailLink}.</p>
+					{mailingAddress}
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">
@@ -408,13 +400,11 @@ export function ContactRoute(_handle: Handle) {
 				</header>
 				<section className="seo-section">
 					<h2>Email</h2>
-					<p>
-						<SupportEmailLink />
-					</p>
+					<p>{supportEmailLink}</p>
 				</section>
 				<section className="seo-section">
 					<h2>Mailing address</h2>
-					<MailingAddress />
+					{mailingAddress}
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">
