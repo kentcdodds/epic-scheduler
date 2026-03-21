@@ -13,6 +13,14 @@ import {
 	getRectangularSlotSelection,
 	toDayKey,
 } from '#client/schedule-utils.ts'
+import {
+	areSlotIdSetsEqual,
+	filterSlotsToValidSet,
+	gridSelectionStorageKeyHostBlocked,
+	gridSelectionStorageKeyHostPreview,
+	readSlotIdsFromSessionStorage,
+	writeSlotIdsToSessionStorage,
+} from '#client/schedule-grid-selection-storage.ts'
 import { visuallyHiddenCss } from '#client/styles/visually-hidden.ts'
 import { normalizeName, type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import {
@@ -462,6 +470,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	let refreshTimer: ReturnType<typeof setInterval> | null = null
 	let cleanupMobileViewportListener: (() => void) | null = null
 	let lastPathname = ''
+	let didRestoreHostGridsFromSession = false
 	let snapshotRequestId = 0
 	const saveDebounceMs = 600
 	const refreshIntervalMs = 5000
@@ -496,6 +505,22 @@ export function ScheduleHostRoute(handle: Handle) {
 		statusMessage = message
 		statusError = error
 		handle.update()
+	}
+
+	function persistHostBlockedToSession() {
+		if (!shareToken) return
+		writeSlotIdsToSessionStorage(
+			gridSelectionStorageKeyHostBlocked(shareToken),
+			blockedSlots,
+		)
+	}
+
+	function persistHostPreviewToSession() {
+		if (!shareToken) return
+		writeSlotIdsToSessionStorage(
+			gridSelectionStorageKeyHostPreview(shareToken),
+			previewSelectedSlots,
+		)
 	}
 
 	function clearSaveDebounceTimer() {
@@ -618,6 +643,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		onSelectionPreviewSlot: (slot) => {
 			activeHostSlot = slot
 		},
+		onSelectionFinished: ({ changed, cancelled }) => {
+			if (changed && !cancelled) {
+				persistHostBlockedToSession()
+			}
+			return true
+		},
 	})
 
 	const previewSelection = createPointerDragSelectionController({
@@ -634,6 +665,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activePreviewSlot = slot
+		},
+		onSelectionFinished: ({ changed, cancelled }) => {
+			if (changed && !cancelled) {
+				persistHostPreviewToSession()
+			}
+			return true
 		},
 	})
 
@@ -871,6 +908,35 @@ export function ScheduleHostRoute(handle: Handle) {
 		handle.update()
 	}
 
+	function maybeRestoreHostGridsFromSessionOnce() {
+		if (didRestoreHostGridsFromSession) return
+		const currentSnapshot = snapshot
+		if (!currentSnapshot || !shareToken) return
+		didRestoreHostGridsFromSession = true
+		const valid = new Set(currentSnapshot.slots)
+		const storedBlocked = readSlotIdsFromSessionStorage(
+			gridSelectionStorageKeyHostBlocked(shareToken),
+		)
+		if (storedBlocked && storedBlocked.length > 0) {
+			const nextBlocked = filterSlotsToValidSet(storedBlocked, valid)
+			if (!areSlotIdSetsEqual(nextBlocked, persistedBlockedSlots)) {
+				blockedSlots = nextBlocked
+				changeVersion++
+				queueHostSettingsSave()
+			}
+		}
+		const storedPreview = readSlotIdsFromSessionStorage(
+			gridSelectionStorageKeyHostPreview(shareToken),
+		)
+		if (storedPreview && storedPreview.length > 0) {
+			previewSelectedSlots = new Set(
+				Array.from(filterSlotsToValidSet(storedPreview, valid)).filter(
+					(slot) => !blockedSlots.has(slot),
+				),
+			)
+		}
+	}
+
 	async function loadSnapshot() {
 		const requestShareToken = shareToken
 		const requestHostAccessToken = hostAccessToken
@@ -917,6 +983,7 @@ export function ScheduleHostRoute(handle: Handle) {
 				return
 			}
 			applySnapshot(payload.snapshot)
+			maybeRestoreHostGridsFromSessionOnce()
 			isLoading = false
 			handle.update()
 		} catch {
@@ -1066,6 +1133,8 @@ export function ScheduleHostRoute(handle: Handle) {
 			applySnapshot(payload.snapshot, {
 				preserveHostDrafts: shouldPreserveHostDrafts,
 			})
+			persistHostBlockedToSession()
+			persistHostPreviewToSession()
 			if (!rangeValidationError) {
 				setStatus('Host settings synced.')
 			}
@@ -1254,6 +1323,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		}
 		changeVersion += 1
 		queueHostSettingsSave()
+		persistHostBlockedToSession()
 		return true
 	}
 
@@ -1360,6 +1430,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		const nextSelection = new Set(nextSlots)
 		if (areSetsEqual(previewSelectedSlots, nextSelection)) return false
 		previewSelectedSlots = nextSelection
+		persistHostPreviewToSession()
 		return true
 	}
 
@@ -1368,6 +1439,9 @@ export function ScheduleHostRoute(handle: Handle) {
 		const didClearTooltip = clearPreviewHoverTooltip()
 		previewSelectedSlots = new Set<string>()
 		activePreviewSlot = null
+		if (hadSelection) {
+			persistHostPreviewToSession()
+		}
 		if (hadSelection || didClearTooltip) {
 			handle.update()
 		}
@@ -1566,6 +1640,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		const nextPathname = getPathname()
 		if (nextPathname === lastPathname) return
 		lastPathname = nextPathname
+		didRestoreHostGridsFromSession = false
 		clearSaveDebounceTimer()
 		clearSocketResources()
 		clearRefreshTimer()

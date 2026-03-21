@@ -11,7 +11,15 @@ import {
 	formatSlotLabel,
 	formatSlotForAttendeeTimeZone,
 } from '#client/schedule-utils.ts'
-import { type ScheduleSnapshot } from '#shared/schedule-store.ts'
+import {
+	areSlotIdSetsEqual,
+	clearSlotIdsFromSessionStorage,
+	filterSlotsToValidSet,
+	gridSelectionStorageKeyAttendee,
+	readSlotIdsFromSessionStorage,
+	writeSlotIdsToSessionStorage,
+} from '#client/schedule-grid-selection-storage.ts'
+import { normalizeName, type ScheduleSnapshot } from '#shared/schedule-store.ts'
 import { extractScheduleToolInput } from './schedule-widget-tool-input.js'
 import {
 	createFullscreenManager,
@@ -320,6 +328,37 @@ function setupScheduleWidget() {
 		updateSelectionSummary()
 	}
 
+	function widgetAttendeeSessionKey() {
+		const token = currentShareToken?.trim()
+		if (!token) return null
+		const nameLookup = normalizeName(attendeeNameInput.value).toLowerCase()
+		if (!nameLookup) return null
+		return gridSelectionStorageKeyAttendee({
+			shareToken: token,
+			attendeeNameLookup: nameLookup,
+		})
+	}
+
+	function persistWidgetGridSelection() {
+		const key = widgetAttendeeSessionKey()
+		if (!key) return
+		writeSlotIdsToSessionStorage(key, selectedSlots)
+	}
+
+	function applyWidgetSessionDraftIfPresent() {
+		if (!snapshot) return
+		const key = widgetAttendeeSessionKey()
+		if (!key) return
+		const stored = readSlotIdsFromSessionStorage(key)
+		if (!stored || stored.length === 0) return
+		const valid = new Set(snapshot.slots)
+		const filtered = filterSlotsToValidSet(stored, valid)
+		if (areSlotIdSetsEqual(filtered, persistedSelectedSlots)) {
+			return
+		}
+		selectedSlots = filtered
+	}
+
 	function resetSelectionForAttendee(preserveDirtySelection = false) {
 		const selectionDiff = preserveDirtySelection
 			? getSelectionDiff({
@@ -336,6 +375,7 @@ function setupScheduleWidget() {
 		)
 		if (!hasDirtyChanges) {
 			selectedSlots = new Set(persistedSelectedSlots)
+			applyWidgetSessionDraftIfPresent()
 		}
 		if (activeSlot && snapshot?.slots.includes(activeSlot)) {
 			return
@@ -501,6 +541,10 @@ function setupScheduleWidget() {
 					: `Request failed (${response.status})`,
 			)
 		}
+		const draftKey = widgetAttendeeSessionKey()
+		if (draftKey) {
+			clearSlotIdsFromSessionStorage(draftKey)
+		}
 		if (payload.snapshot) {
 			setSnapshot(payload.snapshot)
 		} else {
@@ -588,6 +632,7 @@ function setupScheduleWidget() {
 		} else {
 			selectedSlots.add(slot)
 		}
+		persistWidgetGridSelection()
 		setStatus('Local changes pending. Save availability to sync.')
 		renderGrid()
 		renderSlotDetails()

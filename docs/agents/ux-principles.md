@@ -2,6 +2,17 @@
 
 Cross-cutting UX expectations for interactive surfaces in this codebase.
 
+## Grid selection persistence
+
+- Editable schedule grids persist the current slot selection in `sessionStorage`
+  (keys built in `client/schedule-grid-selection-storage.ts`) so a refresh or
+  same-tab history navigation does not wipe in-progress selection.
+- The homepage create form also persists title, host name, date range, interval,
+  and slot selection under a single key (`HOME_CREATE_FORM_STORAGE_KEY`); legacy
+  slot-only keys may still be read once for migration.
+- Attendee and host views key by share token (and attendee name for availability
+  drafts).
+
 ## Mobile schedule grid width
 
 - On small breakpoints, `renderScheduleGrid` uses a viewport-bleed shell so the

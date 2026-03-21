@@ -19,6 +19,14 @@ import {
 } from '#client/schedule-utils.ts'
 import { type ScheduleSnapshot, normalizeName } from '#shared/schedule-store.ts'
 import {
+	areSlotIdSetsEqual,
+	clearSlotIdsFromSessionStorage,
+	filterSlotsToValidSet,
+	gridSelectionStorageKeyAttendee,
+	readSlotIdsFromSessionStorage,
+	writeSlotIdsToSessionStorage,
+} from '#client/schedule-grid-selection-storage.ts'
+import {
 	colors,
 	mq,
 	radius,
@@ -142,6 +150,15 @@ export function ScheduleRoute(handle: Handle) {
 
 	function normalizeNameForLookup(name: string) {
 		return normalizeName(name).toLowerCase()
+	}
+
+	function attendeeGridSessionKey() {
+		const nameLookup = normalizeNameForLookup(attendeeName)
+		if (!shareToken || !nameLookup) return null
+		return gridSelectionStorageKeyAttendee({
+			shareToken,
+			attendeeNameLookup: nameLookup,
+		})
 	}
 
 	function getPersistedAttendee(name: string) {
@@ -337,6 +354,7 @@ export function ScheduleRoute(handle: Handle) {
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (!hasDirtyChanges) {
 				selectedSlots = new Set(persistedSelectedSlots)
+				applyAttendeeSessionDraftIfPresent()
 			} else {
 				normalizeLocalSelectionAgainstBlockedSlots()
 			}
@@ -435,6 +453,10 @@ export function ScheduleRoute(handle: Handle) {
 			persistedSelectedSlots = getPersistedSelectionForName(attendeeName)
 			if (saveVersion === changeVersion) {
 				hasDirtyChanges = false
+				const key = attendeeGridSessionKey()
+				if (key) {
+					clearSlotIdsFromSessionStorage(key)
+				}
 				setStatus(null, false)
 			}
 		} catch {
@@ -472,11 +494,38 @@ export function ScheduleRoute(handle: Handle) {
 		}, autoSaveDelayMs)
 	}
 
+	function persistAttendeeGridSelectionToSession() {
+		const key = attendeeGridSessionKey()
+		if (!key) return
+		writeSlotIdsToSessionStorage(key, selectedSlots)
+	}
+
 	function markDirty() {
 		hasDirtyChanges = true
 		changeVersion += 1
+		persistAttendeeGridSelectionToSession()
 		scheduleAutoSave()
 		handle.update()
+	}
+
+	function applyAttendeeSessionDraftIfPresent() {
+		const currentSnapshot = snapshot
+		if (!currentSnapshot) return
+		const key = attendeeGridSessionKey()
+		if (!key) return
+		const stored = readSlotIdsFromSessionStorage(key)
+		if (!stored || stored.length === 0) return
+		const blockedSlots = getBlockedSlots()
+		const valid = new Set(currentSnapshot.slots)
+		const fromSession = filterSlotsToValidSet(stored, valid)
+		const filtered = new Set(
+			Array.from(fromSession).filter((slot) => !blockedSlots.has(slot)),
+		)
+		if (areSlotIdSetsEqual(filtered, persistedSelectedSlots)) {
+			return
+		}
+		selectedSlots = filtered
+		markDirty()
 	}
 
 	async function deleteSubmission() {
@@ -532,6 +581,10 @@ export function ScheduleRoute(handle: Handle) {
 			pendingRenameSourceName = null
 			hasDirtyChanges = false
 			pendingSave = false
+			const draftKey = attendeeGridSessionKey()
+			if (draftKey) {
+				clearSlotIdsFromSessionStorage(draftKey)
+			}
 			setStatus(
 				payload.deleted
 					? 'Submission deleted.'
@@ -614,6 +667,10 @@ export function ScheduleRoute(handle: Handle) {
 			pendingRenameSourceName = null
 			hasDirtyChanges = false
 			pendingSave = false
+			const draftKey = attendeeGridSessionKey()
+			if (draftKey) {
+				clearSlotIdsFromSessionStorage(draftKey)
+			}
 			setStatus(payload.renamed ? 'Name updated.' : 'Name already up to date.')
 			completedSuccessfully = true
 		} catch {
@@ -1113,6 +1170,7 @@ export function ScheduleRoute(handle: Handle) {
 											getPersistedSelectionForName(attendeeName)
 										if (!hasDirtyChanges) {
 											selectedSlots = new Set(persistedSelectedSlots)
+											applyAttendeeSessionDraftIfPresent()
 										}
 										if (!normalizeName(attendeeName)) {
 											pendingRenameSourceName = null
