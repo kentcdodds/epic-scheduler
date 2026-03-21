@@ -10,6 +10,7 @@ export const sitePaths = {
 	privacy: '/privacy',
 	terms: '/terms',
 	pricing: '/pricing',
+	support: '/support',
 } as const
 
 export type SiteNavLink = {
@@ -32,6 +33,7 @@ export const siteFooterLinks: ReadonlyArray<SiteNavLink> = [
 		href: sitePaths.pricing,
 		label: "Price (it's free... really)",
 	},
+	{ href: sitePaths.support, label: 'Support' },
 ]
 
 /** Active state for top nav (blog index + posts highlight “Blog”). */

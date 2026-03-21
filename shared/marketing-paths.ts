@@ -13,5 +13,6 @@ export function getMarketingSitemapPaths(): Array<string> {
 		sitePaths.terms,
 		sitePaths.aboutMcp,
 		sitePaths.pricing,
+		sitePaths.support,
 	]
 }

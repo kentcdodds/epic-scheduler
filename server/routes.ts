@@ -12,6 +12,7 @@ export const routes = route({
 	terms: '/terms',
 	aboutMcp: '/about-mcp',
 	pricing: '/pricing',
+	support: '/support',
 	robotsTxt: '/robots.txt',
 	sitemapXml: '/sitemap.xml',
 	health: '/health',

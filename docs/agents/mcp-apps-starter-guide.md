@@ -175,6 +175,8 @@ new schedule (which issues a new token).
 - `bun run format`
 - `bun run test:mcp`
 - `bun run validate`
+- Confirm the Platform Dashboard support contact details match `/support` and
+  `shared/support-details.ts`.
 - Confirm docs in `docs/agents` reflect any new workflow or constraints.
 
 ## Replacing starter examples safely
