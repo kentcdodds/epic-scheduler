@@ -41,8 +41,15 @@ export async function registerGetScheduleSnapshotTool(agent: MCP) {
 					}
 				}
 
+				const availabilityByAttendee = Object.fromEntries(
+					snapshot.attendees.map((attendee) => [
+						attendee.name,
+						snapshot.availabilityByAttendee[attendee.id] ?? [],
+					]),
+				)
 				const sanitizedSnapshot = {
 					...snapshot,
+					availabilityByAttendee,
 					// MCP output should not leak internal attendee ids.
 					attendees: snapshot.attendees.map(
 						({ id: _id, ...attendee }) => attendee,
