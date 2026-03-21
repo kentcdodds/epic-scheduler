@@ -2954,7 +2954,6 @@ export function ScheduleHostRoute(handle: Handle) {
 										selectionSlots: previewSelection.state.slots,
 										selectionSlotLabel:
 											'included in pending preview range selection',
-										dayHeaderLayout: 'stacked',
 										dayColumnWidth: 'narrow',
 										showWeekSeparators: true,
 										fitToContentWidth: true,
@@ -3095,7 +3094,6 @@ export function ScheduleHostRoute(handle: Handle) {
 								{renderScheduleGrid({
 									slots: currentSnapshot.slots,
 									selectedSlots: blockedSlots,
-									dayHeaderLayout: 'stacked',
 									dayColumnWidth: 'narrow',
 									showWeekSeparators: true,
 									fitToContentWidth: true,
