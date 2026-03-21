@@ -23,6 +23,17 @@ export function HowItWorksRoute(_handle: Handle) {
 					</p>
 				</section>
 				<section className="seo-section">
+					<h2>Host access link</h2>
+					<p>
+						When a schedule is created, Epic Scheduler issues a host access
+						token (<code>hostAccessToken</code>) that lives in the host
+						dashboard URL and <code>X-Host-Token</code> header. It is an
+						app-generated capability scoped to that schedule, not a third-party
+						password or external credential. Creating a new schedule rotates the
+						token.
+					</p>
+				</section>
+				<section className="seo-section">
 					<h2>Inline demo: overlap heatmap</h2>
 					<p>
 						This simplified preview mirrors how slot intensity maps to attendee
