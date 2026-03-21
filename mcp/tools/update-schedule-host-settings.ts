@@ -19,6 +19,12 @@ const updateScheduleHostSettingsTool = {
 		idempotentHint: false,
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
+	annotationJustifications: {
+		readOnlyHint: 'Writes host settings into internal storage.',
+		destructiveHint: 'Does not delete schedules or irreversible records.',
+		idempotentHint: 'Repeated calls can change state based on inputs.',
+		openWorldHint: 'Uses internal storage only; no external network calls.',
+	},
 } as const
 
 function isHostSettingsValidationError(message: string) {

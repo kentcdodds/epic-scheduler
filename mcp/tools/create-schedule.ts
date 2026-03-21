@@ -19,6 +19,12 @@ const createScheduleTool = {
 		idempotentHint: false,
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
+	annotationJustifications: {
+		readOnlyHint: 'Creates a schedule and writes to internal storage.',
+		destructiveHint: 'Does not delete schedules or irreversibly remove data.',
+		idempotentHint: 'Generates new tokens/records on each call.',
+		openWorldHint: 'Uses local storage only; no external network calls.',
+	},
 } as const
 
 const intervalSchema = z.union([z.literal(15), z.literal(30), z.literal(60)])

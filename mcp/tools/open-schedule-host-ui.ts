@@ -15,6 +15,13 @@ const openScheduleHostUiTool = {
 		idempotentHint: true,
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
+	annotationJustifications: {
+		readOnlyHint:
+			'Opens a host dashboard widget without changing schedule data.',
+		destructiveHint: 'Does not delete or irreversibly mutate data.',
+		idempotentHint: 'Same inputs yield the same widget payload.',
+		openWorldHint: 'Uses an internal UI resource with no external calls.',
+	},
 } as const
 
 export async function registerOpenScheduleHostUiTool(agent: MCP) {

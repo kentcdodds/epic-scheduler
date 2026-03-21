@@ -14,6 +14,12 @@ const submitAvailabilityTool = {
 		idempotentHint: false,
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
+	annotationJustifications: {
+		readOnlyHint: 'Writes attendee availability into internal storage.',
+		destructiveHint: 'Does not delete schedule data or irreversible records.',
+		idempotentHint: 'Repeated calls overwrite availability selections.',
+		openWorldHint: 'Uses internal storage and durable objects only.',
+	},
 } as const
 
 export async function registerSubmitScheduleAvailabilityTool(agent: MCP) {

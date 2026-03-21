@@ -14,6 +14,12 @@ const getScheduleSnapshotTool = {
 		idempotentHint: true,
 		openWorldHint: false,
 	} satisfies ToolAnnotations,
+	annotationJustifications: {
+		readOnlyHint: 'Only reads stored schedule data; no mutation occurs.',
+		destructiveHint: 'Does not delete or irreversibly mutate data.',
+		idempotentHint: 'Same input yields the same snapshot until data changes.',
+		openWorldHint: 'Reads from local storage only (no external network calls).',
+	},
 } as const
 
 export async function registerGetScheduleSnapshotTool(agent: MCP) {
