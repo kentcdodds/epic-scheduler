@@ -32,6 +32,7 @@ export const siteFooterLinks: ReadonlyArray<SiteNavLink> = [
 	{ href: sitePaths.privacy, label: 'Privacy' },
 	{ href: sitePaths.terms, label: 'Terms' },
 	{ href: sitePaths.features, label: 'Features' },
+	{ href: sitePaths.contact, label: 'Contact' },
 	{
 		href: sitePaths.pricing,
 		label: "Price (it's free... really)",
