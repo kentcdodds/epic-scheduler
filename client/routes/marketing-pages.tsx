@@ -172,27 +172,77 @@ export function PrivacyRoute(_handle: Handle) {
 				<section className="seo-section">
 					<h2>What we collect</h2>
 					<ul>
-						<li>Schedule metadata (range, interval, share token)</li>
-						<li>Attendee display names</li>
+						<li>
+							Schedule details (title, date range, interval length, share token,
+							blocked slots, and a hashed host access token)
+						</li>
+						<li>Attendee details (display name and optional time zone)</li>
 						<li>Availability selections per slot</li>
+						<li>
+							Technical data needed to operate the service (for example request
+							metadata like IP address and user agent in infrastructure logs)
+						</li>
 					</ul>
 					<p>
 						We do not run account signups and do not intentionally collect
-						sensitive personal profile data in v1.
+						sensitive personal profile data, payment details, or government
+						identifiers.
 					</p>
 				</section>
 				<section className="seo-section">
-					<h2>How data is used</h2>
+					<h2>How we use data</h2>
+					<ul>
+						<li>Create schedules and share links</li>
+						<li>Display overlap and availability for participants</li>
+						<li>Sync realtime updates for the UI and MCP tools</li>
+						<li>Protect reliability and debug failures</li>
+					</ul>
+				</section>
+				<section className="seo-section">
+					<h2>Where data is stored</h2>
 					<p>
-						Data is used only to display and synchronize scheduling availability
-						for link participants.
+						Schedule data is stored in Cloudflare D1 (SQLite). Realtime
+						coordination data lives in Cloudflare Durable Objects so overlap
+						updates stay in sync.
 					</p>
+				</section>
+				<section className="seo-section">
+					<h2>Who receives data</h2>
+					<ul>
+						<li>Hosts and attendees who have access to the share link</li>
+						<li>
+							MCP clients (such as ChatGPT) that request schedule data on your
+							behalf
+						</li>
+						<li>
+							Cloudflare, which hosts the app, database, and infrastructure logs
+						</li>
+					</ul>
+					<p>We do not sell your data.</p>
+				</section>
+				<section className="seo-section">
+					<h2>Your controls</h2>
+					<ul>
+						<li>Choose what name to display (or use a pseudonym)</li>
+						<li>Update availability by submitting again</li>
+						<li>Delete your submission from the attendee page</li>
+						<li>
+							Hosts can rename or delete attendee submissions in the host
+							dashboard
+						</li>
+					</ul>
 				</section>
 				<section className="seo-section">
 					<h2>Retention and deletion</h2>
 					<p>
-						We may delete schedules, reset storage, or discontinue the project
-						at any time. Do not treat this service as archival storage.
+						Schedule data is retained until participants delete their
+						submissions, a host stops using the link, or we reset storage. We
+						may delete schedules, reset storage, or discontinue the project at
+						any time. Do not treat this service as archival storage.
+					</p>
+					<p>
+						Infrastructure logs are retained for a limited time by our hosting
+						provider.
 					</p>
 				</section>
 				<section className="seo-section">
@@ -200,6 +250,16 @@ export function PrivacyRoute(_handle: Handle) {
 					<p>
 						Reasonable effort is made, but no uptime, durability, or security
 						SLA is guaranteed.
+					</p>
+				</section>
+				<section className="seo-section">
+					<h2>Contact</h2>
+					<p>
+						For privacy questions or deletion requests, open an issue at{' '}
+						<a href="https://github.com/kentcdodds/epic-scheduler/issues">
+							github.com/kentcdodds/epic-scheduler
+						</a>
+						.
 					</p>
 				</section>
 				<footer className="seo-footer-marketing">
