@@ -387,7 +387,7 @@ test(
 					schedule?: { title?: string }
 					blockedSlots?: Array<string>
 					countsBySlot?: Record<string, number>
-					attendees?: Array<{ name?: string; id?: unknown }>
+					attendees?: Array<{ name?: string }>
 			  }
 			| undefined
 		expect(snapshot?.schedule?.title).toBe('Host-managed test schedule')
