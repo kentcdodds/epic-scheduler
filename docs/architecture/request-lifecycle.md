@@ -13,7 +13,11 @@ Requests are handled in this order:
 1. Browser noise endpoint:
    - `/.well-known/appspecific/com.chrome.devtools.json` (returns 204)
 2. MCP endpoint:
-   - `/mcp`
+   - `/mcp` — for `GET`/`HEAD` requests whose `Accept` header clearly prefers an
+     HTML document over `text/event-stream` or `application/json`, the Worker
+     responds with `302` to `/about-mcp` (same pattern as
+     [kentcdodds.com/mcp](https://kentcdodds.com/mcp)). Otherwise the request is
+     handled by the MCP agent (`MCP.serve`).
 3. Realtime websocket endpoint:
    - `/ws/:shareToken` (proxied to `ScheduleRoom` durable object)
 4. SEO crawler endpoints:
@@ -22,14 +26,18 @@ Requests are handled in this order:
 5. Static assets:
    - Served from `ASSETS` for `GET` and `HEAD` when available
 6. App server routes:
-   - Everything else is handled by `server/handler.ts`
+   - Everything else is handled by `server/handler.ts` (document shell + APIs).
 
 ## App server flow
 
 `server/handler.ts` validates environment variables then creates the app router.
 
 `server/router.ts` maps route patterns from `server/routes.ts` to handler
-modules (home app shell, marketing/SEO pages, schedule APIs, and health).
+modules. **Document routes** (pages) all return the same HTML shell from
+`server/handlers/document-shell.ts`: global styles plus `client-entry.js`, with
+an empty `#root` until the Remix client mounts. **Route-specific UI** (home,
+schedules, marketing pages, blog) is rendered only on the client via
+`client/routes/index.tsx` and `client/app.tsx`.
 
 ## Client-side navigation flow
 

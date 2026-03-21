@@ -55,7 +55,7 @@ export function renderScheduleHostUiEntryPoint(baseUrl: string | URL) {
 			.host-widget {
 				display: grid;
 				gap: var(--spacing-md);
-				width: min(100%, 72rem);
+				width: min(100%, var(--content-max-width));
 				margin: 0 auto;
 				padding: var(--spacing-lg);
 			}

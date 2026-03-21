@@ -1,5 +1,6 @@
 import { createRouter } from 'remix/fetch-router'
 import { type AppEnv } from '#types/env-schema.ts'
+import { documentShell } from '#server/handlers/document-shell.ts'
 import { robotsTxt, sitemapXml } from './handlers/seo-assets.ts'
 import { createHealthHandler } from './handlers/health.ts'
 import { createScheduleHostReadHandler } from './handlers/schedule-host-read.ts'
@@ -11,14 +12,6 @@ import { createScheduleHostUpdateHandler } from './handlers/schedule-host-update
 import { createScheduleRenameSubmissionHandler } from './handlers/schedule-rename-submission.ts'
 import { createScheduleReadHandler } from './handlers/schedule-read.ts'
 import { createScheduleSubmitAvailabilityHandler } from './handlers/schedule-submit-availability.ts'
-import {
-	blogIndex,
-	blogPost,
-	features,
-	howItWorks,
-	privacy,
-	terms,
-} from './handlers/seo-pages.ts'
 import { Layout } from './layout.ts'
 import { render } from './render.ts'
 import { routes } from './routes.ts'
@@ -34,12 +27,14 @@ export function createAppRouter(appEnv: AppEnv) {
 	router.map(routes.home, home)
 	router.map(routes.schedulePage, schedulePage)
 	router.map(routes.scheduleHostPage, scheduleHostPage)
-	router.map(routes.howItWorks, howItWorks)
-	router.map(routes.features, features)
-	router.map(routes.blog, blogIndex)
-	router.map(routes.blogPost, blogPost)
-	router.map(routes.privacy, privacy)
-	router.map(routes.terms, terms)
+	router.map(routes.howItWorks, documentShell)
+	router.map(routes.features, documentShell)
+	router.map(routes.blog, documentShell)
+	router.map(routes.blogPost, documentShell)
+	router.map(routes.privacy, documentShell)
+	router.map(routes.terms, documentShell)
+	router.map(routes.aboutMcp, documentShell)
+	router.map(routes.pricing, documentShell)
 	router.map(routes.robotsTxt, robotsTxt)
 	router.map(routes.sitemapXml, sitemapXml)
 	router.map(routes.health, createHealthHandler(appEnv))

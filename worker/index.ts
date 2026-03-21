@@ -1,6 +1,6 @@
 import { MCP } from '#mcp/index.ts'
 import { handleRequest } from '#server/handler.ts'
-import { withCors } from './utils.ts'
+import { prefersHtmlDocumentForMcpGet, withCors } from './utils.ts'
 
 export { MCP }
 export { ScheduleRoom } from './schedule-room.ts'
@@ -193,6 +193,17 @@ const appHandler = withCors({
 		}
 
 		if (url.pathname === mcpResourcePath) {
+			if (prefersHtmlDocumentForMcpGet(request)) {
+				const location = new URL('/about-mcp', url.origin).toString()
+				return new Response(null, {
+					status: 302,
+					headers: {
+						Location: location,
+						Vary: 'Accept',
+					},
+				})
+			}
+
 			const startedAt = Date.now()
 			const rpcSummary = await summarizeMcpRpcRequest(request)
 			const requestId = request.headers.get('cf-ray')

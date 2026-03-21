@@ -10,6 +10,8 @@ export const routes = route({
 	blogPost: '/blog/:slug',
 	privacy: '/privacy',
 	terms: '/terms',
+	aboutMcp: '/about-mcp',
+	pricing: '/pricing',
 	robotsTxt: '/robots.txt',
 	sitemapXml: '/sitemap.xml',
 	health: '/health',

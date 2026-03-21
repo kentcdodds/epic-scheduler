@@ -37,7 +37,7 @@
     "test:e2e": "bun tools/prepare-e2e-env.ts && playwright test",
     "test:e2e:ui": "bun tools/prepare-e2e-env.ts && playwright test --ui",
     "test:e2e:install": "playwright install chromium --with-deps",
-    "test:mcp": "bun run build:mcp-apps && bun test mcp/mcp-server-e2e.test.ts"
+    "test:mcp": "bun run build:mcp-apps && bun test mcp/mcp-server-e2e.test.ts worker/utils.test.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

@@ -1,6 +1,16 @@
 import { type Handle } from 'remix/component'
 import { clientRoutes } from './routes/index.tsx'
-import { listenToRouterNavigation, Router } from './client-router.tsx'
+import {
+	getPathname,
+	listenToRouterNavigation,
+	Router,
+} from './client-router.tsx'
+import {
+	isFooterNavHrefActive,
+	isPrimaryNavHrefActive,
+	siteFooterLinks,
+	sitePrimaryNavLinks,
+} from '#shared/site-chrome.ts'
 import { colors, mq, spacing, typography } from './styles/tokens.ts'
 import { visuallyHiddenCss } from './styles/visually-hidden.ts'
 
@@ -12,6 +22,16 @@ function getRouteAnnouncement(pathname: string) {
 	if (segments[0] === 's' && segments.length >= 2) {
 		return 'Schedule availability page loaded.'
 	}
+	if (segments[0] === 'how-it-works') return 'How it works page loaded.'
+	if (segments[0] === 'meeting-scheduler-features')
+		return 'Features page loaded.'
+	if (segments[0] === 'blog' && segments.length >= 2)
+		return 'Blog post page loaded.'
+	if (segments[0] === 'blog') return 'Blog page loaded.'
+	if (segments[0] === 'privacy') return 'Privacy page loaded.'
+	if (segments[0] === 'terms') return 'Terms page loaded.'
+	if (segments[0] === 'about-mcp') return 'About MCP page loaded.'
+	if (segments[0] === 'pricing') return 'Pricing page loaded.'
 	return 'Page content loaded.'
 }
 
@@ -87,10 +107,14 @@ export function App(handle: Handle) {
 	}
 
 	return () => {
+		const pathname = getPathname()
 		return (
 			<div
 				css={{
-					maxWidth: '80rem',
+					display: 'flex',
+					flexDirection: 'column',
+					minHeight: '100dvh',
+					maxWidth: 'var(--content-max-width)',
 					margin: '0 auto',
 					padding: spacing['2xl'],
 					fontFamily: typography.fontFamily,
@@ -147,19 +171,26 @@ export function App(handle: Handle) {
 							</span>
 						</a>
 						<div css={{ display: 'inline-flex', gap: spacing.md }}>
-							<a href="/" css={navLinkCss}>
-								New schedule
-							</a>
-							<a href="/how-it-works" css={navLinkCss} data-router-reload>
-								How it works
-							</a>
-							<a href="/blog" css={navLinkCss} data-router-reload>
-								Blog
-							</a>
+							{sitePrimaryNavLinks.map((link) => (
+								<a
+									key={link.href}
+									href={link.href}
+									css={{
+										...navLinkCss,
+										...(isPrimaryNavHrefActive(link.href, pathname)
+											? {
+													fontWeight: typography.fontWeight.semibold,
+												}
+											: {}),
+									}}
+								>
+									{link.label}
+								</a>
+							))}
 						</div>
 					</nav>
 				</header>
-				<main id="main-content" tabIndex={-1}>
+				<main id="main-content" tabIndex={-1} css={{ flex: '1 1 auto' }}>
 					<Router
 						setup={{
 							routes: clientRoutes,
@@ -193,19 +224,22 @@ export function App(handle: Handle) {
 						gap: spacing.md,
 					}}
 				>
-					<a href="/privacy" css={navLinkCss} data-router-reload>
-						Privacy
-					</a>
-					<a href="/terms" css={navLinkCss} data-router-reload>
-						Terms
-					</a>
-					<a
-						href="/meeting-scheduler-features"
-						css={navLinkCss}
-						data-router-reload
-					>
-						Features
-					</a>
+					{siteFooterLinks.map((link) => (
+						<a
+							key={link.href}
+							href={link.href}
+							css={{
+								...navLinkCss,
+								...(isFooterNavHrefActive(link.href, pathname)
+									? {
+											fontWeight: typography.fontWeight.semibold,
+										}
+									: {}),
+							}}
+						>
+							{link.label}
+						</a>
+					))}
 				</footer>
 			</div>
 		)

@@ -15,6 +15,14 @@ import {
 	remapSelectedSlotsForIntervalChange,
 } from '#client/schedule-utils.ts'
 import {
+	clearHomeCreateFormFromSessionStorage,
+	gridSelectionStorageKeyHome,
+	readHomeCreateFormFromSessionStorage,
+	readSlotIdsFromSessionStorage,
+	filterSlotsToValidSet,
+	writeHomeCreateFormToSessionStorage,
+} from '#client/schedule-grid-selection-storage.ts'
+import {
 	colors,
 	mq,
 	radius,
@@ -62,10 +70,35 @@ export function HomeRoute(handle: Handle) {
 	let didInitializeSelection = false
 	let scheduleTitleError: string | null = null
 	let hostNameError: string | null = null
+	let pendingHomeSelectionIds: Array<string> | null = null
 	const scheduleTitleRequiredMessage =
 		'Schedule name is required before making a submission.'
 	const hostNameRequiredMessage =
 		'Host name is required before making a submission.'
+
+	function persistHomeForm() {
+		writeHomeCreateFormToSessionStorage({
+			title,
+			hostName,
+			intervalMinutes,
+			startDateInput,
+			endDateInput,
+			selectedSlotIds: Array.from(selectedSlots),
+		})
+	}
+
+	function tryRestoreHomeFormFromSession() {
+		const data = readHomeCreateFormFromSessionStorage()
+		if (!data) return
+		title = data.title
+		hostName = data.hostName
+		intervalMinutes = data.intervalMinutes
+		if (data.startDateInput && data.endDateInput) {
+			startDateInput = data.startDateInput
+			endDateInput = data.endDateInput
+		}
+		pendingHomeSelectionIds = data.selectedSlotIds
+	}
 
 	function syncSlots(previousIntervalMinutes = intervalMinutes) {
 		const nextRange = createSlotRangeFromDateInputs({
@@ -78,8 +111,34 @@ export function HomeRoute(handle: Handle) {
 		generatedSlots = nextRange.slots
 
 		if (!didInitializeSelection) {
+			const valid = new Set(generatedSlots)
+			if (pendingHomeSelectionIds !== null) {
+				const restored = filterSlotsToValidSet(pendingHomeSelectionIds, valid)
+				pendingHomeSelectionIds = null
+				selectedSlots = restored
+				didInitializeSelection = true
+				persistHomeForm()
+				return
+			}
+			const legacyStored = readSlotIdsFromSessionStorage(
+				gridSelectionStorageKeyHome({
+					rangeStartUtc,
+					rangeEndUtc,
+					intervalMinutes,
+				}),
+			)
+			if (legacyStored && legacyStored.length > 0) {
+				const restored = filterSlotsToValidSet(legacyStored, valid)
+				if (restored.size > 0) {
+					selectedSlots = restored
+					didInitializeSelection = true
+					persistHomeForm()
+					return
+				}
+			}
 			selectedSlots = buildDefaultSelection(generatedSlots)
 			didInitializeSelection = true
+			persistHomeForm()
 			return
 		}
 
@@ -109,6 +168,7 @@ export function HomeRoute(handle: Handle) {
 		if (activeSlot && !validSlots.has(activeSlot)) {
 			activeSlot = null
 		}
+		persistHomeForm()
 	}
 
 	function setMessage(nextStatus: RequestStatus, text: string | null) {
@@ -238,6 +298,7 @@ export function HomeRoute(handle: Handle) {
 		}
 		clearKeyboardRangeSelection()
 		setMessage('idle', null)
+		persistHomeForm()
 		return true
 	}
 
@@ -247,6 +308,7 @@ export function HomeRoute(handle: Handle) {
 		activeSlot = slot
 		clearKeyboardRangeSelection()
 		setMessage('idle', null)
+		persistHomeForm()
 	}
 
 	const pointerSelection = createRectangularGridSelectionController({
@@ -263,6 +325,12 @@ export function HomeRoute(handle: Handle) {
 		},
 		onSelectionPreviewSlot: (slot) => {
 			activeSlot = slot
+		},
+		onSelectionFinished: ({ changed, cancelled }) => {
+			if (changed && !cancelled) {
+				persistHomeForm()
+			}
+			return true
 		},
 	})
 
@@ -352,6 +420,7 @@ export function HomeRoute(handle: Handle) {
 				setMessage('error', 'Unable to create schedule.')
 				return
 			}
+			clearHomeCreateFormFromSessionStorage()
 			const redirectTo = `/s/${encodeURIComponent(payload.shareToken)}/${encodeURIComponent(normalizedHostToken)}`
 			navigate(redirectTo)
 		} catch {
@@ -409,6 +478,7 @@ export function HomeRoute(handle: Handle) {
 		handle.update()
 	}
 
+	tryRestoreHomeFormFromSession()
 	syncSlots()
 	const secondaryTextColor =
 		'color-mix(in srgb, var(--color-text) 82%, var(--color-surface))'
@@ -416,6 +486,29 @@ export function HomeRoute(handle: Handle) {
 		'color-mix(in srgb, var(--color-primary) 26%, var(--color-surface))'
 	const heroBadgeBorder =
 		'1px solid color-mix(in srgb, var(--color-primary) 38%, var(--color-border))'
+	const pillBadgeCss = {
+		padding: `${spacing.xs} ${spacing.sm}`,
+		borderRadius: radius.full,
+		backgroundColor: heroBadgeBackground,
+		border: heroBadgeBorder,
+		color: colors.text,
+		fontSize: typography.fontSize.xs,
+		fontWeight: typography.fontWeight.medium,
+	}
+	const aiReadyPillCss = {
+		...pillBadgeCss,
+		display: 'inline-flex',
+		alignItems: 'center',
+		textDecoration: 'none',
+		cursor: 'pointer',
+		'&:hover': {
+			textDecoration: 'underline',
+		},
+		'&:focus-visible': {
+			outline: `2px solid ${colors.primary}`,
+			outlineOffset: '2px',
+		},
+	}
 
 	return () => {
 		setDocumentTitle('Epic Scheduler | Link-based meeting scheduler')
@@ -517,45 +610,12 @@ export function HomeRoute(handle: Handle) {
 							gap: spacing.xs,
 						}}
 					>
-						<span
-							css={{
-								padding: `${spacing.xs} ${spacing.sm}`,
-								borderRadius: radius.full,
-								backgroundColor: heroBadgeBackground,
-								border: heroBadgeBorder,
-								color: colors.text,
-								fontSize: typography.fontSize.xs,
-								fontWeight: typography.fontWeight.medium,
-							}}
-						>
-							Realtime shared grid
-						</span>
-						<span
-							css={{
-								padding: `${spacing.xs} ${spacing.sm}`,
-								borderRadius: radius.full,
-								backgroundColor: heroBadgeBackground,
-								border: heroBadgeBorder,
-								color: colors.text,
-								fontSize: typography.fontSize.xs,
-								fontWeight: typography.fontWeight.medium,
-							}}
-						>
-							15/30/60 minute slots
-						</span>
-						<span
-							css={{
-								padding: `${spacing.xs} ${spacing.sm}`,
-								borderRadius: radius.full,
-								backgroundColor: heroBadgeBackground,
-								border: heroBadgeBorder,
-								color: colors.text,
-								fontSize: typography.fontSize.xs,
-								fontWeight: typography.fontWeight.medium,
-							}}
-						>
-							Timezone-friendly links
-						</span>
+						<span css={pillBadgeCss}>Realtime shared grid</span>
+						<span css={pillBadgeCss}>15/30/60 minute slots</span>
+						<span css={pillBadgeCss}>Timezone-friendly links</span>
+						<a href="/about-mcp" css={aiReadyPillCss} data-router-reload>
+							AI Ready
+						</a>
 					</div>
 				</header>
 
@@ -758,6 +818,7 @@ export function HomeRoute(handle: Handle) {
 										if (title.trim()) {
 											scheduleTitleError = null
 										}
+										persistHomeForm()
 										handle.update()
 									},
 								}}
@@ -811,6 +872,7 @@ export function HomeRoute(handle: Handle) {
 										if (hostName.trim()) {
 											hostNameError = null
 										}
+										persistHomeForm()
 										handle.update()
 									},
 								}}
@@ -882,6 +944,7 @@ export function HomeRoute(handle: Handle) {
 								click: () => {
 									pointerSelection.cleanup()
 									selectedSlots = buildDefaultSelection(generatedSlots)
+									persistHomeForm()
 									clearKeyboardRangeSelection()
 									setMessage('idle', null)
 								},

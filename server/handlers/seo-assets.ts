@@ -1,5 +1,5 @@
 import { type BuildAction } from 'remix/fetch-router'
-import { getMarketingSitemapPaths } from '#server/seo-content.ts'
+import { getMarketingSitemapPaths } from '#shared/marketing-paths.ts'
 import { type routes } from '#server/routes.ts'
 
 export const robotsTxt = {

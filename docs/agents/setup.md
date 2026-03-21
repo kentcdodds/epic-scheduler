@@ -30,6 +30,12 @@ Quick notes for getting a local epic-scheduler environment running.
 - `bun run test:e2e` to run Playwright specs.
 - `bun run test:mcp` to run MCP server E2E tests.
 
+## MCP endpoint and `/about-mcp`
+
+- Programmatic MCP clients connect to `/mcp` as usual.
+- Opening `/mcp` in a normal browser tab sends `Accept: text/html` and receives
+  a `302` redirect to `/about-mcp`, which documents how to configure clients.
+
 ## MCP diagnostics logs
 
 Production and local Worker logs now include structured MCP diagnostics for

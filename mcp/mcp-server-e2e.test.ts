@@ -575,3 +575,42 @@ test(
 	},
 	{ timeout: defaultTimeoutMs },
 )
+
+test(
+	'GET /mcp with browser Accept redirects to /about-mcp',
+	async () => {
+		await using database = await createTestDatabase()
+		await using server = await startDevServer(database.persistDir)
+
+		const response = await fetch(new URL('/mcp', server.origin), {
+			method: 'GET',
+			headers: {
+				Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+			},
+			redirect: 'manual',
+		})
+
+		expect(response.status).toBe(302)
+		expect(response.headers.get('Location')).toBe(
+			new URL('/about-mcp', server.origin).toString(),
+		)
+	},
+	{ timeout: defaultTimeoutMs },
+)
+
+test(
+	'GET /mcp with */* Accept does not redirect to about page',
+	async () => {
+		await using database = await createTestDatabase()
+		await using server = await startDevServer(database.persistDir)
+
+		const response = await fetch(new URL('/mcp', server.origin), {
+			method: 'GET',
+			headers: { Accept: '*/*' },
+			redirect: 'manual',
+		})
+
+		expect(response.status).not.toBe(302)
+	},
+	{ timeout: defaultTimeoutMs },
+)

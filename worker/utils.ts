@@ -64,3 +64,53 @@ export function mergeHeaders(
 export function wantsJson(request: Request) {
 	return request.headers.get('Accept')?.includes('application/json') ?? false
 }
+
+/** Parses `Accept` header segments into explicit media-range → quality weights. */
+function parseAcceptWeights(acceptHeader: string): Map<string, number> {
+	const result = new Map<string, number>()
+	if (!acceptHeader.trim()) return result
+
+	for (const segment of acceptHeader.split(',')) {
+		const parts = segment
+			.trim()
+			.split(';')
+			.map((part) => part.trim())
+		const mediaRange = parts[0]?.toLowerCase()
+		if (!mediaRange) continue
+
+		let quality = 1
+		for (let i = 1; i < parts.length; i++) {
+			const param = parts[i]
+			if (!param) continue
+			const [key, value] = param.split('=').map((fragment) => fragment.trim())
+			if (key?.toLowerCase() === 'q') {
+				const parsed = Number.parseFloat(value ?? '1')
+				if (!Number.isNaN(parsed)) quality = parsed
+			}
+		}
+		result.set(mediaRange, quality)
+	}
+	return result
+}
+
+/**
+ * True when the client is clearly asking for an HTML document (typical browser
+ * navigation) rather than MCP JSON-RPC or SSE. Used to redirect `/mcp` to the
+ * human-readable about page.
+ */
+export function prefersHtmlDocumentForMcpGet(request: Request): boolean {
+	if (request.method !== 'GET' && request.method !== 'HEAD') return false
+
+	const acceptHeader = request.headers.get('Accept') ?? ''
+	const weights = parseAcceptWeights(acceptHeader)
+	const htmlQ = weights.get('text/html') ?? 0
+	if (htmlQ <= 0) return false
+
+	const sseQ = weights.get('text/event-stream') ?? 0
+	if (sseQ >= htmlQ) return false
+
+	const jsonQ = weights.get('application/json') ?? 0
+	if (jsonQ > htmlQ) return false
+
+	return true
+}
