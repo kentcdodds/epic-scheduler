@@ -14,7 +14,9 @@ worker and client together.
 - Home flow: create a schedule and land on the host dashboard.
 - Collaboration flow: attendee availability changes appear for the host.
 - Host flow: key host actions persist (for example host profile edits).
-- MCP app flow: widget can load a schedule and save availability.
+- MCP app flow: attendee and host widgets should load the same `/s/...` routes
+  as the web app, then verify key attendee save or host dashboard behavior
+  inside the embedded page.
 
 ## What does not belong in e2e
 
