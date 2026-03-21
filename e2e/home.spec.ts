@@ -61,7 +61,7 @@ test('slot selection does not require title or name before submit', async ({
 	await expect(hostNameError).toHaveCount(0)
 
 	const firstGridCell = page
-		.locator('[data-schedule-grid-shell] table button')
+		.locator('[data-schedule-grid-scroller] table button')
 		.first()
 	await expect(firstGridCell).toBeVisible()
 	await firstGridCell.click()
@@ -83,7 +83,43 @@ test('mobile date header stays sticky while page scrolls', async ({ page }) => {
 
 	const dateHeaderCell = page
 		.locator(
-			'[data-schedule-grid-mobile-header] [data-schedule-grid-day-header]',
+			'[data-schedule-grid-shell] thead th[data-schedule-grid-day-header]',
+		)
+		.first()
+	await expect(dateHeaderCell).toBeVisible()
+
+	const gridBox = await grid.boundingBox()
+	expect(gridBox).not.toBeNull()
+	if (!gridBox) {
+		throw new Error('Expected schedule grid to be measurable.')
+	}
+
+	await page.evaluate(
+		(targetScrollY) => {
+			window.scrollTo({ top: targetScrollY, behavior: 'instant' })
+		},
+		Math.max(0, gridBox.y + 120),
+	)
+
+	const stickyHeaderTop = await dateHeaderCell.evaluate((element) => {
+		return Math.round(element.getBoundingClientRect().top)
+	})
+	expect(stickyHeaderTop).toBeGreaterThanOrEqual(0)
+	expect(stickyHeaderTop).toBeLessThanOrEqual(48)
+})
+
+test('desktop date header stays sticky while page scrolls', async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 720 })
+	await page.goto('/')
+
+	const grid = page.locator('[data-schedule-grid-shell]').first()
+	await expect(grid).toBeVisible()
+
+	const dateHeaderCell = page
+		.locator(
+			'[data-schedule-grid-shell] thead th[data-schedule-grid-day-header]',
 		)
 		.first()
 	await expect(dateHeaderCell).toBeVisible()
@@ -147,7 +183,7 @@ test('changing to a smaller interval expands selected availability', async ({
 
 	await page.getByLabel('Slot interval').selectOption('60')
 	const firstGridCell = page
-		.locator('[data-schedule-grid-shell] table button')
+		.locator('[data-schedule-grid-scroller] table button')
 		.first()
 	await expect(firstGridCell).toBeVisible()
 	await firstGridCell.click()

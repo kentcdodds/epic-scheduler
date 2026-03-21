@@ -22,7 +22,7 @@ test('attendee update appears in host schedule view', async ({
 	await expect(page).toHaveURL(new RegExp(`/s/${shareToken}`))
 	// Both desktop and mobile tables are rendered; only one is visible.
 	const hostChosenSlot = page
-		.locator('[data-schedule-grid-shell] table:visible')
+		.locator('[data-schedule-grid-scroller] table')
 		.first()
 		.locator('button[aria-pressed="true"]')
 		.first()
@@ -43,7 +43,7 @@ test('attendee update appears in host schedule view', async ({
 
 		// Scope to the visible table so this test is viewport-agnostic.
 		const candidateSlot = attendeePage
-			.locator('[data-schedule-grid-shell] table:visible')
+			.locator('[data-schedule-grid-scroller] table')
 			.first()
 			.getByRole('button', {
 				name: new RegExp(`^${escapeRegex(slotPrefix)}`),
@@ -73,7 +73,7 @@ test('attendee update appears in host schedule view', async ({
 			.toBe(2)
 		await page.reload()
 		const hostUpdatedSlot = page
-			.locator('[data-schedule-grid-shell] table:visible')
+			.locator('[data-schedule-grid-scroller] table')
 			.first()
 			.getByRole('button', {
 				name: new RegExp(`^${escapeRegex(slotPrefix)}`),

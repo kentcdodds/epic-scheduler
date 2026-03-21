@@ -87,7 +87,7 @@ test('host dashboard can rename an attendee from edit mode', async ({
 		await attendeePage.goto(`/s/${shareToken}?name=Alex`)
 		await attendeePage.getByLabel('Your name').fill('Alex')
 		const attendeeSlot = attendeePage
-			.locator('[data-schedule-grid-shell] table:visible')
+			.locator('[data-schedule-grid-scroller] table')
 			.first()
 			.locator('button')
 			.first()
@@ -224,7 +224,7 @@ test('best-time preview shows partial slot availability counts', async ({
 		})
 		.first()
 	const hostOnlySlotCell = previewSection
-		.locator('[data-schedule-grid-shell] table:visible')
+		.locator('[data-schedule-grid-scroller] table')
 		.first()
 		.locator(`button[data-slot="${secondSlot}"]`)
 	await expect(hostOnlySlotCell).toBeVisible()
