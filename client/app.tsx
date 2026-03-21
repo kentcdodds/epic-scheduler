@@ -32,6 +32,7 @@ function getRouteAnnouncement(pathname: string) {
 	if (segments[0] === 'terms') return 'Terms page loaded.'
 	if (segments[0] === 'about-mcp') return 'About MCP page loaded.'
 	if (segments[0] === 'pricing') return 'Pricing page loaded.'
+	if (segments[0] === 'support') return 'Support page loaded.'
 	return 'Page content loaded.'
 }
 

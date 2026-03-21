@@ -5,6 +5,7 @@ import {
 	HowItWorksRoute,
 	PricingRoute,
 	PrivacyRoute,
+	SupportRoute,
 	TermsRoute,
 } from './marketing-pages.tsx'
 import { HomeRoute } from './home.tsx'
@@ -21,6 +22,7 @@ export const clientRoutes = {
 	'/terms': <TermsRoute />,
 	'/about-mcp': <AboutMcpRoute />,
 	'/pricing': <PricingRoute />,
+	'/support': <SupportRoute />,
 	'/s/:shareToken/:hostAccessToken': <ScheduleHostRoute />,
 	'/s/:shareToken': <ScheduleRoute />,
 }

@@ -1,5 +1,6 @@
 import { type Handle } from 'remix/component'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
+import { supportContact } from '#shared/support-details.ts'
 import { sitePaths } from '#shared/site-chrome.ts'
 
 export function HowItWorksRoute(_handle: Handle) {
@@ -285,6 +286,45 @@ export function PricingRoute(_handle: Handle) {
 						a meeting time with friends or a team, you&apos;re in the right
 						place.
 					</p>
+				</section>
+				<footer className="seo-footer-marketing">
+					<p className="seo-footer-tagline">
+						Build schedules faster with a single link and shared overlap
+						visibility.
+					</p>
+				</footer>
+			</main>
+		)
+	}
+}
+
+export function SupportRoute(_handle: Handle) {
+	return () => {
+		setDocumentTitle(toAppTitle('Support'))
+		return (
+			<main className="seo-page">
+				<header className="seo-hero">
+					<p className="seo-eyebrow">Support</p>
+					<h1>Need help with Epic Scheduler?</h1>
+					<p>
+						We keep support simple and async. Use the link below to reach the
+						maintainer and track responses.
+					</p>
+				</header>
+				<section className="seo-section">
+					<h2>Contact</h2>
+					<p>
+						<a href={supportContact.url}>{supportContact.label}</a>
+					</p>
+					<p>{supportContact.description}</p>
+				</section>
+				<section className="seo-section">
+					<h2>What to include</h2>
+					<ul>
+						<li>Share link or host dashboard URL (if applicable)</li>
+						<li>Steps to reproduce the issue</li>
+						<li>Expected vs actual behavior</li>
+					</ul>
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">

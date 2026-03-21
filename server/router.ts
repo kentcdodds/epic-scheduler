@@ -35,6 +35,7 @@ export function createAppRouter(appEnv: AppEnv) {
 	router.map(routes.terms, documentShell)
 	router.map(routes.aboutMcp, documentShell)
 	router.map(routes.pricing, documentShell)
+	router.map(routes.support, documentShell)
 	router.map(routes.robotsTxt, robotsTxt)
 	router.map(routes.sitemapXml, sitemapXml)
 	router.map(routes.health, createHealthHandler(appEnv))
