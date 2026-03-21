@@ -63,6 +63,8 @@ export function HomeRoute(handle: Handle) {
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
+	let keyboardCommittedRangeAnchor: string | null = null
+	let keyboardCommittedRangeSlots = new Set<string>()
 	let activeSlot: string | null = null
 	let lastPointerWasTouch = false
 	let status: RequestStatus = 'idle'
@@ -165,6 +167,23 @@ export function HomeRoute(handle: Handle) {
 				keyboardRangeAction = null
 			}
 		}
+		if (
+			keyboardCommittedRangeAnchor &&
+			!validSlots.has(keyboardCommittedRangeAnchor)
+		) {
+			keyboardCommittedRangeAnchor = null
+			keyboardCommittedRangeSlots = new Set<string>()
+		} else if (keyboardCommittedRangeSlots.size > 0) {
+			keyboardCommittedRangeSlots = remapSelectedSlotsForIntervalChange({
+				previousSelectedSlots: keyboardCommittedRangeSlots,
+				previousIntervalMinutes,
+				nextSlots: generatedSlots,
+				nextIntervalMinutes: intervalMinutes,
+			})
+			if (keyboardCommittedRangeSlots.size === 0) {
+				keyboardCommittedRangeAnchor = null
+			}
+		}
 		if (activeSlot && !validSlots.has(activeSlot)) {
 			activeSlot = null
 		}
@@ -251,10 +270,20 @@ export function HomeRoute(handle: Handle) {
 		selectedSlots.delete(slot)
 	}
 
+	function clearCommittedKeyboardRange() {
+		keyboardCommittedRangeAnchor = null
+		keyboardCommittedRangeSlots = new Set<string>()
+	}
+
 	function clearKeyboardRangeSelection() {
 		keyboardRangeAnchor = null
 		keyboardRangeAction = null
 		keyboardRangeSlots = new Set<string>()
+	}
+
+	function clearAllKeyboardRangeState() {
+		clearKeyboardRangeSelection()
+		clearCommittedKeyboardRange()
 	}
 
 	function updateKeyboardRangePreview(params: {
@@ -263,8 +292,12 @@ export function HomeRoute(handle: Handle) {
 		shiftKey: boolean
 	}) {
 		if (!params.shiftKey) {
-			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
-				clearKeyboardRangeSelection()
+			if (
+				keyboardRangeAnchor ||
+				keyboardRangeSlots.size > 0 ||
+				keyboardCommittedRangeSlots.size > 0
+			) {
+				clearAllKeyboardRangeState()
 				handle.update()
 			}
 			return
@@ -272,6 +305,7 @@ export function HomeRoute(handle: Handle) {
 		if (!generatedSlots.includes(params.fromSlot)) return
 		if (!generatedSlots.includes(params.toSlot)) return
 		if (!keyboardRangeAnchor) {
+			clearCommittedKeyboardRange()
 			keyboardRangeAnchor = params.fromSlot
 			keyboardRangeAction = selectedSlots.has(params.fromSlot)
 				? 'remove'
@@ -296,9 +330,25 @@ export function HomeRoute(handle: Handle) {
 		for (const slot of keyboardRangeSlots) {
 			setSlotSelection(slot, shouldSelect)
 		}
+		keyboardCommittedRangeSlots = new Set(keyboardRangeSlots)
+		keyboardCommittedRangeAnchor = keyboardRangeAnchor
 		clearKeyboardRangeSelection()
 		setMessage('idle', null)
 		persistHomeForm()
+		return true
+	}
+
+	function applyCommittedKeyboardRangeActivate(slot: string) {
+		if (keyboardCommittedRangeSlots.size === 0) return false
+		if (keyboardRangeSlots.size > 0) return false
+		if (!keyboardCommittedRangeSlots.has(slot)) return false
+		for (const rangeSlot of keyboardCommittedRangeSlots) {
+			setSlotSelection(rangeSlot, !selectedSlots.has(rangeSlot))
+		}
+		activeSlot = slot
+		setMessage('idle', null)
+		persistHomeForm()
+		handle.update()
 		return true
 	}
 
@@ -306,7 +356,7 @@ export function HomeRoute(handle: Handle) {
 		const shouldSelect = !selectedSlots.has(slot)
 		setSlotSelection(slot, shouldSelect)
 		activeSlot = slot
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		setMessage('idle', null)
 		persistHomeForm()
 	}
@@ -435,7 +485,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellPointerDown(slot: string, event: PointerEvent) {
 		lastPointerWasTouch = event.pointerType === 'touch'
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		if (event.pointerType === 'touch') return
 		pointerSelection.startSelection({
 			slot,
@@ -446,7 +496,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellDragHandlePointerDown(slot: string, event: PointerEvent) {
 		lastPointerWasTouch = event.pointerType === 'touch'
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		pointerSelection.startSelection({
 			slot,
 			event,
@@ -470,6 +520,7 @@ export function HomeRoute(handle: Handle) {
 
 	function onCellKeyboardActivate(slot: string) {
 		if (applyKeyboardRangeSelection()) return
+		if (applyCommittedKeyboardRangeActivate(slot)) return
 		toggleSlotSelection(slot)
 	}
 
@@ -518,11 +569,15 @@ export function HomeRoute(handle: Handle) {
 		const isPointerRangePending = pointerSelection.state.mode !== null
 		const pendingSelectionSlots = isPointerRangePending
 			? pointerSelection.state.slots
-			: keyboardRangeSlots
+			: keyboardRangeSlots.size > 0
+				? keyboardRangeSlots
+				: keyboardCommittedRangeSlots
 		const pendingSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
-			: 'included in pending keyboard range selection'
-		const gridRangeAnchor = keyboardRangeAnchor
+			: keyboardRangeSlots.size > 0
+				? 'included in pending keyboard range selection'
+				: 'included in keyboard range selection'
+		const gridRangeAnchor = keyboardRangeAnchor ?? keyboardCommittedRangeAnchor
 
 		return (
 			<section
@@ -945,7 +1000,7 @@ export function HomeRoute(handle: Handle) {
 									pointerSelection.cleanup()
 									selectedSlots = buildDefaultSelection(generatedSlots)
 									persistHomeForm()
-									clearKeyboardRangeSelection()
+									clearAllKeyboardRangeState()
 									setMessage('idle', null)
 								},
 							}}

@@ -20,6 +20,9 @@ Cross-cutting UX expectations for interactive surfaces in this codebase.
   overlay as preview, with copy in `selectionSlotLabel` for screen readers)
   until the user moves with an arrow **without** Shift, uses the mouse/touch on
   the grid, toggles a single slot, or starts a new Shift+arrow range.
+- While that committed range is shown, **Enter** or **Space** again (with focus
+  on a cell inside the range) toggles **every** slot in the rectangle, not just
+  the focused cell.
 
 ## Schedule grid day header
 
@@ -30,11 +33,11 @@ Cross-cutting UX expectations for interactive surfaces in this codebase.
   aligned without a duplicate CSS grid row. The header scroller hides its
   scrollbar (only the body scroller’s bar is visible).
 - Both tables use `table-layout: fixed` with **explicit `<col>` widths** for
-  every column (time + each day) and a **total width in `rem`**, not `width:
-  100%`—otherwise each scrollport lays out columns independently. Both scrollers
-  use `scrollbar-gutter: stable` so the body’s visible scrollbar doesn’t change
-  the inline size vs the header. The screen-reader caption lives on the body
-  table only so the header table matches the body column model.
+  every column (time + each day) and a **total width in `rem`**, not
+  `width: 100%`—otherwise each scrollport lays out columns independently. Both
+  scrollers use `scrollbar-gutter: stable` so the body’s visible scrollbar
+  doesn’t change the inline size vs the header. The screen-reader caption lives
+  on the body table only so the header table matches the body column model.
 
 ## Mobile schedule grid width
 

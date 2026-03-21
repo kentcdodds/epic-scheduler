@@ -454,6 +454,8 @@ export function ScheduleHostRoute(handle: Handle) {
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
+	let keyboardCommittedRangeAnchor: string | null = null
+	let keyboardCommittedRangeSlots = new Set<string>()
 	let isLoading = true
 	let isSaving = false
 	let pendingSave = false
@@ -578,10 +580,20 @@ export function ScheduleHostRoute(handle: Handle) {
 		reconnectTimer = null
 	}
 
+	function clearCommittedKeyboardRange() {
+		keyboardCommittedRangeAnchor = null
+		keyboardCommittedRangeSlots = new Set<string>()
+	}
+
 	function clearKeyboardRangeSelection() {
 		keyboardRangeAnchor = null
 		keyboardRangeAction = null
 		keyboardRangeSlots = new Set<string>()
+	}
+
+	function clearAllKeyboardRangeState() {
+		clearKeyboardRangeSelection()
+		clearCommittedKeyboardRange()
 	}
 
 	function setDeleteConfirmationAttendee(nextAttendeeId: string | null) {
@@ -691,7 +703,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		clearSaveDebounceTimer()
 		clearClipboardMessageTimer()
 		clearMobileViewportListener()
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		clearPreviewHoverTooltip()
 		hostSelection.cleanup()
 		previewSelection.cleanup()
@@ -895,6 +907,21 @@ export function ScheduleHostRoute(handle: Handle) {
 			)
 			if (keyboardRangeSlots.size === 0) {
 				clearKeyboardRangeSelection()
+			}
+		}
+		if (
+			keyboardCommittedRangeAnchor &&
+			!nextSnapshot.slots.includes(keyboardCommittedRangeAnchor)
+		) {
+			clearCommittedKeyboardRange()
+		} else if (keyboardCommittedRangeSlots.size > 0) {
+			keyboardCommittedRangeSlots = new Set(
+				Array.from(keyboardCommittedRangeSlots).filter((slot) =>
+					nextSnapshot.slots.includes(slot),
+				),
+			)
+			if (keyboardCommittedRangeSlots.size === 0) {
+				keyboardCommittedRangeAnchor = null
 			}
 		}
 		const selectablePreviewSlots = new Set(
@@ -1328,6 +1355,7 @@ export function ScheduleHostRoute(handle: Handle) {
 	}
 
 	function toggleBlockedSlot(slot: string) {
+		clearAllKeyboardRangeState()
 		const changed = setBlockedSlotState(slot, !blockedSlots.has(slot))
 		activeHostSlot = slot
 		if (changed) {
@@ -1343,8 +1371,12 @@ export function ScheduleHostRoute(handle: Handle) {
 		const currentSnapshot = snapshot
 		if (!currentSnapshot) return
 		if (!params.shiftKey) {
-			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
-				clearKeyboardRangeSelection()
+			if (
+				keyboardRangeAnchor ||
+				keyboardRangeSlots.size > 0 ||
+				keyboardCommittedRangeSlots.size > 0
+			) {
+				clearAllKeyboardRangeState()
 				handle.update()
 			}
 			return
@@ -1352,6 +1384,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		if (!currentSnapshot.slots.includes(params.fromSlot)) return
 		if (!currentSnapshot.slots.includes(params.toSlot)) return
 		if (!keyboardRangeAnchor) {
+			clearCommittedKeyboardRange()
 			keyboardRangeAnchor = params.fromSlot
 			keyboardRangeAction = blockedSlots.has(params.fromSlot) ? 'remove' : 'add'
 		}
@@ -1373,13 +1406,28 @@ export function ScheduleHostRoute(handle: Handle) {
 		for (const slot of keyboardRangeSlots) {
 			setBlockedSlotState(slot, shouldBeBlocked)
 		}
+		keyboardCommittedRangeSlots = new Set(keyboardRangeSlots)
+		keyboardCommittedRangeAnchor = keyboardRangeAnchor
 		clearKeyboardRangeSelection()
+		handle.update()
+		return true
+	}
+
+	function applyCommittedKeyboardRangeActivate(slot: string) {
+		if (keyboardCommittedRangeSlots.size === 0) return false
+		if (keyboardRangeSlots.size > 0) return false
+		if (!keyboardCommittedRangeSlots.has(slot)) return false
+		for (const rangeSlot of keyboardCommittedRangeSlots) {
+			setBlockedSlotState(rangeSlot, !blockedSlots.has(rangeSlot))
+		}
+		activeHostSlot = slot
 		handle.update()
 		return true
 	}
 
 	function handleHostUnavailableKeyboardActivate(slot: string) {
 		if (applyKeyboardRangeSelection()) return
+		if (applyCommittedKeyboardRangeActivate(slot)) return
 		toggleBlockedSlot(slot)
 	}
 
@@ -1389,7 +1437,7 @@ export function ScheduleHostRoute(handle: Handle) {
 
 	function handleHostUnavailablePointerDown(slot: string, event: PointerEvent) {
 		lastHostPointerWasTouch = event.pointerType === 'touch'
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		if (event.pointerType === 'touch') return
 		hostSelection.startSelection({
 			slot,
@@ -1403,7 +1451,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		event: PointerEvent,
 	) {
 		lastHostPointerWasTouch = event.pointerType === 'touch'
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		hostSelection.startSelection({
 			slot,
 			event,
@@ -1668,7 +1716,7 @@ export function ScheduleHostRoute(handle: Handle) {
 		previewSelectedSlots = new Set<string>()
 		lastPreviewPointerWasTouch = false
 		lastHostPointerWasTouch = false
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		hostSelection.cleanup()
 		previewSelection.cleanup()
 		isLoading = true
@@ -1755,11 +1803,15 @@ export function ScheduleHostRoute(handle: Handle) {
 		const isPointerRangePending = hostSelection.state.mode !== null
 		const pendingBlockedSelectionSlots = isPointerRangePending
 			? hostSelection.state.slots
-			: keyboardRangeSlots
+			: keyboardRangeSlots.size > 0
+				? keyboardRangeSlots
+				: keyboardCommittedRangeSlots
 		const pendingBlockedSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
-			: 'included in pending keyboard range selection'
-		const hostRangeAnchor = keyboardRangeAnchor
+			: keyboardRangeSlots.size > 0
+				? 'included in pending keyboard range selection'
+				: 'included in keyboard range selection'
+		const hostRangeAnchor = keyboardRangeAnchor ?? keyboardCommittedRangeAnchor
 		const previewSelectionSource = previewSelection.state.mode
 			? previewSelection.state.slots
 			: previewSelectedSlots

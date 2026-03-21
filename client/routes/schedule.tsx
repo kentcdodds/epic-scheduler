@@ -65,6 +65,8 @@ export function ScheduleRoute(handle: Handle) {
 	let keyboardRangeAnchor: string | null = null
 	let keyboardRangeAction: 'add' | 'remove' | null = null
 	let keyboardRangeSlots = new Set<string>()
+	let keyboardCommittedRangeAnchor: string | null = null
+	let keyboardCommittedRangeSlots = new Set<string>()
 	let lastPointerWasTouch = false
 	let statusMessage: string | null = null
 	let statusError = false
@@ -187,10 +189,20 @@ export function ScheduleRoute(handle: Handle) {
 		)
 	}
 
+	function clearCommittedKeyboardRange() {
+		keyboardCommittedRangeAnchor = null
+		keyboardCommittedRangeSlots = new Set<string>()
+	}
+
 	function clearKeyboardRangeSelection() {
 		keyboardRangeAnchor = null
 		keyboardRangeAction = null
 		keyboardRangeSlots = new Set<string>()
+	}
+
+	function clearAllKeyboardRangeState() {
+		clearKeyboardRangeSelection()
+		clearCommittedKeyboardRange()
 	}
 
 	function clearSaveDebounceTimer() {
@@ -281,7 +293,7 @@ export function ScheduleRoute(handle: Handle) {
 		clearOfflinePollTimer()
 		clearSaveDebounceTimer()
 		clearSubmissionHoverTooltip()
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		pointerSelection.cleanup()
 		pendingSave = false
 	}
@@ -371,6 +383,21 @@ export function ScheduleRoute(handle: Handle) {
 				)
 				if (keyboardRangeSlots.size === 0) {
 					clearKeyboardRangeSelection()
+				}
+			}
+			if (
+				keyboardCommittedRangeAnchor &&
+				!currentSnapshot.slots.includes(keyboardCommittedRangeAnchor)
+			) {
+				clearCommittedKeyboardRange()
+			} else if (keyboardCommittedRangeSlots.size > 0) {
+				keyboardCommittedRangeSlots = new Set(
+					Array.from(keyboardCommittedRangeSlots).filter((slot) =>
+						currentSnapshot.slots.includes(slot),
+					),
+				)
+				if (keyboardCommittedRangeSlots.size === 0) {
+					keyboardCommittedRangeAnchor = null
 				}
 			}
 			if (activeSlot && !currentSnapshot.slots.includes(activeSlot)) {
@@ -703,8 +730,12 @@ export function ScheduleRoute(handle: Handle) {
 		const currentSnapshot = snapshot
 		if (!currentSnapshot) return
 		if (!params.shiftKey) {
-			if (keyboardRangeAnchor || keyboardRangeSlots.size > 0) {
-				clearKeyboardRangeSelection()
+			if (
+				keyboardRangeAnchor ||
+				keyboardRangeSlots.size > 0 ||
+				keyboardCommittedRangeSlots.size > 0
+			) {
+				clearAllKeyboardRangeState()
 				handle.update()
 			}
 			return
@@ -714,10 +745,11 @@ export function ScheduleRoute(handle: Handle) {
 		const blockedSlots = getBlockedSlots()
 		const baseAnchor = keyboardRangeAnchor ?? params.fromSlot
 		if (!ensureSlotIsEditable(baseAnchor)) {
-			clearKeyboardRangeSelection()
+			clearAllKeyboardRangeState()
 			return
 		}
 		if (!keyboardRangeAnchor) {
+			clearCommittedKeyboardRange()
 			keyboardRangeAnchor = baseAnchor
 			keyboardRangeAction = selectedSlots.has(baseAnchor) ? 'remove' : 'add'
 		}
@@ -737,14 +769,31 @@ export function ScheduleRoute(handle: Handle) {
 		if (!keyboardRangeAnchor || !keyboardRangeAction) return false
 		if (keyboardRangeSlots.size === 0) return false
 		if (!ensureSlotIsEditable(keyboardRangeAnchor)) {
-			clearKeyboardRangeSelection()
+			clearAllKeyboardRangeState()
 			return false
 		}
 		const shouldSelect = keyboardRangeAction === 'add'
 		for (const slot of keyboardRangeSlots) {
 			setSlotSelection(slot, shouldSelect)
 		}
+		keyboardCommittedRangeSlots = new Set(keyboardRangeSlots)
+		keyboardCommittedRangeAnchor = keyboardRangeAnchor
 		clearKeyboardRangeSelection()
+		setStatus(null, false)
+		markDirty()
+		return true
+	}
+
+	function applyCommittedKeyboardRangeActivate(slot: string) {
+		if (keyboardCommittedRangeSlots.size === 0) return false
+		if (keyboardRangeSlots.size > 0) return false
+		if (!keyboardCommittedRangeSlots.has(slot)) return false
+		if (!ensureSlotIsEditable(slot)) return false
+		const blockedSlots = getBlockedSlots()
+		for (const rangeSlot of keyboardCommittedRangeSlots) {
+			if (blockedSlots.has(rangeSlot)) continue
+			setSlotSelection(rangeSlot, !selectedSlots.has(rangeSlot))
+		}
 		setStatus(null, false)
 		markDirty()
 		return true
@@ -754,7 +803,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (!ensureSlotIsEditable(slot)) return
 		const shouldSelect = !selectedSlots.has(slot)
 		setSlotSelection(slot, shouldSelect)
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		activeSlot = slot
 		setStatus(null, false)
 		markDirty()
@@ -779,7 +828,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (clearSubmissionHoverTooltip()) {
 			handle.update()
 		}
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		if (event.pointerType === 'touch') return
 		if (!ensureSlotIsEditable(slot)) return
 		pointerSelection.startSelection({
@@ -794,7 +843,7 @@ export function ScheduleRoute(handle: Handle) {
 		if (clearSubmissionHoverTooltip()) {
 			handle.update()
 		}
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		if (!ensureSlotIsEditable(slot)) return
 		pointerSelection.startSelection({
 			slot,
@@ -834,6 +883,7 @@ export function ScheduleRoute(handle: Handle) {
 
 	function handleCellKeyboardActivate(slot: string) {
 		if (applyKeyboardRangeSelection()) return
+		if (applyCommittedKeyboardRangeActivate(slot)) return
 		toggleSingleSlot(slot)
 	}
 
@@ -892,7 +942,7 @@ export function ScheduleRoute(handle: Handle) {
 		activeSlot = null
 		hoverTooltipSlot = null
 		clearHoverTooltipPointerPosition()
-		clearKeyboardRangeSelection()
+		clearAllKeyboardRangeState()
 		hasDirtyChanges = false
 		changeVersion = 0
 		pendingSave = false
@@ -929,11 +979,15 @@ export function ScheduleRoute(handle: Handle) {
 		const isPointerRangePending = pointerSelection.state.mode !== null
 		const pendingSelectionSlots = isPointerRangePending
 			? pointerSelection.state.slots
-			: keyboardRangeSlots
+			: keyboardRangeSlots.size > 0
+				? keyboardRangeSlots
+				: keyboardCommittedRangeSlots
 		const pendingSelectionLabel = isPointerRangePending
 			? 'included in pending drag selection'
-			: 'included in pending keyboard range selection'
-		const gridRangeAnchor = keyboardRangeAnchor
+			: keyboardRangeSlots.size > 0
+				? 'included in pending keyboard range selection'
+				: 'included in keyboard range selection'
+		const gridRangeAnchor = keyboardRangeAnchor ?? keyboardCommittedRangeAnchor
 		const normalizedAttendeeName = normalizeName(attendeeName)
 		const persistedAttendee = getPersistedAttendee(attendeeName)
 		const hasPersistedSubmission = hasPersistedSubmissionForName(attendeeName)
