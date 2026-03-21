@@ -1,9 +1,7 @@
 import { type Handle } from 'remix/component'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { supportContact } from '#shared/support-details.ts'
-import { sitePaths } from '#shared/site-chrome.ts'
-
-const supportEmail = 'support@epic-scheduler.com'
+import { sitePaths, supportEmail } from '#shared/site-chrome.ts'
 
 function SupportEmailLink() {
 	return <a href={`mailto:${supportEmail}`}>{supportEmail}</a>

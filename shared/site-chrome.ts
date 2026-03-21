@@ -18,6 +18,8 @@ export type SiteNavLink = {
 	readonly label: string
 }
 
+export const supportEmail = 'support@epic-scheduler.com'
+
 export const sitePrimaryNavLinks: ReadonlyArray<SiteNavLink> = [
 	{ href: sitePaths.home, label: 'New schedule' },
 	{ href: sitePaths.howItWorks, label: 'How it works' },
