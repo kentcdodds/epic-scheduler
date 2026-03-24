@@ -12,9 +12,12 @@ resources.
 
 - **Local dev**: no Cloudflare D1/KV setup required; `wrangler dev --local` uses
   emulated storage (`bun run migrate:local` applies schema locally).
-- **Production deploy**: Wrangler / your deploy pipeline resolves or creates D1
-  for the production worker and applies migrations remotely (see GitHub Actions
-  `deploy` workflow).
+- **Production deploy**: GitHub Actions runs `tools/ci/production-d1-config.ts`,
+  which lists D1 databases via Wrangler, matches `database_name` from
+  `env.production` (`APP_DB`), creates the database if missing, writes
+  `wrangler-production.generated.json` with `database_id`, then applies
+  migrations and deploys using that config (no baked `database_id` in the
+  template).
 - **PR previews**: `tools/ci/preview-resources.ts` ensures a D1 database named
   `<preview-worker-name>-db`, writes `wrangler-preview.generated.json` with the
   real `database_id`, and deploy uses that config.

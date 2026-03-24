@@ -27,8 +27,9 @@ The Worker forwards:
 ## Configuration reference
 
 Bindings are configured per environment in `wrangler.jsonc` (binding name + D1
-`database_name` in the repo; remote `database_id` is filled in by deploy
-pipelines / generated preview config, not checked into the template):
+`database_name` in the repo; remote `database_id` is supplied by generated CI
+config — `tools/ci/production-d1-config.ts` for production and
+`tools/ci/preview-resources.ts` for previews — not checked into the template):
 
 - `APP_DB` (D1)
 - `MCP_OBJECT` (Durable Objects)
