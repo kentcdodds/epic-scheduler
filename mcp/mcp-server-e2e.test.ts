@@ -464,9 +464,14 @@ test(
 		expect(scheduleResource?.text).toContain('/mcp-apps/schedule-widget.js')
 		expect(scheduleResource?.text).toContain('Your availability')
 		expect(scheduleResource?.text).toContain(
+			'This MCP app loads the same attendee page as the web app',
+		)
+		expect(scheduleResource?.text).toContain(
 			'Share token: <code data-share-token>',
 		)
 		expect(scheduleResource?.text).toContain('Waiting for share token input.')
+		expect(scheduleResource?.text).toContain('data-route-iframe')
+		expect(scheduleResource?.text).toContain('Load attendee page')
 		expect(scheduleResource?.text).toContain('Fullscreen')
 
 		const scheduleWidgetResponse = await fetch(
@@ -478,7 +483,7 @@ test(
 		)
 		const scheduleWidgetSource = await scheduleWidgetResponse.text()
 		expect(scheduleWidgetSource).toContain('createWidgetHostBridge')
-		expect(scheduleWidgetSource).toContain('/api/schedules')
+		expect(scheduleWidgetSource).toContain('/s/')
 		expect(scheduleWidgetSource).toContain('ui/request-display-mode')
 
 		const scheduleHostWidgetResponse = await fetch(
@@ -569,6 +574,8 @@ test(
 		expect(hostResource?.text).toContain('Host dashboard')
 		expect(hostResource?.text).toContain('/mcp-apps/schedule-host-widget.js')
 		expect(hostResource?.text).toContain('data-api-base-url="')
+		expect(hostResource?.text).toContain('data-route-iframe')
+		expect(hostResource?.text).toContain('Load host dashboard')
 		expect(hostResource?.text).toContain(
 			'Waiting for share token and host access token input',
 		)
