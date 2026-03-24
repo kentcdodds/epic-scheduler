@@ -18,7 +18,10 @@ export default defineConfig({
 	webServer: {
 		command: 'bun run build:client && bun run preview:e2e',
 		url: baseURL,
-		reuseExistingServer: true,
+		// In CI always boot our own server so a stray process on the port cannot
+		// satisfy the URL probe and leave tests talking to the wrong app (hangs).
+		reuseExistingServer: process.env.CI !== 'true',
+		timeout: 180_000,
 		env: {
 			CLOUDFLARE_ENV: 'test',
 			PORT: playwrightPort,

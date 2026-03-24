@@ -48,6 +48,19 @@ Avoid `page.locator('css')` unless no accessible alternative exists.
 - If `.env` is missing, `test:e2e` copies `.env.example` to `.env` before
   Playwright starts.
 
+## Web server and ports
+
+- `playwright.config.ts` starts `bun run preview:e2e` and probes `baseURL` (from
+  `PLAYWRIGHT_PORT`, default `8788`).
+- When `CI=true`, Playwright **does not** reuse an existing server on that port,
+  so a stray process cannot satisfy the probe and leave tests hitting the wrong
+  app (symptoms: hangs, empty pages, or flaky timeouts).
+- Locally, reuse stays enabled: stop other listeners on `PLAYWRIGHT_PORT` if
+  tests misbehave.
+- Custom browser contexts must use the `baseURL` fixture (or the same
+  `PLAYWRIGHT_PORT` / `PLAYWRIGHT_BASE_URL`) so `page.goto` targets the server
+  Playwright actually started.
+
 ## Documentation policy
 
 - Keep this doc cross-cutting and stable.

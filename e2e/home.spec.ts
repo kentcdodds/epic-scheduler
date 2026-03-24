@@ -196,7 +196,9 @@ test('changing to a smaller interval expands selected availability', async ({
 test('mobile blocked slot tap updates active ring and details', async ({
 	browser,
 	request,
+	baseURL,
 }) => {
+	test.setTimeout(60_000)
 	const hourMs = 3_600_000
 	const dayMs = 24 * hourMs
 	const rangeStart = new Date(Math.ceil(Date.now() / hourMs) * hourMs + hourMs)
@@ -238,7 +240,10 @@ test('mobile blocked slot tap updates active ring and details', async ({
 
 	try {
 		const mobilePage = await context.newPage()
-		const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8788'
+		const origin =
+			baseURL ??
+			process.env.PLAYWRIGHT_BASE_URL ??
+			`http://localhost:${process.env.PLAYWRIGHT_PORT ?? '8788'}`
 		async function tapSlotButton(
 			button: Awaited<ReturnType<typeof mobilePage.locator>>,
 		) {
@@ -260,7 +265,7 @@ test('mobile blocked slot tap updates active ring and details', async ({
 		}
 
 		await mobilePage.goto(
-			`${baseUrl}/s/${createPayload.shareToken}?name=${encodeURIComponent('Alex')}`,
+			`${origin}/s/${createPayload.shareToken}?name=${encodeURIComponent('Alex')}`,
 		)
 
 		await expect(
@@ -306,17 +311,21 @@ test('mobile blocked slot tap updates active ring and details', async ({
 			'This slot is unavailable because the host blocked it.',
 		)
 		await expect
-			.poll(() =>
-				blockedSlotButton.evaluate((element) =>
-					getComputedStyle(element).boxShadow.includes('inset'),
-				),
+			.poll(
+				() =>
+					blockedSlotButton.evaluate((element) =>
+						getComputedStyle(element).boxShadow.includes('inset'),
+					),
+				{ timeout: 15_000 },
 			)
 			.toBe(true)
 		await expect
-			.poll(() =>
-				editableSlotButton.evaluate(
-					(element) => getComputedStyle(element).boxShadow !== 'none',
-				),
+			.poll(
+				() =>
+					editableSlotButton.evaluate(
+						(element) => getComputedStyle(element).boxShadow !== 'none',
+					),
+				{ timeout: 15_000 },
 			)
 			.toBe(false)
 	} finally {

@@ -41,7 +41,6 @@
 				{
 					"binding": "APP_DB",
 					"database_name": "epic-scheduler",
-					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
 				},
 			],
@@ -68,7 +67,6 @@
 				{
 					"binding": "APP_DB",
 					"database_name": "epic-scheduler",
-					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
 				},
 			],
@@ -95,7 +93,6 @@
 				{
 					"binding": "APP_DB",
 					"database_name": "epic-scheduler",
-					"database_id": "5b52e35f-1236-48da-9322-d880c2bc9fcd",
 					"migrations_dir": "migrations",
 				},
 			],

@@ -2,6 +2,11 @@ import { spawnSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import {
+	formatWranglerJsonc,
+	parseWranglerJsonc,
+} from '../wrangler-jsonc-utils.ts'
+
 type Command = 'ensure' | 'cleanup'
 
 type CliOptions = {
@@ -216,141 +221,6 @@ function deleteD1Database({ name, dryRun }: { name: string; dryRun: boolean }) {
 	console.error(`Deleted D1 database: ${name}`)
 }
 
-function stripJsonc(source: string) {
-	let output = ''
-	let inString = false
-	let stringQuote = ''
-	let isEscaped = false
-	let inLineComment = false
-	let inBlockComment = false
-
-	for (let index = 0; index < source.length; index += 1) {
-		const char = source[index] ?? ''
-		const next = source[index + 1] ?? ''
-
-		if (inLineComment) {
-			if (char === '\n') {
-				inLineComment = false
-				output += char
-			}
-			continue
-		}
-
-		if (inBlockComment) {
-			if (char === '*' && next === '/') {
-				inBlockComment = false
-				index += 1
-			}
-			continue
-		}
-
-		if (inString) {
-			output += char
-			if (isEscaped) {
-				isEscaped = false
-				continue
-			}
-			if (char === '\\') {
-				isEscaped = true
-				continue
-			}
-			if (char === stringQuote) {
-				inString = false
-				stringQuote = ''
-			}
-			continue
-		}
-
-		if (char === '"' || char === "'") {
-			inString = true
-			stringQuote = char
-			output += char
-			continue
-		}
-
-		if (char === '/' && next === '/') {
-			inLineComment = true
-			index += 1
-			continue
-		}
-
-		if (char === '/' && next === '*') {
-			inBlockComment = true
-			index += 1
-			continue
-		}
-
-		output += char
-	}
-
-	return output
-}
-
-function stripTrailingCommas(source: string) {
-	let output = ''
-	let inString = false
-	let stringQuote = ''
-	let isEscaped = false
-
-	for (let index = 0; index < source.length; index += 1) {
-		const char = source[index] ?? ''
-
-		if (inString) {
-			output += char
-			if (isEscaped) {
-				isEscaped = false
-				continue
-			}
-			if (char === '\\') {
-				isEscaped = true
-				continue
-			}
-			if (char === stringQuote) {
-				inString = false
-				stringQuote = ''
-			}
-			continue
-		}
-
-		if (char === '"' || char === "'") {
-			inString = true
-			stringQuote = char
-			output += char
-			continue
-		}
-
-		if (char === ',') {
-			let lookahead = index + 1
-			while (lookahead < source.length) {
-				const next = source[lookahead] ?? ''
-				if (next === ' ' || next === '\t' || next === '\n' || next === '\r') {
-					lookahead += 1
-					continue
-				}
-				if (next === '}' || next === ']') {
-					break
-				}
-				break
-			}
-			const nextNonWhitespace = source[lookahead] ?? ''
-			if (nextNonWhitespace === '}' || nextNonWhitespace === ']') {
-				continue
-			}
-		}
-
-		output += char
-	}
-
-	return output
-}
-
-function parseJsonc<T>(source: string): T {
-	const withoutBom = source.replace(/^\uFEFF/, '')
-	const noComments = stripJsonc(withoutBom)
-	const json = stripTrailingCommas(noComments)
-	return JSON.parse(json) as T
-}
-
 async function writeGeneratedWranglerConfig({
 	baseConfigPath,
 	outConfigPath,
@@ -363,7 +233,7 @@ async function writeGeneratedWranglerConfig({
 	d1DatabaseId: string
 }) {
 	const baseText = await readFile(baseConfigPath, 'utf8')
-	const config = parseJsonc<Record<string, unknown>>(baseText)
+	const config = parseWranglerJsonc<Record<string, unknown>>(baseText)
 	const env = config.env
 	if (!env || typeof env !== 'object') {
 		fail(`wrangler config "${baseConfigPath}" is missing "env".`)
@@ -399,11 +269,7 @@ async function writeGeneratedWranglerConfig({
 	}
 
 	const resolvedOut = path.resolve(outConfigPath)
-	await writeFile(
-		resolvedOut,
-		`${JSON.stringify(config, null, '\t')}\n`,
-		'utf8',
-	)
+	await writeFile(resolvedOut, formatWranglerJsonc(config), 'utf8')
 	console.error(`Wrote generated Wrangler config: ${resolvedOut}`)
 	return resolvedOut
 }

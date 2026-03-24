@@ -5,15 +5,23 @@ expects.
 
 ## Cloudflare resources
 
-Create or provide the following resources (prod + preview):
+The checked-in `wrangler.jsonc` template lists **binding names** and D1
+`database_name` values only. It intentionally does **not** bake in `database_id`
+/ KV `id` fields so clones do not accidentally point at another project's
+resources.
 
-- D1 database
-  - `database_name`: `<app-name>`
-  - `database_name` (preview): `<app-name>-<preview>-db`
+- **Local dev**: no Cloudflare D1/KV setup required; `wrangler dev --local` uses
+  emulated storage (`bun run migrate:local` applies schema locally).
+- **Production deploy**: Wrangler / your deploy pipeline resolves or creates D1
+  for the production worker and applies migrations remotely (see GitHub Actions
+  `deploy` workflow).
+- **PR previews**: `tools/ci/preview-resources.ts` ensures a D1 database named
+  `<preview-worker-name>-db`, writes `wrangler-preview.generated.json` with the
+  real `database_id`, and deploy uses that config.
 
-The post-download script will write the resulting IDs into `wrangler.jsonc` and
-replace template `epic-scheduler` branding tokens with your app name across text
-files.
+If you add KV (for example an `OAUTH_KV` binding), keep the same pattern: names
+in the repo template, real namespace IDs supplied at deploy time (Wrangler can
+derive KV namespace names from the worker name if you configure it that way).
 
 ## Optional Cloudflare offerings
 

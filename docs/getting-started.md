@@ -25,39 +25,34 @@ bun install
 
 ## Expectations and assumptions
 
-The setup flow assumes:
-
 - Bun is installed (uses `bun`/`bunx`).
 - You run commands from the repo root (needs `wrangler.jsonc` and
   `package.json`).
-- You can write to files in the repository (the script updates config files and
-  replaces template `epic-scheduler` tokens across text files).
-- Wrangler is available. If you are not logged in, the script prints
-  `bunx wrangler login` and stops. In interactive mode, it can run the login for
-  you.
 
 See `docs/setup-manifest.md` for required resources and secrets.
 
 For optional Cloudflare offerings (R2, Workers AI, AI Gateway, extra KV), see
 `docs/cloudflare-offerings.md`.
 
-## Preflight checks
+## Quick start (local only)
 
-Run a quick validation of your environment and Wrangler login:
+Local development does **not** require creating D1 or KV in Cloudflare. The
+checked-in `wrangler.jsonc` uses binding names and `database_name` only;
+Wrangler uses a local D1 emulator with `wrangler dev --local`.
 
-```
-bun ./docs/post-download.ts --check
-```
-
-## Quick Start (local only)
-
-1. Run the guided setup script:
+1. Copy environment defaults:
 
 ```
-bun ./docs/post-download.ts --guided
+cp .env.example .env
 ```
 
-2. Start local development:
+2. Apply migrations to the local D1 database:
+
+```
+bun run migrate:local
+```
+
+3. Start the app:
 
 ```
 bun run dev
@@ -65,47 +60,21 @@ bun run dev
 
 ## Full Cloudflare setup (deploy)
 
-1. Run the guided setup script and create resources when prompted:
-
-```
-bun ./docs/post-download.ts --guided
-```
-
-2. Configure GitHub Actions secrets for deploy:
+1. Configure GitHub Actions secrets for deploy:
 
 - `CLOUDFLARE_API_TOKEN` (Workers deploy + D1 edit access on the correct
   account)
 - `APP_BASE_URL` (optional, used in deploy metadata and health reporting)
 
-3. Deploy:
+2. Deploy:
 
 ```
 bun run deploy
 ```
 
-## Agent/CI setup
-
-Use non-interactive flags or `--defaults`. The `--defaults` flag skips prompts
-and uses defaults based on the current directory name (worker/package/database
-names).
-
-```
-bun ./docs/post-download.ts --defaults --database-id <id> --preview-database-id <id>
-```
-
-To preview changes without writing, add `--dry-run`. To emit a JSON summary, add
-`--json`. To run preflight checks only, add `--check`.
-
-### Script flags
-
-- `--guided`: interactive, state-aware flow (resource creation optional).
-- `--check`: run preflight checks only.
-- `--defaults`: accept defaults without prompts.
-- `--dry-run`: show changes without writing or deleting the script.
-- `--json`: print a JSON summary.
-- `--app-name`, `--worker-name`, `--package-name`
-- `--database-name`, `--database-id`
-- `--preview-database-name`, `--preview-database-id`
+Production deploys and PR preview deploys create or resolve the correct D1
+database (and any KV namespaces you add) and inject real IDs at deploy time; see
+`docs/setup-manifest.md` and `docs/agents/setup.md`.
 
 ## Local development
 

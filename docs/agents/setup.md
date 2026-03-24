@@ -15,6 +15,9 @@ Quick notes for getting a local epic-scheduler environment running.
 
 - Copy `.env.example` to `.env` before starting any work, then update secrets as
   needed.
+- You do not need to provision Cloudflare D1 or KV for local work:
+  `wrangler dev --local` (via `bun run dev` / `bun run dev:worker`) uses local
+  emulation; run `bun run migrate:local` after schema changes.
 - `bun run dev`.
 - If you only need the client bundle or worker, use:
   - `bun run dev:client`
