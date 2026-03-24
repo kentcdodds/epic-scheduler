@@ -1,7 +1,23 @@
 import { type Handle } from 'remix/component'
 import { setDocumentTitle, toAppTitle } from '#client/document-title.ts'
 import { supportContact } from '#shared/support-details.ts'
-import { sitePaths } from '#shared/site-chrome.ts'
+import { sitePaths, supportEmail } from '#shared/site-chrome.ts'
+
+const supportEmailLink = <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
+
+const mailingAddress = (
+	<address>
+		epic-scheduler.com
+		<br />
+		Epic Scheduling
+		<br />
+		55 N Merchant St #562
+		<br />
+		American Fork, UT 84003
+		<br />
+		United States
+	</address>
+)
 
 export function HowItWorksRoute(_handle: Handle) {
 	return () => {
@@ -254,13 +270,8 @@ export function PrivacyRoute(_handle: Handle) {
 				</section>
 				<section className="seo-section">
 					<h2>Contact</h2>
-					<p>
-						For privacy questions or deletion requests, open an issue at{' '}
-						<a href="https://github.com/kentcdodds/epic-scheduler/issues">
-							github.com/kentcdodds/epic-scheduler
-						</a>
-						.
-					</p>
+					<p>Questions about this policy can be sent to {supportEmailLink}.</p>
+					{mailingAddress}
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">
@@ -313,6 +324,11 @@ export function TermsRoute(_handle: Handle) {
 						Do not abuse the service with illegal activity, spam, or attempts to
 						degrade availability for other users.
 					</p>
+				</section>
+				<section className="seo-section">
+					<h2>Contact</h2>
+					<p>Questions about these terms can be sent to {supportEmailLink}.</p>
+					{mailingAddress}
 				</section>
 				<footer className="seo-footer-marketing">
 					<p className="seo-footer-tagline">
@@ -369,6 +385,38 @@ export function PricingRoute(_handle: Handle) {
 	}
 }
 
+export function ContactRoute(_handle: Handle) {
+	return () => {
+		setDocumentTitle(toAppTitle('Contact'))
+		return (
+			<main className="seo-page">
+				<header className="seo-hero">
+					<p className="seo-eyebrow">Support</p>
+					<h1>Contact Epic Scheduling</h1>
+					<p>
+						Questions about scheduling links, MCP access, or data retention?
+						Send us a note and we&apos;ll help.
+					</p>
+				</header>
+				<section className="seo-section">
+					<h2>Email</h2>
+					<p>{supportEmailLink}</p>
+				</section>
+				<section className="seo-section">
+					<h2>Mailing address</h2>
+					{mailingAddress}
+				</section>
+				<footer className="seo-footer-marketing">
+					<p className="seo-footer-tagline">
+						Build schedules faster with a single link and shared overlap
+						visibility.
+					</p>
+				</footer>
+			</main>
+		)
+	}
+}
+
 export function SupportRoute(_handle: Handle) {
 	return () => {
 		setDocumentTitle(toAppTitle('Support'))
@@ -409,7 +457,6 @@ export function SupportRoute(_handle: Handle) {
 }
 
 const mcpPath = '/mcp'
-
 export function AboutMcpRoute(_handle: Handle) {
 	return () => {
 		setDocumentTitle(toAppTitle('About Epic Scheduler MCP'))
@@ -448,7 +495,8 @@ export function AboutMcpRoute(_handle: Handle) {
 					<h2>Endpoint</h2>
 					<p>
 						Connect your MCP client to <code>{mcpPath}</code> on your deployment
-						origin (for example <code>{`https://your-domain${mcpPath}`}</code>).
+						origin (for example{' '}
+						<code>{`https://epic-scheduler.com${mcpPath}`}</code>).
 					</p>
 				</section>
 				<section className="seo-section">
@@ -464,14 +512,14 @@ export function AboutMcpRoute(_handle: Handle) {
 						<code>{`{
   "mcpServers": {
     "epic-scheduler": {
-      "url": "https://your-domain${mcpPath}"
+      "url": "https://epic-scheduler.com${mcpPath}"
     }
   }
 }`}</code>
 					</pre>
 					<p>
-						Replace <code>your-domain</code> with the host where Epic Scheduler
-						is deployed.
+						Replace <code>epic-scheduler.com</code> with the host where Epic
+						Scheduler is deployed.
 					</p>
 				</section>
 				<section className="seo-section">

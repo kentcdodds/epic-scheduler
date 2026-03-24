@@ -7,6 +7,7 @@ export const sitePaths = {
 	features: '/meeting-scheduler-features',
 	blog: '/blog',
 	aboutMcp: '/about-mcp',
+	contact: '/contact',
 	privacy: '/privacy',
 	terms: '/terms',
 	pricing: '/pricing',
@@ -17,6 +18,8 @@ export type SiteNavLink = {
 	readonly href: string
 	readonly label: string
 }
+
+export const supportEmail = 'support@epic-scheduler.com'
 
 export const sitePrimaryNavLinks: ReadonlyArray<SiteNavLink> = [
 	{ href: sitePaths.home, label: 'New schedule' },
@@ -29,6 +32,7 @@ export const siteFooterLinks: ReadonlyArray<SiteNavLink> = [
 	{ href: sitePaths.privacy, label: 'Privacy' },
 	{ href: sitePaths.terms, label: 'Terms' },
 	{ href: sitePaths.features, label: 'Features' },
+	{ href: sitePaths.contact, label: 'Contact' },
 	{
 		href: sitePaths.pricing,
 		label: "Price (it's free... really)",

@@ -1,6 +1,7 @@
 import { BlogIndexRoute, BlogPostRoute } from './marketing-blog.tsx'
 import {
 	AboutMcpRoute,
+	ContactRoute,
 	FeaturesRoute,
 	HowItWorksRoute,
 	PricingRoute,
@@ -18,6 +19,7 @@ export const clientRoutes = {
 	'/meeting-scheduler-features': <FeaturesRoute />,
 	'/blog': <BlogIndexRoute />,
 	'/blog/:slug': <BlogPostRoute />,
+	'/contact': <ContactRoute />,
 	'/privacy': <PrivacyRoute />,
 	'/terms': <TermsRoute />,
 	'/about-mcp': <AboutMcpRoute />,
