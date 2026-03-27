@@ -15,10 +15,159 @@ type FormSubmitDetails = {
 	formData: FormData
 }
 
+type RouterNavigationType = 'pop' | 'push'
+
 export const routerEvents = new EventTarget()
 let routerInitialized = false
+const scrollPositionsStorageKey = 'react-router-scroll-positions'
+let hasLoadedScrollPositions = false
+let scrollPositions: Record<string, number> = {}
+let scrollSaveScheduled = false
+let scrollSaveToken = 0
+let skipScrollSave = false
+let lastNavigationType: RouterNavigationType = 'push'
 
-function notify() {
+function createHistoryStateKey() {
+	return Math.random().toString(32).slice(2)
+}
+
+function getHistoryStateObject() {
+	if (typeof window === 'undefined') return {}
+	const state = window.history.state
+	if (state && typeof state === 'object') {
+		return state as Record<string, unknown>
+	}
+	return {}
+}
+
+function getHistoryStateKey() {
+	const key = getHistoryStateObject().key
+	if (typeof key === 'string' && key.length > 0) return key
+	return null
+}
+
+function ensureHistoryStateKey() {
+	const existingKey = getHistoryStateKey()
+	if (existingKey) return existingKey
+	const key = createHistoryStateKey()
+	window.history.replaceState({ ...getHistoryStateObject(), key }, '')
+	return key
+}
+
+function loadScrollPositionsFromSessionStorage() {
+	try {
+		const parsed = JSON.parse(
+			sessionStorage.getItem(scrollPositionsStorageKey) ?? '{}',
+		)
+		if (!parsed || typeof parsed !== 'object') {
+			scrollPositions = {}
+			return
+		}
+
+		scrollPositions = {}
+		for (const [key, value] of Object.entries(parsed)) {
+			if (typeof value === 'number') {
+				scrollPositions[key] = value
+			}
+		}
+	} catch (error) {
+		console.error(error)
+		scrollPositions = {}
+		sessionStorage.removeItem(scrollPositionsStorageKey)
+	}
+}
+
+function getScrollPositions() {
+	if (!hasLoadedScrollPositions) {
+		loadScrollPositionsFromSessionStorage()
+		hasLoadedScrollPositions = true
+	}
+	return scrollPositions
+}
+
+function persistScrollPositions() {
+	try {
+		sessionStorage.setItem(
+			scrollPositionsStorageKey,
+			JSON.stringify(getScrollPositions()),
+		)
+	} catch (error) {
+		console.error(error)
+	}
+}
+
+function saveCurrentScrollPosition(scrollKey: string | null = null) {
+	if (typeof window === 'undefined') return
+	const key = scrollKey ?? ensureHistoryStateKey()
+	getScrollPositions()[key] = window.scrollY
+	persistScrollPositions()
+}
+
+function scheduleScrollSave() {
+	if (typeof window === 'undefined') return
+	if (skipScrollSave) return
+	if (scrollSaveScheduled) return
+	scrollSaveScheduled = true
+	const key = ensureHistoryStateKey()
+	const token = scrollSaveToken
+	window.requestAnimationFrame(() => {
+		scrollSaveScheduled = false
+		if (skipScrollSave) return
+		if (token !== scrollSaveToken) return
+		saveCurrentScrollPosition(key)
+	})
+}
+
+function restoreScrollPosition(restoreKey: string | null = null) {
+	if (typeof window === 'undefined') return
+	const key = restoreKey ?? ensureHistoryStateKey()
+	const storedY = getScrollPositions()[key]
+	if (typeof storedY === 'number') {
+		window.scrollTo(0, storedY)
+	}
+}
+
+function getMaxScrollableY() {
+	if (typeof window === 'undefined') return 0
+	return Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+}
+
+function restoreScrollPositionForPopstate(
+	restoreKey: string | null,
+	remainingFrames: number,
+) {
+	if (typeof window === 'undefined') return
+	const key = restoreKey ?? ensureHistoryStateKey()
+	const storedY = getScrollPositions()[key]
+	if (typeof storedY !== 'number') {
+		skipScrollSave = false
+		return
+	}
+
+	restoreScrollPosition(key)
+	const maxScrollableY = getMaxScrollableY()
+	const canReachTarget = maxScrollableY >= storedY
+	const reachedTarget = window.scrollY >= storedY - 1
+	if (canReachTarget || reachedTarget || remainingFrames <= 0) {
+		skipScrollSave = false
+		return
+	}
+
+	window.requestAnimationFrame(() => {
+		restoreScrollPositionForPopstate(key, remainingFrames - 1)
+	})
+}
+
+function getPopStateEventKey(event: PopStateEvent) {
+	const state = event.state
+	if (!state || typeof state !== 'object') return null
+	const key = (state as Record<string, unknown>).key
+	if (typeof key === 'string' && key.length > 0) return key
+	return null
+}
+
+function notify(navigationType: RouterNavigationType = 'push') {
+	lastNavigationType = navigationType
 	routerEvents.dispatchEvent(new Event('navigate'))
 }
 
@@ -246,15 +395,36 @@ function handleDocumentSubmit(event: Event) {
 function ensureRouter() {
 	if (routerInitialized) return
 	routerInitialized = true
-	window.addEventListener('popstate', notify)
+	if ('scrollRestoration' in window.history) {
+		window.history.scrollRestoration = 'manual'
+	}
+	window.requestAnimationFrame(() => {
+		skipScrollSave = true
+		restoreScrollPositionForPopstate(null, 8)
+	})
+	window.addEventListener('scroll', scheduleScrollSave, { passive: true })
+	window.addEventListener('pagehide', () => {
+		saveCurrentScrollPosition()
+	})
+	window.addEventListener('popstate', (event) => {
+		const restoreKey = getPopStateEventKey(event)
+		skipScrollSave = true
+		notify('pop')
+		window.requestAnimationFrame(() => {
+			restoreScrollPositionForPopstate(restoreKey, 8)
+		})
+	})
 	document.addEventListener('click', handleDocumentClick)
 	document.addEventListener('submit', handleDocumentSubmit)
 }
 
-export function listenToRouterNavigation(handle: Handle, listener: () => void) {
+export function listenToRouterNavigation(
+	handle: Handle,
+	listener: (navigationType: RouterNavigationType) => void,
+) {
 	ensureRouter()
 	handle.on(routerEvents, {
-		navigate: () => listener(),
+		navigate: () => listener(lastNavigationType),
 	})
 }
 
@@ -272,6 +442,7 @@ export function navigate(to: string) {
 	if (typeof window === 'undefined') return
 	const destination = new URL(to, window.location.href)
 	if (destination.origin !== window.location.origin) {
+		saveCurrentScrollPosition()
 		window.location.assign(destination.toString())
 		return
 	}
@@ -279,8 +450,19 @@ export function navigate(to: string) {
 	const nextPath = `${destination.pathname}${destination.search}${destination.hash}`
 	if (nextPath === getCurrentPathWithSearchAndHash()) return
 
-	window.history.pushState({}, '', nextPath)
-	notify()
+	const currentKey = ensureHistoryStateKey()
+	const positions = getScrollPositions()
+	const storedY = positions[currentKey]
+	const scrollY =
+		window.scrollY === 0 && typeof storedY === 'number' && !scrollSaveScheduled
+			? storedY
+			: window.scrollY
+	positions[currentKey] = scrollY
+	persistScrollPositions()
+	scrollSaveToken += 1
+	const nextKey = createHistoryStateKey()
+	window.history.pushState({ key: nextKey }, '', nextPath)
+	notify('push')
 }
 
 export function Router(handle: Handle, setup: RouterSetup) {

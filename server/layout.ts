@@ -12,6 +12,46 @@ const defaultShell = html`<div class="app-shell">
 		aria-label="Loading"
 	></div>
 </div>`
+const scrollRestorationScript = html.raw`<script>
+(() => {
+	if (typeof window === 'undefined') return
+	if ('scrollRestoration' in window.history) {
+		window.history.scrollRestoration = 'manual'
+	}
+	const state =
+		window.history.state && typeof window.history.state === 'object'
+			? window.history.state
+			: {}
+	const existingKey =
+		typeof state.key === 'string' && state.key.length > 0 ? state.key : null
+	const key = existingKey ?? Math.random().toString(32).slice(2)
+	if (!existingKey) {
+		window.history.replaceState({ ...state, key }, '')
+	}
+	try {
+		const storageKey = 'react-router-scroll-positions'
+		const stored = sessionStorage.getItem(storageKey)
+		if (!stored) return
+		const positions = JSON.parse(stored)
+		const storedY =
+			positions && typeof positions === 'object' ? positions[key] : null
+		if (typeof storedY === 'number') {
+			const root = document.getElementById('root')
+			if (root && storedY > 0) {
+				const minHeight = storedY + window.innerHeight
+				root.style.minHeight = String(minHeight) + 'px'
+				root.setAttribute(
+					'data-scroll-restoration-min-height',
+					String(minHeight),
+				)
+			}
+			window.scrollTo(0, storedY)
+		}
+	} catch {
+		// Ignore storage failures, client router will handle restoration.
+	}
+})()
+</script>`
 
 /**
  * Full HTML document. Prefer empty `#root` (no `children`) so the client shell
@@ -66,6 +106,7 @@ export function Layout({
 		</head>
 		<body>
 			<div id="root">${shell}</div>
+			${scrollRestorationScript}
 			${scripts.map(
 				(script) => html`<script type="module" src="${script}"></script>`,
 			)}

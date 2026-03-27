@@ -58,9 +58,9 @@ export function App(handle: Handle) {
 	let lastAnnouncedPath = ''
 	let routeAnnouncement = ''
 
-	listenToRouterNavigation(handle, () => {
+	listenToRouterNavigation(handle, (navigationType) => {
 		pendingRouteA11ySync = true
-		shouldMoveFocusToMainContent = true
+		shouldMoveFocusToMainContent = navigationType !== 'pop'
 		void handle.update()
 	})
 
